@@ -1,33 +1,46 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Indicadores AIFA</title>
+  <meta charset="UTF-8" />
+  <title>Indicadores AIFA – Histograma</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Supabase SDK y Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+    h1 { margin-bottom: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    label { font-weight: 600; }
+    select, button { padding: 6px 10px; }
+    canvas { max-width: 100%; height: 420px; }
+  </style>
 </head>
 <body>
-  <h1>Histograma de Indicadores</h1>
+  <h1>Indicadores AIFA – Histograma comparativo</h1>
 
-  <label for="indicador">Indicador:</label>
-  <select id="indicador"></select>
+  <div class="row">
+    <label for="indicador">Indicador:</label>
+    <select id="indicador"></select>
 
-  <label for="anioA">Año A:</label>
-  <select id="anioA">
-    <option>2024</option>
-    <option>2025</option>
-  </select>
+    <label for="anioA">Año A:</label>
+    <select id="anioA">
+      <option>2024</option>
+      <option selected>2025</option>
+    </select>
 
-  <label for="anioB">Año B:</label>
-  <select id="anioB">
-    <option>2024</option>
-    <option selected>2025</option>
-  </select>
+    <label for="anioB">Año B:</label>
+    <select id="anioB">
+      <option selected>2024</option>
+      <option>2025</option>
+    </select>
 
-  <button onclick="cargarHistograma()">Comparar</button>
+    <button id="btnComparar">Comparar</button>
+  </div>
 
-  <canvas id="histograma" width="800" height="400"></canvas>
+  <canvas id="histograma" width="1000" height="420"></canvas>
 
+  <!-- Tu lógica -->
   <script src="app.js"></script>
 </body>
 </html>
