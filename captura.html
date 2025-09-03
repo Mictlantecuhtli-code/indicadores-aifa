@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captura de Indicadores - AIFA</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Inicio</a>
+                <a href="consulta.html" class="nav-link">Consulta</a>
+                <a href="captura.html" class="nav-link active">Captura</a>
+                <a href="edicion.html" class="nav-link">Edición</a>
+                <a href="login.html" class="nav-link">Login</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <section class="page-header">
+                <h2>Captura de Valores</h2>
+                <p class="page-subtitle">Registro de nuevos valores mensuales para indicadores</p>
+            </section>
+
+            <section class="form-section">
+                <div class="form-card">
+                    <h3>Formulario de Captura</h3>
+                    
+                    <form id="captura-form" class="captura-form" novalidate>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="indicador-select" class="form-label required">Indicador:</label>
+                                <select id="indicador-select" class="form-select" required aria-describedby="indicador-help">
+                                    <option value="">Seleccione un indicador...</option>
+                                </select>
+                                <small id="indicador-help" class="form-help">Solo se muestran indicadores de sus áreas asignadas</small>
+                                <div class="form-error" id="indicador-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="anio-input" class="form-label required">Año:</label>
+                                <input 
+                                    type="number" 
+                                    id="anio-input" 
+                                    class="form-input" 
+                                    min="2020" 
+                                    max="2030" 
+                                    value="2025" 
+                                    required 
+                                    aria-describedby="anio-help"
+                                >
+                                <small id="anio-help" class="form-help">Año del valor a capturar (2020-2030)</small>
+                                <div class="form-error" id="anio-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="mes-select" class="form-label required">Mes:</label>
+                                <select id="mes-select" class="form-select" required aria-describedby="mes-help">
+                                    <option value="">Seleccione un mes...</option>
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                                <small id="mes-help" class="form-help">Mes correspondiente al valor</small>
+                                <div class="form-error" id="mes-error"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="valor-input" class="form-label required">Valor:</label>
+                                <input 
+                                    type="number" 
+                                    id="valor-input" 
+                                    class="form-input" 
+                                    step="0.01" 
+                                    min="0" 
+                                    required 
+                                    aria-describedby="valor-help"
+                                    placeholder="0.00"
+                                >
+                                <small id="valor-help" class="form-help">Valor numérico del indicador (debe ser mayor a 0)</small>
+                                <div class="form-error" id="valor-error"></div>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label for="fuente-input" class="form-label">Fuente:</label>
+                                <input 
+                                    type="text" 
+                                    id="fuente-input" 
+                                    class="form-input" 
+                                    maxlength="200" 
+                                    aria-describedby="fuente-help"
+                                    placeholder="Ej: Reporte operacional mensual, Sistema XYZ..."
+                                >
+                                <small id="fuente-help" class="form-help">Fuente de información (opcional, máx. 200 caracteres)</small>
+                                <div class="form-error" id="fuente-error"></div>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label for="comentario-input" class="form-label">Comentario:</label>
+                                <textarea 
+                                    id="comentario-input" 
+                                    class="form-textarea" 
+                                    rows="3" 
+                                    maxlength="500" 
+                                    aria-describedby="comentario-help"
+                                    placeholder="Observaciones adicionales, contexto del valor, situaciones especiales..."
+                                ></textarea>
+                                <small id="comentario-help" class="form-help">Comentarios adicionales (opcional, máx. 500 caracteres)</small>
+                                <div class="char-counter">
+                                    <span id="comentario-counter">0</span>/500 caracteres
+                                </div>
+                                <div class="form-error" id="comentario-error"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" id="duplicar-btn" class="btn btn-secondary" disabled aria-describedby="duplicar-help">
+                                <span class="btn-text">📋 Duplicar Anterior</span>
+                                <span class="btn-loading" style="display: none;">Cargando...</span>
+                            </button>
+                            <button type="submit" id="guardar-btn" class="btn btn-primary">
+                                <span class="btn-text">💾 Guardar Valor</span>
+                                <span class="btn-loading" style="display: none;">Guardando...</span>
+                            </button>
+                            <button type="button" id="limpiar-btn" class="btn btn-outline">
+                                🗑️ Limpiar Formulario
+                            </button>
+                        </div>
+                        <small id="duplicar-help" class="form-help">Copia los datos del mes anterior para el mismo indicador</small>
+                    </form>
+                </div>
+            </section>
+
+            <section class="preview-section" id="preview-section" style="display: none;">
+                <div class="preview-card">
+                    <h3>Vista Previa del Registro</h3>
+                    <div class="preview-content">
+                        <div class="preview-item">
+                            <span class="preview-label">Indicador:</span>
+                            <span id="preview-indicador" class="preview-value">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Período:</span>
+                            <span id="preview-periodo" class="preview-value">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Valor:</span>
+                            <span id="preview-valor" class="preview-value">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Fuente:</span>
+                            <span id="preview-fuente" class="preview-value">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Comentario:</span>
+                            <span id="preview-comentario" class="preview-value">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="recent-captures" id="recent-captures" style="display: none;">
+                <div class="recent-card">
+                    <h3>Últimas Capturas</h3>
+                    <div class="recent-list" id="recent-list">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                    <button type="button" id="refresh-recent" class="btn btn-small btn-outline">
+                        🔄 Actualizar
+                    </button>
+                </div>
+            </section>
+
+            <section class="help-section">
+                <details class="help-details">
+                    <summary class="help-summary">Guía de Captura</summary>
+                    <div class="help-content">
+                        <h4>Proceso de Captura:</h4>
+                        <ol>
+                            <li><strong>Seleccione el indicador:</strong> Solo aparecen indicadores de sus áreas asignadas.</li>
+                            <li><strong>Configure período:</strong> Año y mes del valor a registrar.</li>
+                            <li><strong>Ingrese el valor:</strong> Debe ser un número positivo mayor a cero.</li>
+                            <li><strong>Agregue contexto:</strong> Fuente y comentarios son opcionales pero recomendados.</li>
+                            <li><strong>Guarde el registro:</strong> Se validará duplicados automáticamente.</li>
+                        </ol>
+
+                        <h4>Funciones Especiales:</h4>
+                        <ul>
+                            <li><strong>Duplicar Anterior:</strong> Copia los datos del mes anterior para agilizar la captura secuencial.</li>
+                            <li><strong>Vista Previa:</strong> Revise los datos antes de guardar.</li>
+                            <li><strong>Últimas Capturas:</strong> Vea sus registros recientes para verificar.</li>
+                        </ul>
+
+                        <h4>Validaciones Automáticas:</h4>
+                        <ul>
+                            <li>No se permiten valores duplicados (mismo indicador/año/mes)</li>
+                            <li>El valor debe ser numérico y mayor a cero</li>
+                            <li>El año debe estar entre 2020 y 2030</li>
+                            <li>Solo puede capturar en indicadores de sus áreas</li>
+                        </ul>
+
+                        <h4>Estados del Registro:</h4>
+                        <p>Los valores se crean en estado <strong>"capturado"</strong> y pueden ser validados posteriormente por supervisores.</p>
+                    </div>
+                </details>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Aeropuerto Internacional Felipe Ángeles (AIFA) - Sistema de Indicadores v2.0</p>
+        </div>
+    </footer>
+
+    <!-- Toast notifications container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Live region for screen readers -->
+    <div id="live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+    <script src="utils.js"></script>
+    <script src="captura.js"></script>
+</body>
+</html>
