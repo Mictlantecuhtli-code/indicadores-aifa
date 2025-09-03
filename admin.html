@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo-section">
+                <img src="https://via.placeholder.com/60x60/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="logo">
+                <div class="header-text">
+                    <h1>Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+                    <p class="subtitle">Panel de Administración</p>
+                </div>
+            </div>
+            <div class="nav-section">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
+                <button id="logoutBtn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Información de Admin -->
+            <div class="admin-info-section">
+                <div class="admin-info-card">
+                    <h3><i class="fas fa-user-shield"></i> Panel de Administración</h3>
+                    <div class="admin-details">
+                        <div class="admin-item">
+                            <strong>Administrador:</strong> <span id="adminName"></span>
+                        </div>
+                        <div class="admin-item">
+                            <strong>Último acceso:</strong> <span id="lastAccess"></span>
+                        </div>
+                        <div class="admin-item">
+                            <strong>Usuarios totales:</strong> <span id="totalUsers">-</span>
+                        </div>
+                        <div class="admin-item">
+                            <strong>Usuarios activos:</strong> <span id="activeUsers">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación por Tabs -->
+            <div class="admin-tabs-section">
+                <div class="admin-tabs">
+                    <button class="tab-button active" onclick="showTab('usuarios')">
+                        <i class="fas fa-users"></i> Gestión de Usuarios
+                    </button>
+                    <button class="tab-button" onclick="showTab('roles')">
+                        <i class="fas fa-user-tag"></i> Roles y Permisos
+                    </button>
+                    <button class="tab-button" onclick="showTab('areas')">
+                        <i class="fas fa-building"></i> Áreas
+                    </button>
+                    <button class="tab-button" onclick="showTab('sistema')">
+                        <i class="fas fa-cogs"></i> Sistema
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab: Gestión de Usuarios -->
+            <div id="usuarios-tab" class="tab-content active">
+                <div class="tab-header">
+                    <h3><i class="fas fa-users"></i> Gestión de Usuarios</h3>
+                    <button id="newUserBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nuevo Usuario
+                    </button>
+                </div>
+
+                <!-- Filtros de Usuario -->
+                <div class="filters-card">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label for="userRoleFilter">Rol</label>
+                            <select id="userRoleFilter" class="form-select">
+                                <option value="">Todos los roles</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="userStatusFilter">Estado</label>
+                            <select id="userStatusFilter" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="true">Activos</option>
+                                <option value="false">Inactivos</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="userSearchFilter">Buscar</label>
+                            <input type="text" id="userSearchFilter" class="form-input" placeholder="Nombre, email o usuario...">
+                        </div>
+                        <div class="filter-actions">
+                            <button id="searchUsersBtn" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button id="clearUserFiltersBtn" class="btn btn-secondary">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Usuarios -->
+                <div class="table-responsive">
+                    <table class="admin-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Áreas</th>
+                                <th>Estado</th>
+                                <th>Registro</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr class="loading-row">
+                                <td colspan="8">
+                                    <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab: Roles y Permisos -->
+            <div id="roles-tab" class="tab-content">
+                <div class="tab-header">
+                    <h3><i class="fas fa-user-tag"></i> Roles y Permisos</h3>
+                </div>
+
+                <div class="roles-grid">
+                    <div class="role-card">
+                        <h4><i class="fas fa-user"></i> Capturista</h4>
+                        <ul>
+                            <li>Capturar valores en sus áreas asignadas</li>
+                            <li>Ver indicadores de sus áreas</li>
+                            <li>Consultar histogramas</li>
+                        </ul>
+                        <div class="role-stats">
+                            <span class="role-count" id="capturistaCount">0</span> usuarios
+                        </div>
+                    </div>
+
+                    <div class="role-card">
+                        <h4><i class="fas fa-user-tie"></i> Jefe de Área</h4>
+                        <ul>
+                            <li>Todas las funciones de capturista</li>
+                            <li>Editar y eliminar valores de su área</li>
+                            <li>Aprobar/rechazar valores</li>
+                        </ul>
+                        <div class="role-stats">
+                            <span class="role-count" id="jefeAreaCount">0</span> usuarios
+                        </div>
+                    </div>
+
+                    <div class="role-card">
+                        <h4><i class="fas fa-user-graduate"></i> Subdirector</h4>
+                        <ul>
+                            <li>Todas las funciones de jefe de área</li>
+                            <li>Ver indicadores de múltiples áreas</li>
+                            <li>Reportes consolidados</li>
+                        </ul>
+                        <div class="role-stats">
+                            <span class="role-count" id="subdirectorCount">0</span> usuarios
+                        </div>
+                    </div>
+
+                    <div class="role-card">
+                        <h4><i class="fas fa-crown"></i> Director</h4>
+                        <ul>
+                            <li>Acceso completo a todos los indicadores</li>
+                            <li>Reportes ejecutivos</li>
+                            <li>Gestión de metas y objetivos</li>
+                        </ul>
+                        <div class="role-stats">
+                            <span class="role-count" id="directorCount">0</span> usuarios
+                        </div>
+                    </div>
+
+                    <div class="role-card admin-role">
+                        <h4><i class="fas fa-user-shield"></i> Administrador</h4>
+                        <ul>
+                            <li>Gestión completa de usuarios</li>
+                            <li>Configuración del sistema</li>
+                            <li>Acceso a todas las funciones</li>
+                        </ul>
+                        <div class="role-stats">
+                            <span class="role-count" id="adminCount">0</span> usuarios
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Áreas -->
+            <div id="areas-tab" class="tab-content">
+                <div class="tab-header">
+                    <h3><i class="fas fa-building"></i> Gestión de Áreas</h3>
+                    <button id="newAreaBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nueva Área
+                    </button>
+                </div>
+
+                <div class="areas-grid" id="areasGrid">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Tab: Sistema -->
+            <div id="sistema-tab" class="tab-content">
+                <div class="tab-header">
+                    <h3><i class="fas fa-cogs"></i> Configuración del Sistema</h3>
+                </div>
+
+                <div class="system-cards">
+                    <div class="system-card">
+                        <h4><i class="fas fa-database"></i> Base de Datos</h4>
+                        <div class="system-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Total indicadores:</span>
+                                <span class="stat-value" id="totalIndicators">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Valores capturados:</span>
+                                <span class="stat-value" id="totalValues">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Registros eliminados:</span>
+                                <span class="stat-value" id="deletedValues">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="system-card">
+                        <h4><i class="fas fa-chart-bar"></i> Actividad</h4>
+                        <div class="system-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Capturas hoy:</span>
+                                <span class="stat-value" id="todayCaptures">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Capturas esta semana:</span>
+                                <span class="stat-value" id="weekCaptures">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Usuarios activos hoy:</span>
+                                <span class="stat-value" id="todayActiveUsers">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="system-card">
+                        <h4><i class="fas fa-tools"></i> Herramientas</h4>
+                        <div class="system-actions">
+                            <button id="exportUsersBtn" class="btn btn-info">
+                                <i class="fas fa-download"></i> Exportar Usuarios
+                            </button>
+                            <button id="exportDataBtn" class="btn btn-info">
+                                <i class="fas fa-database"></i> Exportar Datos
+                            </button>
+                            <button id="systemReportBtn" class="btn btn-success">
+                                <i class="fas fa-file-alt"></i> Reporte del Sistema
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Usuario -->
+    <div id="userModal" class="modal" style="display: none;">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h4 id="userModalTitle"><i class="fas fa-user-plus"></i> Nuevo Usuario</h4>
+                <button id="closeUserModalBtn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userFormMode" value="create">
+                    <input type="hidden" id="editUserId">
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="userUsername">Usuario <span class="required">*</span></label>
+                            <input type="text" id="userUsername" class="form-input" required maxlength="50">
+                            <div class="form-help">Nombre único para iniciar sesión</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="userEmail">Email <span class="required">*</span></label>
+                            <input type="email" id="userEmail" class="form-input" required maxlength="255">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="userNombre">Nombre completo <span class="required">*</span></label>
+                            <input type="text" id="userNombre" class="form-input" required maxlength="100">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="userRole">Rol <span class="required">*</span></label>
+                            <select id="userRole" class="form-select" required>
+                                <option value="">Seleccione un rol...</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="passwordGroup">
+                        <label for="userPassword">Contraseña <span class="required">*</span></label>
+                        <input type="password" id="userPassword" class="form-input" minlength="6">
+                        <div class="form-help">Mínimo 6 caracteres</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="userAreas">Áreas asignadas</label>
+                        <div class="checkbox-group" id="userAreasCheckboxes">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                        <div class="form-help">Seleccione las áreas a las que tendrá acceso el usuario</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="userActivo" checked>
+                            Usuario activo
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelUserBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button id="saveUserBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Guardar Usuario
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="utils.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
