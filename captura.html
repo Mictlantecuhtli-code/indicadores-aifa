@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captura de Datos - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo-section">
+                <img src="https://via.placeholder.com/60x60/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="logo">
+                <div class="header-text">
+                    <h1>Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+                    <p class="subtitle">Captura de Datos</p>
+                </div>
+            </div>
+            <div class="nav-section">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
+                <button id="logoutBtn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Información del Usuario -->
+            <div class="user-info-section">
+                <div class="user-info-card">
+                    <h3><i class="fas fa-user"></i> Información de Captura</h3>
+                    <div class="user-details">
+                        <div class="detail-item">
+                            <strong>Usuario:</strong> <span id="userName"></span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Rol:</strong> <span id="userRole"></span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Áreas autorizadas:</strong> <span id="userAreas"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de Captura -->
+            <div class="form-section">
+                <div class="form-card">
+                    <h3><i class="fas fa-plus-circle"></i> Capturar Nuevo Valor</h3>
+                    
+                    <form id="capturaForm" class="capture-form">
+                        <div class="form-grid">
+                            <!-- Área (si el usuario tiene múltiples áreas) -->
+                            <div class="form-group" id="areaGroup" style="display: none;">
+                                <label for="areaSelect">
+                                    <i class="fas fa-building"></i> Área <span class="required">*</span>
+                                </label>
+                                <select id="areaSelect" class="form-select" required>
+                                    <option value="">Seleccione un área...</option>
+                                </select>
+                            </div>
+
+                            <!-- Indicador -->
+                            <div class="form-group">
+                                <label for="indicadorSelect">
+                                    <i class="fas fa-chart-line"></i> Indicador <span class="required">*</span>
+                                </label>
+                                <select id="indicadorSelect" class="form-select" required>
+                                    <option value="">Seleccione un indicador...</option>
+                                </select>
+                                <div class="form-help" id="indicadorHelp"></div>
+                            </div>
+
+                            <!-- Año -->
+                            <div class="form-group">
+                                <label for="anioSelect">
+                                    <i class="fas fa-calendar"></i> Año <span class="required">*</span>
+                                </label>
+                                <select id="anioSelect" class="form-select" required>
+                                    <option value="">Seleccione año...</option>
+                                </select>
+                            </div>
+
+                            <!-- Mes -->
+                            <div class="form-group">
+                                <label for="mesSelect">
+                                    <i class="fas fa-calendar-alt"></i> Mes <span class="required">*</span>
+                                </label>
+                                <select id="mesSelect" class="form-select" required>
+                                    <option value="">Seleccione mes...</option>
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+
+                            <!-- Valor -->
+                            <div class="form-group">
+                                <label for="valorInput">
+                                    <i class="fas fa-hashtag"></i> Valor <span class="required">*</span>
+                                </label>
+                                <input 
+                                    type="number" 
+                                    id="valorInput" 
+                                    class="form-input" 
+                                    step="0.01" 
+                                    placeholder="Ingrese el valor numérico"
+                                    required
+                                >
+                                <div class="form-help" id="valorHelp"></div>
+                            </div>
+
+                            <!-- Fuente -->
+                            <div class="form-group">
+                                <label for="fuenteInput">
+                                    <i class="fas fa-file-alt"></i> Fuente
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="fuenteInput" 
+                                    class="form-input" 
+                                    placeholder="Origen del dato (documento, sistema, etc.)"
+                                    maxlength="255"
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Comentario -->
+                        <div class="form-group full-width">
+                            <label for="comentarioInput">
+                                <i class="fas fa-comment"></i> Comentario
+                            </label>
+                            <textarea 
+                                id="comentarioInput" 
+                                class="form-textarea" 
+                                rows="3" 
+                                placeholder="Observaciones adicionales sobre el valor capturado"
+                                maxlength="500"
+                            ></textarea>
+                            <div class="char-counter">
+                                <span id="comentarioCounter">0</span>/500 caracteres
+                            </div>
+                        </div>
+
+                        <!-- Botones -->
+                        <div class="form-actions">
+                            <button type="button" id="limpiarBtn" class="btn btn-secondary">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                            <button type="submit" id="guardarBtn" class="btn btn-primary" disabled>
+                                <i class="fas fa-save"></i>
+                                <span id="guardarBtnText">Guardar</span>
+                                <div id="guardarSpinner" class="spinner" style="display: none;"></div>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Últimas Capturas -->
+            <div class="history-section">
+                <div class="history-card">
+                    <h3>
+                        <i class="fas fa-history"></i> Últimas Capturas
+                        <button id="refreshHistoryBtn" class="btn btn-sm btn-outline">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </h3>
+                    
+                    <div class="table-responsive">
+                        <table class="history-table" id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Indicador</th>
+                                    <th>Período</th>
+                                    <th>Valor</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr class="no-data">
+                                    <td colspan="6">
+                                        <i class="fas fa-info-circle"></i>
+                                        No hay capturas recientes
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indicadores del Área -->
+            <div class="indicators-section">
+                <div class="indicators-card">
+                    <h3>
+                        <i class="fas fa-list"></i> Indicadores de su Área
+                        <span class="indicator-count" id="indicatorCount"></span>
+                    </h3>
+                    
+                    <div class="indicators-grid" id="indicatorsGrid">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Confirmación -->
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4><i class="fas fa-exclamation-triangle"></i> Confirmar Captura</h4>
+                <button id="closeModalBtn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>¿Está seguro de que desea guardar el siguiente valor?</p>
+                <div class="confirmation-details">
+                    <div class="detail-row">
+                        <strong>Indicador:</strong> <span id="confirmIndicador"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Período:</strong> <span id="confirmPeriodo"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Valor:</strong> <span id="confirmValor"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Fuente:</strong> <span id="confirmFuente"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelModalBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button id="confirmSaveBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Confirmar y Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="utils.js"></script>
+    <script src="captura.js"></script>
+</body>
+</html>
