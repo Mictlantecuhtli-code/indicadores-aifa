@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <!-- Header con branding -->
+        <div class="login-header">
+            <img src="https://via.placeholder.com/80x80/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="login-logo">
+            <h1>Aeropuerto Internacional Felipe Ángeles</h1>
+            <h2>Sistema de Indicadores 2.0</h2>
+        </div>
+
+        <!-- Formulario de login -->
+        <div class="login-form-container">
+            <form id="loginForm" class="login-form">
+                <h3><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</h3>
+                
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i> Usuario
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required 
+                        autocomplete="username"
+                        placeholder="Ingrese su nombre de usuario"
+                        class="form-input"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i> Contraseña
+                    </label>
+                    <div class="password-input-container">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required 
+                            autocomplete="current-password"
+                            placeholder="Ingrese su contraseña"
+                            class="form-input"
+                        >
+                        <button type="button" id="togglePassword" class="toggle-password" tabindex="-1">
+                            <i class="fas fa-eye" id="togglePasswordIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" id="loginBtn" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span id="loginBtnText">Iniciar Sesión</span>
+                    <div id="loginSpinner" class="spinner" style="display: none;"></div>
+                </button>
+
+                <div id="loginMessage" class="login-message" style="display: none;"></div>
+            </form>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="login-info">
+            <div class="info-card">
+                <h4><i class="fas fa-info-circle"></i> Información del Sistema</h4>
+                <ul>
+                    <li>Utilice las credenciales proporcionadas por su administrador</li>
+                    <li>Si olvidó su contraseña, contacte al área de sistemas</li>
+                    <li>El sistema cerrará automáticamente su sesión por inactividad</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <p><i class="fas fa-question-circle"></i> ¿Necesita ayuda?</p>
+                <p>Contacte al administrador del sistema o al área de TI</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="login-footer">
+        <div class="container">
+            <p>&copy; 2025 Aeropuerto Internacional Felipe Ángeles (AIFA). Todos los derechos reservados.</p>
+            <p>Sistema de Indicadores 2.0 - Versión 1.0</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="utils.js"></script>
+    <script src="login.js"></script>
+
+    <script>
+        // Verificar si ya hay una sesión activa al cargar la página
+        document.addEventListener('DOMContentLoaded', async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                // Si ya hay sesión activa, redirigir al dashboard
+                location.href = './index.html';
+            }
+        });
+
+        // Manejar parámetros de URL para mensajes
+        const urlParams = new URLSearchParams(window.location.search);
+        const message = urlParams.get('message');
+        const type = urlParams.get('type');
+        
+        if (message) {
+            document.addEventListener('DOMContentLoaded', () => {
+                showMessage(decodeURIComponent(message), type || 'info');
+            });
+        }
+
+        // Función para mostrar mensajes en el login
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.getElementById('loginMessage');
+            messageDiv.textContent = message;
+            messageDiv.className = `login-message ${type}`;
+            messageDiv.style.display = 'block';
+
+            // Auto-ocultar después de 5 segundos si es éxito
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Limpiar URL después de mostrar mensaje
+        if (message) {
+            history.replaceState({}, document.title, window.location.pathname);
+        }
+    </script>
+</body>
+</html>
