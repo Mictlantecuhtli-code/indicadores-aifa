@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edición de Datos - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo-section">
+                <img src="https://via.placeholder.com/60x60/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="logo">
+                <div class="header-text">
+                    <h1>Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+                    <p class="subtitle">Edición de Datos</p>
+                </div>
+            </div>
+            <div class="nav-section">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
+                <button id="logoutBtn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Información de Permisos -->
+            <div class="permissions-section">
+                <div class="permissions-card">
+                    <h3><i class="fas fa-shield-alt"></i> Permisos de Edición</h3>
+                    <div class="permissions-info">
+                        <div class="permission-item">
+                            <strong>Usuario:</strong> <span id="userName"></span>
+                        </div>
+                        <div class="permission-item">
+                            <strong>Rol:</strong> <span id="userRole"></span>
+                        </div>
+                        <div class="permission-item">
+                            <strong>Áreas con acceso:</strong> <span id="userAreas"></span>
+                        </div>
+                        <div class="permission-item">
+                            <strong>Puede editar:</strong> <span id="editPermissions"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-section">
+                <div class="filters-card">
+                    <h3><i class="fas fa-filter"></i> Filtros de Búsqueda</h3>
+                    
+                    <div class="filters-grid">
+                        <!-- Área -->
+                        <div class="filter-group">
+                            <label for="areaFilter">
+                                <i class="fas fa-building"></i> Área
+                            </label>
+                            <select id="areaFilter" class="form-select">
+                                <option value="">Todas las áreas</option>
+                            </select>
+                        </div>
+
+                        <!-- Indicador -->
+                        <div class="filter-group">
+                            <label for="indicadorFilter">
+                                <i class="fas fa-chart-line"></i> Indicador
+                            </label>
+                            <select id="indicadorFilter" class="form-select">
+                                <option value="">Todos los indicadores</option>
+                            </select>
+                        </div>
+
+                        <!-- Año -->
+                        <div class="filter-group">
+                            <label for="anioFilter">
+                                <i class="fas fa-calendar"></i> Año
+                            </label>
+                            <select id="anioFilter" class="form-select">
+                                <option value="">Todos los años</option>
+                            </select>
+                        </div>
+
+                        <!-- Estado -->
+                        <div class="filter-group">
+                            <label for="estadoFilter">
+                                <i class="fas fa-flag"></i> Estado
+                            </label>
+                            <select id="estadoFilter" class="form-select">
+                                <option value="">Todos los estados</option>
+                                <option value="activos">Solo activos</option>
+                                <option value="eliminados">Solo eliminados</option>
+                                <option value="pendiente">Pendientes</option>
+                                <option value="aprobado">Aprobados</option>
+                                <option value="rechazado">Rechazados</option>
+                            </select>
+                        </div>
+
+                        <!-- Botones de acción -->
+                        <div class="filter-actions">
+                            <button id="buscarBtn" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button id="limpiarFiltrosBtn" class="btn btn-secondary">
+                                <i class="fas fa-eraser"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones Masivas -->
+            <div class="bulk-actions-section" id="bulkActionsSection" style="display: none;">
+                <div class="bulk-actions-card">
+                    <div class="bulk-actions-header">
+                        <span id="selectedCount">0 elementos seleccionados</span>
+                        <div class="bulk-actions-buttons">
+                            <button id="bulkEditBtn" class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i> Editar seleccionados
+                            </button>
+                            <button id="bulkDeleteBtn" class="btn btn-sm btn-danger">
+                                <i class="fas fa-trash"></i> Eliminar seleccionados
+                            </button>
+                            <button id="bulkRestoreBtn" class="btn btn-sm btn-success" style="display: none;">
+                                <i class="fas fa-undo"></i> Restaurar seleccionados
+                            </button>
+                            <button id="clearSelectionBtn" class="btn btn-sm btn-outline">
+                                <i class="fas fa-times"></i> Limpiar selección
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Datos -->
+            <div class="data-table-section">
+                <div class="data-table-card">
+                    <div class="table-header">
+                        <h3>
+                            <i class="fas fa-table"></i> Datos de Indicadores
+                            <span id="recordCount" class="record-count"></span>
+                        </h3>
+                        <div class="table-actions">
+                            <button id="refreshBtn" class="btn btn-sm btn-outline">
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                            <button id="exportBtn" class="btn btn-sm btn-info">
+                                <i class="fas fa-download"></i> Exportar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="edit-table" id="editTable">
+                            <thead>
+                                <tr>
+                                    <th class="checkbox-col">
+                                        <input type="checkbox" id="selectAll">
+                                    </th>
+                                    <th class="sortable" data-column="area">
+                                        Área <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="indicador">
+                                        Indicador <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="periodo">
+                                        Período <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" data-column="valor">
+                                        Valor <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th>Fuente</th>
+                                    <th>Estado</th>
+                                    <th class="sortable" data-column="fecha">
+                                        Fecha <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="editTableBody">
+                                <tr class="loading-row">
+                                    <td colspan="9">
+                                        <div class="loading-message">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            Cargando datos...
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="pagination-section">
+                        <div class="pagination-info">
+                            <span id="paginationInfo">Mostrando 0 de 0 registros</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button id="firstPageBtn" class="btn btn-sm btn-outline" disabled>
+                                <i class="fas fa-angle-double-left"></i>
+                            </button>
+                            <button id="prevPageBtn" class="btn btn-sm btn-outline" disabled>
+                                <i class="fas fa-angle-left"></i>
+                            </button>
+                            <span class="page-numbers" id="pageNumbers"></span>
+                            <button id="nextPageBtn" class="btn btn-sm btn-outline" disabled>
+                                <i class="fas fa-angle-right"></i>
+                            </button>
+                            <button id="lastPageBtn" class="btn btn-sm btn-outline" disabled>
+                                <i class="fas fa-angle-double-right"></i>
+                            </button>
+                        </div>
+                        <div class="page-size-selector">
+                            <label for="pageSizeSelect">Mostrar:</label>
+                            <select id="pageSizeSelect" class="form-select-sm">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span>por página</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Edición -->
+    <div id="editModal" class="modal" style="display: none;">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h4><i class="fas fa-edit"></i> Editar Valor</h4>
+                <button id="closeEditModalBtn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <input type="hidden" id="editRecordId">
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Indicador:</label>
+                            <div class="form-display" id="editIndicadorDisplay"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Período:</label>
+                            <div class="form-display" id="editPeriodoDisplay"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editValor">Valor <span class="required">*</span></label>
+                            <input type="number" id="editValor" class="form-input" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editEstado">Estado</label>
+                            <select id="editEstado" class="form-select">
+                                <option value="">Sin estado</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="aprobado">Aprobado</option>
+                                <option value="rechazado">Rechazado</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label for="editFuente">Fuente</label>
+                        <input type="text" id="editFuente" class="form-input" maxlength="255">
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label for="editComentario">Comentario</label>
+                        <textarea id="editComentario" class="form-textarea" rows="3" maxlength="500"></textarea>
+                        <div class="char-counter">
+                            <span id="editComentarioCounter">0</span>/500 caracteres
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelEditBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button id="saveEditBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación -->
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 id="confirmTitle"><i class="fas fa-exclamation-triangle"></i> Confirmar Acción</h4>
+                <button id="closeConfirmModalBtn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage"></p>
+                <div id="confirmDetails" class="confirmation-details"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelConfirmBtn" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button id="confirmActionBtn" class="btn btn-danger">
+                    <i class="fas fa-check"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="utils.js"></script>
+    <script src="edicion.js"></script>
+</body>
+</html>
