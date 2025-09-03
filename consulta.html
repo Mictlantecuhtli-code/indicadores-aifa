@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Indicadores - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo-section">
+                <img src="https://via.placeholder.com/60x60/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="logo">
+                <div class="header-text">
+                    <h1>Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+                    <p class="subtitle">Consulta de Indicadores</p>
+                </div>
+            </div>
+            <div class="nav-section">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
+                <button id="logoutBtn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Controles de Consulta -->
+            <div class="controls-section">
+                <div class="controls-card">
+                    <h3><i class="fas fa-sliders-h"></i> Parámetros de Consulta</h3>
+                    
+                    <div class="controls-grid">
+                        <!-- Selección de Indicador -->
+                        <div class="control-group">
+                            <label for="indicadorSelect">
+                                <i class="fas fa-chart-line"></i> Indicador
+                            </label>
+                            <select id="indicadorSelect" class="form-select" required>
+                                <option value="">Seleccione un indicador...</option>
+                            </select>
+                        </div>
+
+                        <!-- Año A -->
+                        <div class="control-group">
+                            <label for="anioASelect">
+                                <i class="fas fa-calendar"></i> Año A
+                            </label>
+                            <select id="anioASelect" class="form-select" required>
+                                <option value="">Seleccione año...</option>
+                            </select>
+                        </div>
+
+                        <!-- Año B -->
+                        <div class="control-group">
+                            <label for="anioBSelect">
+                                <i class="fas fa-calendar-alt"></i> Año B
+                            </label>
+                            <select id="anioBSelect" class="form-select" required>
+                                <option value="">Seleccione año...</option>
+                            </select>
+                        </div>
+
+                        <!-- Botón de Consulta -->
+                        <div class="control-group">
+                            <label>&nbsp;</label>
+                            <button id="consultarBtn" class="btn btn-primary" disabled>
+                                <i class="fas fa-search"></i>
+                                <span id="consultarBtnText">Consultar</span>
+                                <div id="consultarSpinner" class="spinner" style="display: none;"></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controles de Visualización -->
+            <div class="viz-controls-section" id="vizControlsSection" style="display: none;">
+                <div class="viz-controls-card">
+                    <h4><i class="fas fa-cog"></i> Controles de Visualización</h4>
+                    
+                    <div class="viz-controls-grid">
+                        <!-- Control de Bins -->
+                        <div class="viz-control-group">
+                            <label for="binsRange">
+                                <i class="fas fa-bars"></i> Número de Bins
+                                <span id="binsValue" class="control-value">20</span>
+                            </label>
+                            <input 
+                                type="range" 
+                                id="binsRange" 
+                                min="5" 
+                                max="50" 
+                                value="20" 
+                                class="range-slider"
+                            >
+                        </div>
+
+                        <!-- Control de Escala -->
+                        <div class="viz-control-group">
+                            <label for="scaleSelect">
+                                <i class="fas fa-ruler"></i> Escala
+                            </label>
+                            <select id="scaleSelect" class="form-select">
+                                <option value="linear">Lineal</option>
+                                <option value="log">Logarítmica</option>
+                            </select>
+                        </div>
+
+                        <!-- Botón de Actualizar -->
+                        <div class="viz-control-group">
+                            <button id="actualizarVisualizacionBtn" class="btn btn-success">
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                        </div>
+
+                        <!-- Botón de Exportar -->
+                        <div class="viz-control-group">
+                            <button id="exportarBtn" class="btn btn-info">
+                                <i class="fas fa-download"></i> Exportar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Área de Resultados -->
+            <div class="results-section">
+                <!-- Información del Indicador -->
+                <div class="indicator-info" id="indicatorInfo" style="display: none;">
+                    <div class="info-card">
+                        <h4 id="indicatorName"></h4>
+                        <div class="indicator-details">
+                            <div class="detail-item">
+                                <strong>Área:</strong> <span id="indicatorArea"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Unidad:</strong> <span id="indicatorUnit"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Frecuencia:</strong> <span id="indicatorFrequency"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Fuente:</strong> <span id="indicatorSource"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico -->
+                <div class="chart-container" id="chartContainer" style="display: none;">
+                    <div class="chart-header">
+                        <h4><i class="fas fa-chart-bar"></i> Histograma Comparativo</h4>
+                        <div class="chart-actions">
+                            <button id="toggleFullscreenBtn" class="btn btn-outline">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="plotlyChart" class="plotly-chart"></div>
+                </div>
+
+                <!-- Estadísticas -->
+                <div class="stats-container" id="statsContainer" style="display: none;">
+                    <div class="stats-grid">
+                        <!-- Estadísticas Año A -->
+                        <div class="stats-card">
+                            <h5 id="statsYearA">Año A - Estadísticas</h5>
+                            <div class="stats-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">Valores:</span>
+                                    <span class="stat-value" id="countA">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Mínimo:</span>
+                                    <span class="stat-value" id="minA">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Máximo:</span>
+                                    <span class="stat-value" id="maxA">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Media:</span>
+                                    <span class="stat-value" id="meanA">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Mediana:</span>
+                                    <span class="stat-value" id="medianA">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Desv. Est.:</span>
+                                    <span class="stat-value" id="stdA">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estadísticas Año B -->
+                        <div class="stats-card">
+                            <h5 id="statsYearB">Año B - Estadísticas</h5>
+                            <div class="stats-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">Valores:</span>
+                                    <span class="stat-value" id="countB">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Mínimo:</span>
+                                    <span class="stat-value" id="minB">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Máximo:</span>
+                                    <span class="stat-value" id="maxB">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Media:</span>
+                                    <span class="stat-value" id="meanB">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Mediana:</span>
+                                    <span class="stat-value" id="medianB">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Desv. Est.:</span>
+                                    <span class="stat-value" id="stdB">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Comparación -->
+                        <div class="stats-card comparison-card">
+                            <h5><i class="fas fa-balance-scale"></i> Comparación</h5>
+                            <div class="stats-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">Diferencia en Media:</span>
+                                    <span class="stat-value" id="meanDiff">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">% Cambio:</span>
+                                    <span class="stat-value" id="percentChange">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Correlación:</span>
+                                    <span class="stat-value" id="correlation">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mensaje de No Datos -->
+                <div class="no-data-message" id="noDataMessage" style="display: none;">
+                    <div class="no-data-card">
+                        <i class="fas fa-chart-line fa-3x"></i>
+                        <h4>No hay datos disponibles</h4>
+                        <p>No se encontraron datos para los parámetros seleccionados.</p>
+                        <p>Verifique que existan valores capturados para el indicador y años seleccionados.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="consulta.js"></script>
+</body>
+</html>
