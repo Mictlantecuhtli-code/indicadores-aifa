@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página no encontrada - AIFA Indicadores 2.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Estilos específicos para página 404 */
+        .error-body {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-md);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .error-body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .error-container {
+            background-color: var(--bg-primary);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-xl);
+            padding: var(--spacing-2xl);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .error-icon {
+            font-size: 8rem;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-lg);
+            opacity: 0.8;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .error-title {
+            font-size: var(--font-size-4xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .error-subtitle {
+            font-size: var(--font-size-xl);
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .error-message {
+            color: var(--text-secondary);
+            font-size: var(--font-size-base);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .error-actions {
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .branding-info {
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-xl);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .logo-small {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .branding-text {
+            color: var(--text-muted);
+            font-size: var(--font-size-sm);
+        }
+
+        .countdown {
+            background-color: var(--gray-100);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+        }
+
+        .countdown strong {
+            color: var(--primary-color);
+            font-size: var(--font-size-lg);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .error-container {
+                margin: var(--spacing-md);
+                padding: var(--spacing-xl);
+            }
+
+            .error-icon {
+                font-size: 6rem;
+            }
+
+            .error-title {
+                font-size: var(--font-size-3xl);
+            }
+
+            .error-subtitle {
+                font-size: var(--font-size-lg);
+            }
+
+            .error-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .error-actions .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body class="error-body">
+    <div class="error-container">
+        <!-- Icono de error -->
+        <div class="error-icon">
+            <i class="fas fa-plane-departure"></i>
+        </div>
+
+        <!-- Contenido del error -->
+        <h1 class="error-title">404</h1>
+        <h2 class="error-subtitle">Página no encontrada</h2>
+        
+        <div class="error-message">
+            <p>Lo sentimos, la página que estás buscando no existe o ha sido movida.</p>
+            <p>Puede que hayas escrito mal la dirección o que la página haya cambiado de ubicación.</p>
+        </div>
+
+        <!-- Acciones -->
+        <div class="error-actions">
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-home"></i>
+                Ir al Inicio
+            </a>
+            <button onclick="history.back()" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Regresar
+            </button>
+            <a href="/login.html" class="btn btn-info">
+                <i class="fas fa-sign-in-alt"></i>
+                Iniciar Sesión
+            </a>
+        </div>
+
+        <!-- Contador de redirección automática -->
+        <div class="countdown" id="countdown">
+            <i class="fas fa-clock"></i>
+            Serás redirigido al inicio en <strong id="countdownTimer">10</strong> segundos.
+            <br>
+            <button onclick="cancelRedirect()" class="btn btn-sm btn-outline mt-2">
+                <i class="fas fa-stop"></i>
+                Cancelar
+            </button>
+        </div>
+
+        <!-- Información de branding -->
+        <div class="branding-info">
+            <img src="https://via.placeholder.com/40x40/0066cc/ffffff?text=AIFA" alt="AIFA Logo" class="logo-small">
+            <div class="branding-text">
+                <strong>Aeropuerto Internacional Felipe Ángeles (AIFA)</strong><br>
+                Sistema de Indicadores 2.0
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables para el contador
+        let countdownTimer = 10;
+        let redirectInterval = null;
+        let redirectCanceled = false;
+
+        // Inicializar contador de redirección
+        function startCountdown() {
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            redirectInterval = setInterval(function() {
+                countdownTimer--;
+                countdownElement.textContent = countdownTimer;
+                
+                if (countdownTimer <= 0) {
+                    clearInterval(redirectInterval);
+                    if (!redirectCanceled) {
+                        window.location.href = '/';
+                    }
+                }
+            }, 1000);
+        }
+
+        // Cancelar redirección automática
+        function cancelRedirect() {
+            redirectCanceled = true;
+            clearInterval(redirectInterval);
+            const countdownDiv = document.getElementById('countdown');
+            countdownDiv.innerHTML = `
+                <i class="fas fa-check"></i>
+                Redirección automática cancelada.
+            `;
+            countdownDiv.style.backgroundColor = 'var(--success-light)';
+            countdownDiv.style.borderColor = 'var(--success-color)';
+            countdownDiv.style.color = 'var(--success-color)';
+        }
+
+        // Detectar si la página fue cargada directamente o viene de un enlace roto
+        function detectError() {
+            const urlPath = window.location.pathname;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Log para debugging (solo en desarrollo)
+            if (window.location.hostname === 'localhost' || window.location.hostname.includes('github.io') === false) {
+                console.log('404 Page loaded:', {
+                    path: urlPath,
+                    params: Object.fromEntries(urlParams),
+                    referrer: document.referrer
+                });
+            }
+            
+            // Si viene de otro sitio, mostrar información adicional
+            if (document.referrer && !document.referrer.includes(window.location.hostname)) {
+                const errorMessage = document.querySelector('.error-message');
+                errorMessage.innerHTML += `
+                    <p><small><strong>Referencia:</strong> Llegaste desde ${new URL(document.referrer).hostname}</small></p>
+                `;
+            }
+        }
+
+        // Manejar navegación del historial
+        function handleNavigation() {
+            // Verificar si hay historial disponible
+            if (window.history.length <= 1) {
+                // Si no hay historial, ocultar botón de regresar
+                const backButton = document.querySelector('button[onclick="history.back()"]');
+                if (backButton) {
+                    backButton.style.display = 'none';
+                }
+            }
+        }
+
+        // Inicialización cuando carga la página
+        document.addEventListener('DOMContentLoaded', function() {
+            detectError();
+            handleNavigation();
+            startCountdown();
+            
+            // Agregar listener para tecla Escape (cancelar redirección)
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && !redirectCanceled) {
+                    cancelRedirect();
+                }
+            });
+        });
+
+        // Pausar contador cuando la página no está visible
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (redirectInterval) {
+                    clearInterval(redirectInterval);
+                }
+            } else {
+                if (!redirectCanceled && countdownTimer > 0) {
+                    startCountdown();
+                }
+            }
+        });
+
+        // Para GitHub Pages: redirigir rutas SPA al index.html
+        function handleSPARouting() {
+            const path = window.location.pathname;
+            
+            // Lista de rutas válidas del sistema (sin extensión .html)
+            const validRoutes = [
+                '/login',
+                '/consulta', 
+                '/captura',
+                '/edicion',
+                '/admin'
+            ];
+            
+            // Si es una ruta válida sin .html, agregar la extensión
+            if (validRoutes.includes(path)) {
+                window.location.replace(path + '.html' + window.location.search);
+                return;
+            }
+            
+            // Si es una ruta que debería ir al index
+            if (path === '/' || path === '/index' || path === '/home') {
+                window.location.replace('/' + window.location.search);
+                return;
+            }
+        }
+
+        // Ejecutar routing para GitHub Pages
+        handleSPARouting();
+    </script>
+</body>
+</html>
