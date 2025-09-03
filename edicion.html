@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edición de Indicadores - AIFA</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Inicio</a>
+                <a href="consulta.html" class="nav-link">Consulta</a>
+                <a href="captura.html" class="nav-link">Captura</a>
+                <a href="edicion.html" class="nav-link active">Edición</a>
+                <a href="login.html" class="nav-link">Login</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <section class="page-header">
+                <h2>Edición de Valores</h2>
+                <p class="page-subtitle">Modificación y gestión de valores existentes</p>
+                <div class="permission-notice" id="permission-notice" style="display: none;">
+                    <span class="notice-icon">⚠️</span>
+                    <span class="notice-text">Acceso limitado: Solo usuarios con rol ≥ Jefe de Área pueden editar valores</span>
+                </div>
+            </section>
+
+            <section class="filters-section">
+                <div class="filters-card">
+                    <h3>Filtros de Búsqueda</h3>
+                    
+                    <div class="filters-grid">
+                        <div class="form-group">
+                            <label for="area-filter" class="form-label">Área:</label>
+                            <select id="area-filter" class="form-select" aria-describedby="area-help">
+                                <option value="">Todas las áreas</option>
+                            </select>
+                            <small id="area-help" class="form-help">Filtrar por área específica</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="indicador-filter" class="form-label">Indicador:</label>
+                            <select id="indicador-filter" class="form-select" aria-describedby="indicador-help">
+                                <option value="">Todos los indicadores</option>
+                            </select>
+                            <small id="indicador-help" class="form-help">Filtrar por indicador específico</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="anio-filter" class="form-label">Año:</label>
+                            <select id="anio-filter" class="form-select">
+                                <option value="">Todos los años</option>
+                                <option value="2022">2022</option>
+                                <option value="2023">2023</option>
+                                <option value="2024">2024</option>
+                                <option value="2025" selected>2025</option>
+                                <option value="2026">2026</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="mes-desde" class="form-label">Desde mes:</label>
+                            <select id="mes-desde" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="mes-hasta" class="form-label">Hasta mes:</label>
+                            <select id="mes-hasta" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="estado-filter" class="form-label">Estado:</label>
+                            <select id="estado-filter" class="form-select">
+                                <option value="">Todos los estados</option>
+                                <option value="capturado">Capturado</option>
+                                <option value="validado">Validado</option>
+                                <option value="publicado">Publicado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="incluir-eliminados" class="form-label">
+                                <input type="checkbox" id="incluir-eliminados" class="form-checkbox">
+                                Incluir eliminados
+                            </label>
+                            <small class="form-help">Mostrar registros con soft-delete</small>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <button id="buscar-btn" class="btn btn-primary" type="button">
+                                <span class="btn-text">🔍 Buscar Valores</span>
+                                <span class="btn-loading" style="display: none;">Buscando...</span>
+                            </button>
+                            <button id="limpiar-filtros-btn" class="btn btn-outline" type="button">
+                                🗑️ Limpiar Filtros
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <h3>Resultados de la Búsqueda</h3>
+                    <div class="results-info">
+                        <span id="results-count" class="results-count">0 registros encontrados</span>
+                        <div class="results-actions">
+                            <button id="export-btn" class="btn btn-small btn-outline" type="button">
+                                📊 Exportar
+                            </button>
+                            <button id="refresh-btn" class="btn btn-small btn-outline" type="button">
+                                🔄 Actualizar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table" id="valores-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Indicador</th>
+                                <th scope="col">Año</th>
+                                <th scope="col">Mes</th>
+                                <th scope="col">Valor</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Fuente</th>
+                                <th scope="col">Modificado</th>
+                                <th scope="col" class="actions-col">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="valores-tbody">
+                            <!-- Se llena dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination" id="pagination" style="display: none;">
+                    <button id="prev-page" class="btn btn-small btn-outline" disabled>« Anterior</button>
+                    <span id="page-info" class="page-info">Página 1 de 1</span>
+                    <button id="next-page" class="btn btn-small btn-outline" disabled>Siguiente »</button>
+                </div>
+            </section>
+
+            <section class="help-section">
+                <details class="help-details">
+                    <summary class="help-summary">Guía de Edición</summary>
+                    <div class="help-content">
+                        <h4>Permisos de Edición:</h4>
+                        <ul>
+                            <li><strong>Capturista:</strong> Solo puede ver valores (sin editar)</li>
+                            <li><strong>Jefe de Área:</strong> Puede editar valores de su área</li>
+                            <li><strong>Subdirector/Director/Admin:</strong> Puede editar según amplitud de responsabilidad</li>
+                        </ul>
+
+                        <h4>Acciones Disponibles:</h4>
+                        <ul>
+                            <li><strong>Editar:</strong> Modificar valor, fuente, comentario y estado</li>
+                            <li><strong>Eliminar:</strong> Soft-delete del registro (se puede restaurar)</li>
+                            <li><strong>Restaurar:</strong> Recuperar registros eliminados</li>
+                            <li><strong>Ver Historial:</strong> Consultar auditoría de cambios</li>
+                        </ul>
+
+                        <h4>Estados del Workflow:</h4>
+                        <ul>
+                            <li><strong>Capturado:</strong> Valor inicial ingresado</li>
+                            <li><strong>Validado:</strong> Revisado y aprobado</li>
+                            <li><strong>Publicado:</strong> Disponible para consultas públicas</li>
+                        </ul>
+
+                        <h4>Filtros de Búsqueda:</h4>
+                        <p>Use los filtros para encontrar registros específicos. Puede combinar múltiples filtros para refinar los resultados.</p>
+                    </div>
+                </details>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal de Edición -->
+    <div id="edit-modal" class="modal" role="dialog" aria-labelledby="edit-modal-title" aria-hidden="true">
+        <div class="modal-overlay" id="edit-modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="edit-modal-title">Editar Valor</h3>
+                <button type="button" class="modal-close" id="edit-modal-close" aria-label="Cerrar modal">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-form" class="edit-form" novalidate>
+                    <input type="hidden" id="edit-id">
+                    
+                    <div class="form-group">
+                        <label for="edit-indicador" class="form-label">Indicador:</label>
+                        <input type="text" id="edit-indicador" class="form-input" readonly>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit-anio" class="form-label">Año:</label>
+                            <input type="number" id="edit-anio" class="form-input" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-mes" class="form-label">Mes:</label>
+                            <input type="text" id="edit-mes" class="form-input" readonly>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-valor" class="form-label required">Valor:</label>
+                        <input type="number" id="edit-valor" class="form-input" step="0.01" min="0" required>
+                        <div class="form-error" id="edit-valor-error"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-estado" class="form-label">Estado:</label>
+                        <select id="edit-estado" class="form-select">
+                            <option value="capturado">Capturado</option>
+                            <option value="validado">Validado</option>
+                            <option value="publicado">Publicado</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-fuente" class="form-label">Fuente:</label>
+                        <input type="text" id="edit-fuente" class="form-input" maxlength="200">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-comentario" class="form-label">Comentario:</label>
+                        <textarea id="edit-comentario" class="form-textarea" rows="3" maxlength="500"></textarea>
+                        <div class="char-counter">
+                            <span id="edit-comentario-counter">0</span>/500 caracteres
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="edit-cancel-btn">Cancelar</button>
+                <button type="submit" form="edit-form" class="btn btn-primary" id="edit-save-btn">
+                    <span class="btn-text">💾 Guardar Cambios</span>
+                    <span class="btn-loading" style="display: none;">Guardando...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación -->
+    <div id="confirm-modal" class="modal" role="dialog" aria-labelledby="confirm-modal-title" aria-hidden="true">
+        <div class="modal-overlay" id="confirm-modal-overlay"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 id="confirm-modal-title">Confirmar Acción</h3>
+                <button type="button" class="modal-close" id="confirm-modal-close" aria-label="Cerrar modal">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-content">
+                    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+                    <p id="confirm-message">¿Está seguro de realizar esta acción?</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="confirm-cancel-btn">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-action-btn">
+                    <span class="btn-text">Confirmar</span>
+                    <span class="btn-loading" style="display: none;">Procesando...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Aeropuerto Internacional Felipe Ángeles (AIFA) - Sistema de Indicadores v2.0</p>
+        </div>
+    </footer>
+
+    <!-- Toast notifications container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Live region for screen readers -->
+    <div id="live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+    <script src="utils.js"></script>
+    <script src="edicion.js"></script>
+</body>
+</html>
