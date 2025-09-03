@@ -1,52 +1,26 @@
 /**
- * login.js - Lógica de Autenticación
- * Sistema de Indicadores AIFA 2.0
- *
- * Maneja el proceso de login con usuario+contraseña.
+ * login.js - Lógica de Autenticación (corrigido)
+ * - Reusa window.supabase (ya inicializado en tu app)
  * - Acepta "usuario" o "correo"
  * - Si es usuario, resuelve email con RPC auth_email_by_username
- * - Valida estado 'activo' en public.users
+ * - Corrige el error "cannot unmarshal array..." garantizando strings
+ * - Verifica 'activo' en public.users
  */
 
-/* ================================
-   Inicialización de Supabase
-   (Usa tus propias constantes si ya las tienes en otro archivo)
-================================ */
-const SUPABASE_URL = "https://kxjldzcaeayguiqkqqyh.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw";
-
-/* Si ya cargas @supabase/supabase-js por <script type="module"> en tu HTML,
-   puedes importar y crear el cliente aquí. Si lo creas en otro archivo y
-   expones window.supabase, este bloque no estorba. */
 let supabase;
-(async () => {
-  try {
-    if (!window.supabase) {
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-      window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-    supabase = window.supabase;
-  } catch (e) {
-    console.error("No se pudo inicializar Supabase:", e);
-  }
-})();
-
-/* ================================
-   Estado y boot del formulario
-================================ */
 let isLoading = false;
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Usa el cliente YA creado por tu app
+  supabase = window.supabase;
+
   initializeLoginForm();
   setupEventListeners();
   validateSupabaseConfig();
 });
 
-/* ================================
-   Inicialización y listeners
-================================ */
+/* ============== Boot / UI ============== */
 function initializeLoginForm() {
-  const form = document.getElementById("loginForm");
   const usernameInput = document.getElementById("username");
   const passwordInput = document.getElementById("password");
 
@@ -72,9 +46,7 @@ function setupEventListeners() {
   document.getElementById("password")?.addEventListener("input", validateForm);
 }
 
-/* ================================
-   Handler principal de login
-================================ */
+/* ============== Handler principal ============== */
 async function handleLogin(event) {
   event.preventDefault();
   if (isLoading) return;
@@ -88,12 +60,11 @@ async function handleLogin(event) {
     setLoadingState(true);
     hideMessage();
 
-    // 1) Determinar si es correo directo
+    // 1) Si ya viene correo, úsalo; si no, resolver por RPC
     let emailStr = "";
     if (usernameOrEmail.includes("@")) {
-      emailStr = usernameOrEmail; // ya es correo
+      emailStr = usernameOrEmail;
     } else {
-      // 2) Resolver email del username usando RPC (robusto a formatos)
       emailStr = await getEmailFromUsername(usernameOrEmail);
       if (!emailStr) {
         showMessage("Usuario no encontrado. Verifique su nombre de usuario.", "error");
@@ -101,7 +72,7 @@ async function handleLogin(event) {
       }
     }
 
-    // 3) Autenticar
+    // 2) Autenticación (FORZAR STRING evita el 400 "unmarshal array")
     const { data, error } = await supabase.auth.signInWithPassword({
       email: String(emailStr).trim(),
       password: String(password)
@@ -112,7 +83,7 @@ async function handleLogin(event) {
       return;
     }
 
-    // 4) Validar 'activo' en public.users
+    // 3) Validar 'activo' en public.users
     const emailForCheck = data?.user?.email || emailStr;
     const userActive = await checkUserActiveStatus(emailForCheck);
     if (!userActive) {
@@ -121,11 +92,9 @@ async function handleLogin(event) {
       return;
     }
 
-    // 5) OK
-    showMessage("Inicio de sesión exitoso. Redirigiendo...", "success");
-    setTimeout(() => {
-      location.href = "./index.html";
-    }, 1200);
+    // 4) OK → redirigir
+    showMessage("Inicio de sesión exitoso. Redirigiendo…", "success");
+    setTimeout(() => (location.href = "./index.html"), 1200);
   } catch (err) {
     console.error("Error en login:", err);
     showMessage("Error interno del sistema. Intente nuevamente.", "error");
@@ -134,9 +103,7 @@ async function handleLogin(event) {
   }
 }
 
-/* ================================
-   RPC username -> email (ROBUSTO)
-================================ */
+/* ============== RPC username -> email (robusto) ============== */
 async function getEmailFromUsername(username) {
   try {
     const { data, error } = await supabase.rpc("auth_email_by_username", {
@@ -147,19 +114,10 @@ async function getEmailFromUsername(username) {
       return null;
     }
 
-    // data puede venir como:
-    // - [{ email: "..." }]  (lo más común)
-    // - "..."               (si alguien cambió el retorno)
-    // - { email: "..." }    (poco probable)
-    if (Array.isArray(data)) {
-      return data[0]?.email ?? null;
-    }
-    if (data && typeof data === "object" && "email" in data) {
-      return data.email;
-    }
-    if (typeof data === "string") {
-      return data;
-    }
+    // data puede ser: [{ email:"..." }]  |  "..."  |  { email:"..." }
+    if (Array.isArray(data)) return data[0]?.email ?? null;
+    if (data && typeof data === "object" && "email" in data) return data.email;
+    if (typeof data === "string") return data;
     return null;
   } catch (e) {
     console.error("Error obteniendo email del username:", e);
@@ -167,9 +125,7 @@ async function getEmailFromUsername(username) {
   }
 }
 
-/* ================================
-   Verificar 'activo' en public.users
-================================ */
+/* ============== Verificar 'activo' en public.users ============== */
 async function checkUserActiveStatus(email) {
   try {
     const { data, error } = await supabase
@@ -189,16 +145,14 @@ async function checkUserActiveStatus(email) {
   }
 }
 
-/* ================================
-   Validaciones y UX
-================================ */
+/* ============== Validaciones / UX ============== */
 function validateLoginForm(username, password) {
   if (!username) {
     showMessage("Por favor ingrese su nombre de usuario o correo.", "error");
     document.getElementById("username")?.focus();
     return false;
   }
-  if (username.length < 3) {
+  if (username.length < 3 && !username.includes("@")) {
     showMessage("El nombre de usuario debe tener al menos 3 caracteres.", "error");
     document.getElementById("username")?.focus();
     return false;
@@ -230,7 +184,6 @@ function handleAuthError(error) {
   } else {
     message += "Verifique sus credenciales e intente nuevamente.";
   }
-
   showMessage(message, "error");
 }
 
@@ -300,7 +253,7 @@ function validateForm() {
   const password = document.getElementById("password")?.value || "";
   const loginBtn = document.getElementById("loginBtn");
 
-  if (username.length >= 3 && password.length >= 6) {
+  if ((username.includes("@") || username.length >= 3) && password.length >= 6) {
     loginBtn?.classList.remove("btn-disabled");
   } else {
     loginBtn?.classList.add("btn-disabled");
@@ -340,67 +293,11 @@ function clearForm() {
   toggleIcon?.classList.add("fa-eye");
 }
 
-/* ================================
-   Utilidades / runtime guards
-================================ */
-function debugLogin(username, email) {
-  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    console.log("Debug Login Info:", { username, email, ts: new Date().toISOString() });
-  }
-}
-
-window.addEventListener("online", () => {
-  hideMessage();
-  showMessage("Conexión restaurada. Puede intentar iniciar sesión.", "success");
-  setTimeout(hideMessage, 2500);
-});
-
-window.addEventListener("offline", () => {
-  showMessage("Sin conexión a internet. Verifique su conexión.", "error");
-});
-
-window.addEventListener("error", (event) => {
-  console.error("Error global capturado:", event.error);
-  if (isLoading) {
-    setLoadingState(false);
-    showMessage("Error inesperado. Recargue la página e intente nuevamente.", "error");
-  }
-});
-
-window.addEventListener("unhandledrejection", (event) => {
-  console.error("Promesa rechazada no capturada:", event.reason);
-  if (isLoading) {
-    setLoadingState(false);
-    showMessage("Error de conexión. Verifique su conexión e intente nuevamente.", "error");
-  }
-});
-
-window.addEventListener("beforeunload", () => {
-  clearForm();
-});
-
-/* ================================
-   Validación de config al cargar
-================================ */
+/* ============== Config guard ============== */
 function validateSupabaseConfig() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error("Configuración de Supabase incompleta");
+  if (typeof window.supabase === "undefined" || !window.supabase) {
+    console.error("Supabase no está inicializado (window.supabase es undefined).");
     showMessage("Error de configuración del sistema. Contacte al administrador.", "error");
-    return;
   }
-  if (!window.supabase) {
-    console.warn("Supabase aún inicializando…");
-  }
-}
-
-/* ================================
-   Exports para pruebas (opcional)
-================================ */
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    validateLoginForm,
-    getEmailFromUsername,
-    checkUserActiveStatus,
-    handleAuthError
-  };
+  // NOTA: No uso SUPABASE_URL / SUPABASE_ANON_KEY aquí para evitar colisiones.
 }
