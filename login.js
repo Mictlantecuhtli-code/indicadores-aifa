@@ -1,5 +1,5 @@
 /**
- * login.js - CORREGIDO - Lógica de autenticación por EMAIL
+ * login.js - FINAL CORREGIDO - Lógica de autenticación por EMAIL
  * Sistema de Indicadores AIFA 2.0
  */
 
@@ -17,16 +17,18 @@ let isInitializing = false;
 let retryCount = 0;
 const maxRetries = 3;
 
+// Cliente Supabase (se obtiene de utils.js)
+let supabaseClient = null;
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         isInitializing = true;
         
-        // Usar cliente Supabase de utils.js (no crear nuevo)
-        if (!window.supabase) {
-            console.error('Supabase no disponible - verifique que utils.js esté cargado');
-            notify('error', 'Error de configuración del sistema');
-            return;
+        // Obtener cliente Supabase de utils.js
+        supabaseClient = createClient();
+        if (!supabaseClient) {
+            throw new Error('No se pudo inicializar cliente Supabase');
         }
         
         // Obtener referencias DOM
@@ -108,18 +110,6 @@ function initializeElements() {
         authStatus: document.getElementById('auth-status'),
         apiStatus: document.getElementById('api-status')
     };
-    
-    // Verificar elementos críticos
-    const criticalElements = [
-        loginElements.loginCard,
-        loginElements.emailForm,
-        loginElements.magicForm
-    ];
-    
-    const missingElements = criticalElements.filter(el => !el);
-    if (missingElements.length > 0) {
-        throw new Error('Faltan elementos DOM críticos para autenticación');
-    }
 }
 
 /**
@@ -152,30 +142,15 @@ function setupEventListeners() {
     loginElements.registerEmail?.addEventListener('input', validateRegisterEmail);
     loginElements.registerPassword?.addEventListener('input', validateRegisterPassword);
     loginElements.registerNombre?.addEventListener('input', validateRegisterNombre);
-    
-    // Enter en campos para envío de formulario
-    [loginElements.emailInput, loginElements.passwordInput].forEach(input => {
-        input?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                handleEmailLogin(e);
-            }
-        });
-    });
-    
-    loginElements.magicEmailInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            handleMagicLinkLogin(e);
-        }
-    });
 }
 
 /**
- * Verifica estado del sistema (DB, Auth, API)
+ * Verifica estado del sistema (DB, Auth, API) - CORREGIDO
  */
 async function checkSystemStatus() {
     // Estado de base de datos
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('users')
             .select('id')
             .limit(1);
@@ -187,7 +162,7 @@ async function checkSystemStatus() {
     
     // Estado de autenticación
     try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data, error } = await supabaseClient.auth.getSession();
         updateSystemStatus('auth', 'success', 'Funcional');
     } catch (error) {
         updateSystemStatus('auth', 'error', 'Error de auth');
@@ -217,11 +192,11 @@ function updateSystemStatus(component, status, message) {
 }
 
 /**
- * Verifica sesión existente al cargar la página
+ * Verifica sesión existente al cargar la página - CORREGIDO
  */
 async function checkExistingSession() {
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
         
         if (error) {
             throw error;
@@ -240,10 +215,10 @@ async function checkExistingSession() {
 }
 
 /**
- * Configura listener para cambios de autenticación
+ * Configura listener para cambios de autenticación - CORREGIDO
  */
 function setupAuthListener() {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (!isInitializing) {
             await handleAuthStateChange(event, session);
         }
@@ -342,8 +317,8 @@ async function handleEmailLogin(e) {
         const email = loginElements.emailInput.value.trim();
         const password = loginElements.passwordInput.value;
         
-        // CORREGIDO: Llamada simple sin opciones inválidas
-        const { data, error } = await supabase.auth.signInWithPassword({
+        // CORREGIDO: Usar supabaseClient
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -355,7 +330,7 @@ async function handleEmailLogin(e) {
         // Verificar que el usuario esté activo en la tabla users
         const isActive = await checkUserActiveStatus(email);
         if (!isActive) {
-            await supabase.auth.signOut();
+            await supabaseClient.auth.signOut();
             throw new Error('Su cuenta está desactivada. Contacte al administrador.');
         }
         
@@ -386,11 +361,11 @@ async function handleEmailLogin(e) {
 }
 
 /**
- * Verifica si el usuario está activo en la tabla users
+ * Verifica si el usuario está activo en la tabla users - CORREGIDO
  */
 async function checkUserActiveStatus(email) {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('users')
             .select('activo')
             .eq('email', email)
@@ -423,8 +398,8 @@ async function handleMagicLinkLogin(e) {
         
         const email = loginElements.magicEmailInput.value.trim();
         
-        // CORREGIDO: Estructura correcta para signInWithOtp
-        const { error } = await supabase.auth.signInWithOtp({
+        // CORREGIDO: Usar supabaseClient
+        const { error } = await supabaseClient.auth.signInWithOtp({
             email: email,
             options: {
                 emailRedirectTo: window.location.origin + '/login.html'
@@ -481,8 +456,8 @@ async function handleRegister(e) {
         const nombre = loginElements.registerNombre.value.trim();
         const rol = loginElements.registerRol.value;
         
-        // CORREGIDO: Crear usuario directamente con signUp
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // CORREGIDO: Usar supabaseClient
+        const { data: authData, error: authError } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: {
@@ -497,8 +472,8 @@ async function handleRegister(e) {
             throw authError;
         }
         
-        // Crear registro en tabla users (esperando confirmación de email)
-        const { error: userError } = await supabase
+        // Crear registro en tabla users
+        const { error: userError } = await supabaseClient
             .from('users')
             .insert({
                 id: authData.user.id,
@@ -510,7 +485,6 @@ async function handleRegister(e) {
         
         if (userError) {
             console.error('Error insertando usuario:', userError);
-            // No eliminar de auth en este caso, usuario puede confirmar email después
         }
         
         notify('success', `Usuario ${nombre} creado. Se envió email de confirmación.`);
@@ -534,10 +508,10 @@ async function handleRegister(e) {
 }
 
 /**
- * Obtiene ID del rol por nombre
+ * Obtiene ID del rol por nombre - CORREGIDO
  */
 async function getRoleIdByName(roleName) {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('roles')
         .select('id')
         .eq('nombre', roleName)
@@ -551,13 +525,13 @@ async function getRoleIdByName(roleName) {
 }
 
 /**
- * Maneja logout
+ * Maneja logout - CORREGIDO
  */
 async function handleLogout() {
     try {
         setLoadingState(loginElements.logoutBtn, true);
         
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabaseClient.auth.signOut();
         
         if (error) {
             throw error;
@@ -574,7 +548,7 @@ async function handleLogout() {
 }
 
 /**
- * Maneja recuperación de contraseña
+ * Maneja recuperación de contraseña - CORREGIDO
  */
 async function handleForgotPassword() {
     const email = loginElements.emailInput?.value.trim();
@@ -586,7 +560,7 @@ async function handleForgotPassword() {
     }
     
     try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: `${window.location.origin}/login.html`
         });
         
@@ -603,13 +577,13 @@ async function handleForgotPassword() {
 }
 
 /**
- * Actualiza sesión del usuario
+ * Actualiza sesión del usuario - CORREGIDO
  */
 async function handleRefreshSession() {
     try {
         setLoadingState(loginElements.refreshSessionBtn, true);
         
-        const { data, error } = await supabase.auth.refreshSession();
+        const { data, error } = await supabaseClient.auth.refreshSession();
         
         if (error) {
             throw error;
