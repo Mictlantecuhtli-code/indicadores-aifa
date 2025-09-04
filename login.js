@@ -3,7 +3,7 @@
  * Sistema de Indicadores AIFA 2.0
  */
 
-// Variables globales
+// Variables globales (SIN declarar supabase - ya está en utils.js)
 let currentUser = null;
 let authState = 'logged-out'; // 'logged-out', 'logged-in', 'loading'
 
@@ -22,8 +22,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         isInitializing = true;
         
-        // Inicializar cliente Supabase
-        supabase = createClient();
+        // Usar cliente Supabase de utils.js (no crear nuevo)
+        if (!window.supabase) {
+            console.error('Supabase no disponible - verifique que utils.js esté cargado');
+            notify('error', 'Error de configuración del sistema');
+            return;
+        }
         
         // Obtener referencias DOM
         initializeElements();
@@ -171,7 +175,7 @@ function setupEventListeners() {
 async function checkSystemStatus() {
     // Estado de base de datos
     try {
-        const { data, error } = await 
+        const { data, error } = await supabase
             .from('users')
             .select('id')
             .limit(1);
@@ -183,7 +187,7 @@ async function checkSystemStatus() {
     
     // Estado de autenticación
     try {
-        const { data, error } = await .auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         updateSystemStatus('auth', 'success', 'Funcional');
     } catch (error) {
         updateSystemStatus('auth', 'error', 'Error de auth');
@@ -217,7 +221,7 @@ function updateSystemStatus(component, status, message) {
  */
 async function checkExistingSession() {
     try {
-        const { data: { session }, error } = await .auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
             throw error;
@@ -239,7 +243,7 @@ async function checkExistingSession() {
  * Configura listener para cambios de autenticación
  */
 function setupAuthListener() {
-    .auth.onAuthStateChange(async (event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
         if (!isInitializing) {
             await handleAuthStateChange(event, session);
         }
@@ -339,7 +343,7 @@ async function handleEmailLogin(e) {
         const password = loginElements.passwordInput.value;
         
         // CORREGIDO: Llamada simple sin opciones inválidas
-        const { data, error } = await .auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -351,7 +355,7 @@ async function handleEmailLogin(e) {
         // Verificar que el usuario esté activo en la tabla users
         const isActive = await checkUserActiveStatus(email);
         if (!isActive) {
-            await .auth.signOut();
+            await supabase.auth.signOut();
             throw new Error('Su cuenta está desactivada. Contacte al administrador.');
         }
         
@@ -386,7 +390,7 @@ async function handleEmailLogin(e) {
  */
 async function checkUserActiveStatus(email) {
     try {
-        const { data, error } = await 
+        const { data, error } = await supabase
             .from('users')
             .select('activo')
             .eq('email', email)
@@ -420,7 +424,7 @@ async function handleMagicLinkLogin(e) {
         const email = loginElements.magicEmailInput.value.trim();
         
         // CORREGIDO: Estructura correcta para signInWithOtp
-        const { error } = await .auth.signInWithOtp({
+        const { error } = await supabase.auth.signInWithOtp({
             email: email,
             options: {
                 emailRedirectTo: window.location.origin + '/login.html'
@@ -478,7 +482,7 @@ async function handleRegister(e) {
         const rol = loginElements.registerRol.value;
         
         // CORREGIDO: Crear usuario directamente con signUp
-        const { data: authData, error: authError } = await .auth.signUp({
+        const { data: authData, error: authError } = await supabase.auth.signUp({
             email: email,
             password: password,
             options: {
@@ -494,7 +498,7 @@ async function handleRegister(e) {
         }
         
         // Crear registro en tabla users (esperando confirmación de email)
-        const { error: userError } = await 
+        const { error: userError } = await supabase
             .from('users')
             .insert({
                 id: authData.user.id,
@@ -533,7 +537,7 @@ async function handleRegister(e) {
  * Obtiene ID del rol por nombre
  */
 async function getRoleIdByName(roleName) {
-    const { data, error } = await 
+    const { data, error } = await supabase
         .from('roles')
         .select('id')
         .eq('nombre', roleName)
@@ -553,7 +557,7 @@ async function handleLogout() {
     try {
         setLoadingState(loginElements.logoutBtn, true);
         
-        const { error } = await .auth.signOut();
+        const { error } = await supabase.auth.signOut();
         
         if (error) {
             throw error;
@@ -582,7 +586,7 @@ async function handleForgotPassword() {
     }
     
     try {
-        const { error } = await .auth.resetPasswordForEmail(email, {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: `${window.location.origin}/login.html`
         });
         
@@ -605,7 +609,7 @@ async function handleRefreshSession() {
     try {
         setLoadingState(loginElements.refreshSessionBtn, true);
         
-        const { data, error } = await .auth.refreshSession();
+        const { data, error } = await supabase.auth.refreshSession();
         
         if (error) {
             throw error;
