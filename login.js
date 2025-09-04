@@ -4,7 +4,6 @@
  */
 
 // Variables globales
-let supabase;
 let currentUser = null;
 let authState = 'logged-out'; // 'logged-out', 'logged-in', 'loading'
 
@@ -172,7 +171,7 @@ function setupEventListeners() {
 async function checkSystemStatus() {
     // Estado de base de datos
     try {
-        const { data, error } = await supabase
+        const { data, error } = await 
             .from('users')
             .select('id')
             .limit(1);
@@ -184,7 +183,7 @@ async function checkSystemStatus() {
     
     // Estado de autenticación
     try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data, error } = await .auth.getSession();
         updateSystemStatus('auth', 'success', 'Funcional');
     } catch (error) {
         updateSystemStatus('auth', 'error', 'Error de auth');
@@ -218,7 +217,7 @@ function updateSystemStatus(component, status, message) {
  */
 async function checkExistingSession() {
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await .auth.getSession();
         
         if (error) {
             throw error;
@@ -240,7 +239,7 @@ async function checkExistingSession() {
  * Configura listener para cambios de autenticación
  */
 function setupAuthListener() {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    .auth.onAuthStateChange(async (event, session) => {
         if (!isInitializing) {
             await handleAuthStateChange(event, session);
         }
@@ -340,7 +339,7 @@ async function handleEmailLogin(e) {
         const password = loginElements.passwordInput.value;
         
         // CORREGIDO: Llamada simple sin opciones inválidas
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await .auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -352,7 +351,7 @@ async function handleEmailLogin(e) {
         // Verificar que el usuario esté activo en la tabla users
         const isActive = await checkUserActiveStatus(email);
         if (!isActive) {
-            await supabase.auth.signOut();
+            await .auth.signOut();
             throw new Error('Su cuenta está desactivada. Contacte al administrador.');
         }
         
@@ -387,7 +386,7 @@ async function handleEmailLogin(e) {
  */
 async function checkUserActiveStatus(email) {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await 
             .from('users')
             .select('activo')
             .eq('email', email)
@@ -421,7 +420,7 @@ async function handleMagicLinkLogin(e) {
         const email = loginElements.magicEmailInput.value.trim();
         
         // CORREGIDO: Estructura correcta para signInWithOtp
-        const { error } = await supabase.auth.signInWithOtp({
+        const { error } = await .auth.signInWithOtp({
             email: email,
             options: {
                 emailRedirectTo: window.location.origin + '/login.html'
@@ -479,7 +478,7 @@ async function handleRegister(e) {
         const rol = loginElements.registerRol.value;
         
         // CORREGIDO: Crear usuario directamente con signUp
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { data: authData, error: authError } = await .auth.signUp({
             email: email,
             password: password,
             options: {
@@ -495,7 +494,7 @@ async function handleRegister(e) {
         }
         
         // Crear registro en tabla users (esperando confirmación de email)
-        const { error: userError } = await supabase
+        const { error: userError } = await 
             .from('users')
             .insert({
                 id: authData.user.id,
@@ -534,7 +533,7 @@ async function handleRegister(e) {
  * Obtiene ID del rol por nombre
  */
 async function getRoleIdByName(roleName) {
-    const { data, error } = await supabase
+    const { data, error } = await 
         .from('roles')
         .select('id')
         .eq('nombre', roleName)
@@ -554,7 +553,7 @@ async function handleLogout() {
     try {
         setLoadingState(loginElements.logoutBtn, true);
         
-        const { error } = await supabase.auth.signOut();
+        const { error } = await .auth.signOut();
         
         if (error) {
             throw error;
@@ -583,7 +582,7 @@ async function handleForgotPassword() {
     }
     
     try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await .auth.resetPasswordForEmail(email, {
             redirectTo: `${window.location.origin}/login.html`
         });
         
@@ -606,7 +605,7 @@ async function handleRefreshSession() {
     try {
         setLoadingState(loginElements.refreshSessionBtn, true);
         
-        const { data, error } = await supabase.auth.refreshSession();
+        const { data, error } = await .auth.refreshSession();
         
         if (error) {
             throw error;
