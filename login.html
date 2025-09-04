@@ -3,327 +3,315 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso al Sistema - AIFA</title>
+    <title>Iniciar Sesión - AIFA Indicadores 2.0</title>
     <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
-    <header class="header">
-        <div class="container">
-            <h1 class="logo">Aeropuerto Internacional Felipe Ángeles (AIFA)</h1>
-            <nav class="nav">
-                <a href="index.html" class="nav-link">Inicio</a>
-                <a href="consulta.html" class="nav-link">Consulta</a>
-                <a href="captura.html" class="nav-link">Captura</a>
-                <a href="edicion.html" class="nav-link">Edición</a>
-                <a href="login.html" class="nav-link active">Login</a>
-            </nav>
+<body class="login-body">
+    <div class="login-container">
+        <!-- Header con branding -->
+        <div class="login-header">
+            <img src="AIFA_Logo.png" alt="AIFA Logo" class="login-logo">
+            <h1>Aeropuerto Internacional Felipe Ángeles</h1>
+            <h2>Sistema de Indicadores 2.0</h2>
         </div>
-    </header>
 
-    <main class="main">
-        <div class="container">
-            <section class="login-section">
-                <div class="login-container">
+        <!-- Panel de Login -->
+        <div class="login-card" id="login-card">
+            <div class="login-form-container">
+                <!-- Tabs de autenticación -->
+                <div class="auth-tabs">
+                    <button type="button" class="auth-tab active" id="email-tab">
+                        <i class="fas fa-envelope"></i> Email/Password
+                    </button>
+                    <button type="button" class="auth-tab" id="magic-tab">
+                        <i class="fas fa-magic"></i> Magic Link
+                    </button>
+                </div>
+
+                <!-- Formulario Email/Password -->
+                <form id="email-form" class="login-form">
+                    <h3><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</h3>
                     
-                    <!-- Panel de Login -->
-                    <div class="login-card" id="login-card">
-                        <div class="login-header">
-                            <h2>Acceso al Sistema</h2>
-                            <p class="login-subtitle">Sistema de Indicadores 2.0</p>
-                        </div>
-
-                        <div class="auth-tabs">
-                            <button type="button" class="auth-tab active" id="email-tab" data-tab="email">
-                                📧 Email/Password
-                            </button>
-                            <button type="button" class="auth-tab" id="magic-tab" data-tab="magic">
-                                ✨ Magic Link
-                            </button>
-                        </div>
-
-                        <!-- Formulario Email/Password -->
-                        <form id="email-form" class="auth-form" novalidate>
-                            <div class="form-group">
-                                <label for="email-input" class="form-label required">Email:</label>
-                                <input 
-                                    type="email" 
-                                    id="email-input" 
-                                    class="form-input" 
-                                    required 
-                                    autocomplete="email"
-                                    placeholder="usuario@aifa.gob.mx"
-                                    aria-describedby="email-help"
-                                >
-                                <small id="email-help" class="form-help">Ingrese su email corporativo</small>
-                                <div class="form-error" id="email-error"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="password-input" class="form-label required">Contraseña:</label>
-                                <div class="password-input-container">
-                                    <input 
-                                        type="password" 
-                                        id="password-input" 
-                                        class="form-input" 
-                                        required 
-                                        autocomplete="current-password"
-                                        placeholder="••••••••"
-                                        aria-describedby="password-help"
-                                    >
-                                    <button 
-                                        type="button" 
-                                        class="password-toggle" 
-                                        id="password-toggle"
-                                        aria-label="Mostrar/ocultar contraseña"
-                                    >
-                                        👁️
-                                    </button>
-                                </div>
-                                <small id="password-help" class="form-help">Mínimo 6 caracteres</small>
-                                <div class="form-error" id="password-error"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label checkbox-label">
-                                    <input type="checkbox" id="remember-me" class="form-checkbox">
-                                    <span class="checkbox-text">Recordar sesión</span>
-                                </label>
-                                <small class="form-help">Mantener sesión activa por 30 días</small>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary btn-large" id="login-btn">
-                                <span class="btn-text">🔐 Iniciar Sesión</span>
-                                <span class="btn-loading" style="display: none;">Iniciando sesión...</span>
-                            </button>
-
-                            <div class="auth-links">
-                                <button type="button" class="link-button" id="forgot-password-btn">
-                                    ¿Olvidó su contraseña?
-                                </button>
-                            </div>
-                        </form>
-
-                        <!-- Formulario Magic Link -->
-                        <form id="magic-form" class="auth-form" style="display: none;" novalidate>
-                            <div class="form-group">
-                                <label for="magic-email-input" class="form-label required">Email:</label>
-                                <input 
-                                    type="email" 
-                                    id="magic-email-input" 
-                                    class="form-input" 
-                                    required 
-                                    autocomplete="email"
-                                    placeholder="usuario@aifa.gob.mx"
-                                    aria-describedby="magic-email-help"
-                                >
-                                <small id="magic-email-help" class="form-help">Recibirá un enlace de acceso directo</small>
-                                <div class="form-error" id="magic-email-error"></div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary btn-large" id="magic-btn">
-                                <span class="btn-text">✨ Enviar Magic Link</span>
-                                <span class="btn-loading" style="display: none;">Enviando enlace...</span>
-                            </button>
-
-                            <div class="magic-info">
-                                <div class="info-box">
-                                    <h4>¿Qué es un Magic Link?</h4>
-                                    <p>Un enlace seguro enviado a su email que le permite acceder sin contraseña. Válido por 1 hora.</p>
-                                </div>
-                            </div>
-                        </form>
+                    <div class="form-group">
+                        <label for="email-input">
+                            <i class="fas fa-envelope"></i> Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email-input" 
+                            name="email" 
+                            required 
+                            autocomplete="email"
+                            placeholder="usuario@aifa.aero"
+                            class="form-input"
+                        >
+                        <div class="form-error" id="email-error"></div>
                     </div>
 
-                    <!-- Panel de Usuario Autenticado -->
-                    <div class="user-card" id="user-card" style="display: none;">
-                        <div class="user-header">
-                            <h2>Sesión Activa</h2>
-                            <div class="user-status">
-                                <span class="status-dot success"></span>
-                                <span>Conectado</span>
-                            </div>
-                        </div>
-
-                        <div class="user-info">
-                            <div class="user-avatar" id="user-avatar">
-                                👤
-                            </div>
-                            <div class="user-details">
-                                <h3 id="user-display-name">Usuario</h3>
-                                <p id="user-email">email@aifa.gob.mx</p>
-                                <div class="user-metadata">
-                                    <div class="metadata-item">
-                                        <span class="metadata-label">Rol:</span>
-                                        <span id="user-role-display" class="metadata-value">-</span>
-                                    </div>
-                                    <div class="metadata-item">
-                                        <span class="metadata-label">Áreas:</span>
-                                        <span id="user-areas-display" class="metadata-value">-</span>
-                                    </div>
-                                    <div class="metadata-item">
-                                        <span class="metadata-label">Último acceso:</span>
-                                        <span id="user-last-login" class="metadata-value">-</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="session-actions">
-                            <button type="button" class="btn btn-outline" id="refresh-session-btn">
-                                🔄 Actualizar Datos
-                            </button>
-                            <button type="button" class="btn btn-danger" id="logout-btn">
-                                🚪 Cerrar Sesión
+                    <div class="form-group">
+                        <label for="password-input">
+                            <i class="fas fa-lock"></i> Contraseña
+                        </label>
+                        <div class="password-input-container">
+                            <input 
+                                type="password" 
+                                id="password-input" 
+                                name="password" 
+                                required 
+                                autocomplete="current-password"
+                                placeholder="Ingrese su contraseña"
+                                class="form-input"
+                            >
+                            <button type="button" id="password-toggle" class="toggle-password" tabindex="-1">
+                                <i class="fas fa-eye" id="togglePasswordIcon"></i>
                             </button>
                         </div>
-
-                        <div class="session-info">
-                            <div class="info-box">
-                                <h4>Información de Seguridad</h4>
-                                <ul>
-                                    <li>Su sesión expira automáticamente por inactividad</li>
-                                    <li>Cierre sesión al usar equipos compartidos</li>
-                                    <li>Reporte actividad sospechosa al administrador</li>
-                                </ul>
-                            </div>
-                        </div>
+                        <div class="form-error" id="password-error"></div>
                     </div>
 
-                    <!-- Panel de Registro (Solo Admin) -->
-                    <div class="register-card" id="register-card" style="display: none;">
-                        <div class="register-header">
-                            <h2>Registro de Usuario</h2>
-                            <p class="register-subtitle">Solo administradores pueden crear cuentas</p>
-                        </div>
-
-                        <form id="register-form" class="auth-form" novalidate>
-                            <div class="form-group">
-                                <label for="register-email" class="form-label required">Email:</label>
-                                <input 
-                                    type="email" 
-                                    id="register-email" 
-                                    class="form-input" 
-                                    required 
-                                    placeholder="nuevo.usuario@aifa.gob.mx"
-                                >
-                                <div class="form-error" id="register-email-error"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="register-password" class="form-label required">Contraseña Temporal:</label>
-                                <input 
-                                    type="password" 
-                                    id="register-password" 
-                                    class="form-input" 
-                                    required 
-                                    minlength="6"
-                                    placeholder="••••••••"
-                                >
-                                <small class="form-help">El usuario debe cambiarla en su primer acceso</small>
-                                <div class="form-error" id="register-password-error"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="register-nombre" class="form-label required">Nombre Completo:</label>
-                                <input 
-                                    type="text" 
-                                    id="register-nombre" 
-                                    class="form-input" 
-                                    required 
-                                    placeholder="Juan Pérez García"
-                                >
-                                <div class="form-error" id="register-nombre-error"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="register-rol" class="form-label required">Rol:</label>
-                                <select id="register-rol" class="form-select" required>
-                                    <option value="">Seleccione un rol...</option>
-                                    <option value="capturista">Capturista</option>
-                                    <option value="jefe_area">Jefe de Área</option>
-                                    <option value="subdirector">Subdirector</option>
-                                    <option value="director">Director</option>
-                                    <option value="admin">Administrador</option>
-                                </select>
-                                <div class="form-error" id="register-rol-error"></div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary btn-large" id="register-btn">
-                                <span class="btn-text">👤 Crear Usuario</span>
-                                <span class="btn-loading" style="display: none;">Creando cuenta...</span>
-                            </button>
-                        </form>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="remember-me" class="form-checkbox">
+                            <span class="checkbox-text">Recordar sesión</span>
+                        </label>
                     </div>
 
-                </div>
+                    <button type="submit" id="login-btn" class="login-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span class="btn-text">Iniciar Sesión</span>
+                        <div class="btn-loading spinner" style="display: none;"></div>
+                    </button>
 
-                <!-- Panel de Estado del Sistema -->
-                <div class="system-status">
-                    <h3>Estado del Sistema</h3>
-                    <div class="status-grid">
-                        <div class="status-item">
-                            <span class="status-label">Base de Datos:</span>
-                            <span id="db-status" class="status-indicator">
-                                <span class="status-dot"></span>
-                                <span class="status-text">Verificando...</span>
-                            </span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">Autenticación:</span>
-                            <span id="auth-status" class="status-indicator">
-                                <span class="status-dot"></span>
-                                <span class="status-text">Verificando...</span>
-                            </span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">API:</span>
-                            <span id="api-status" class="status-indicator">
-                                <span class="status-dot"></span>
-                                <span class="status-text">Verificando...</span>
-                            </span>
+                    <div class="auth-links">
+                        <button type="button" id="forgot-password-btn" class="link-button">
+                            <i class="fas fa-key"></i> ¿Olvidó su contraseña?
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Formulario Magic Link -->
+                <form id="magic-form" class="login-form" style="display: none;">
+                    <h3><i class="fas fa-magic"></i> Magic Link</h3>
+                    
+                    <div class="form-group">
+                        <label for="magic-email-input">
+                            <i class="fas fa-envelope"></i> Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="magic-email-input" 
+                            name="email" 
+                            required 
+                            autocomplete="email"
+                            placeholder="usuario@aifa.aero"
+                            class="form-input"
+                        >
+                        <div class="form-error" id="magic-email-error"></div>
+                    </div>
+
+                    <button type="submit" id="magic-btn" class="login-btn">
+                        <i class="fas fa-paper-plane"></i>
+                        <span class="btn-text">Enviar Magic Link</span>
+                        <div class="btn-loading spinner" style="display: none;"></div>
+                    </button>
+
+                    <div class="magic-info">
+                        <div class="info-box">
+                            <h4><i class="fas fa-info-circle"></i> ¿Qué es un Magic Link?</h4>
+                            <p>Un enlace seguro enviado a su email que le permite acceder sin contraseña. Válido por 1 hora.</p>
                         </div>
                     </div>
-                </div>
-            </section>
-
-            <section class="help-section">
-                <details class="help-details">
-                    <summary class="help-summary">Ayuda de Acceso</summary>
-                    <div class="help-content">
-                        <h4>Métodos de Autenticación:</h4>
-                        <ul>
-                            <li><strong>Email/Password:</strong> Método tradicional con credenciales</li>
-                            <li><strong>Magic Link:</strong> Enlace seguro enviado por email (sin contraseña)</li>
-                        </ul>
-
-                        <h4>Problemas Comunes:</h4>
-                        <ul>
-                            <li><strong>Email no registrado:</strong> Contacte al administrador para crear su cuenta</li>
-                            <li><strong>Contraseña incorrecta:</strong> Use "¿Olvidó su contraseña?" para restablecerla</li>
-                            <li><strong>Cuenta inactiva:</strong> Su cuenta puede estar deshabilitada temporalmente</li>
-                            <li><strong>Magic Link no llega:</strong> Revise la carpeta de spam o correo no deseado</li>
-                        </ul>
-
-                        <h4>Seguridad:</h4>
-                        <ul>
-                            <li>Use contraseñas seguras con mínimo 6 caracteres</li>
-                            <li>No comparta sus credenciales con otros usuarios</li>
-                            <li>Cierre sesión al terminar de usar el sistema</li>
-                            <li>Reporte actividad sospechosa inmediatamente</li>
-                        </ul>
-
-                        <h4>Soporte Técnico:</h4>
-                        <p>Para problemas de acceso, contacte al equipo de soporte técnico de AIFA o al administrador del sistema.</p>
-                    </div>
-                </details>
-            </section>
+                </form>
+            </div>
         </div>
-    </main>
 
-    <footer class="footer">
+        <!-- Panel de Usuario Autenticado -->
+        <div class="user-card" id="user-card" style="display: none;">
+            <div class="user-header">
+                <h2><i class="fas fa-user-check"></i> Sesión Activa</h2>
+                <div class="user-status">
+                    <span class="status-dot success"></span>
+                    <span>Conectado</span>
+                </div>
+            </div>
+
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="user-details">
+                    <h3 id="user-display-name">Usuario</h3>
+                    <p id="user-email">email@aifa.aero</p>
+                    <div class="user-metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label"><i class="fas fa-user-tag"></i> Rol:</span>
+                            <span id="user-role-display" class="metadata-value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label"><i class="fas fa-building"></i> Áreas:</span>
+                            <span id="user-areas-display" class="metadata-value">-</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label"><i class="fas fa-clock"></i> Último acceso:</span>
+                            <span id="user-last-login" class="metadata-value">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="session-actions">
+                <button type="button" id="refresh-session-btn" class="login-btn secondary">
+                    <i class="fas fa-sync-alt"></i>
+                    <span class="btn-text">Actualizar Datos</span>
+                    <div class="btn-loading spinner" style="display: none;"></div>
+                </button>
+                <button type="button" id="logout-btn" class="login-btn danger">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="btn-text">Cerrar Sesión</span>
+                    <div class="btn-loading spinner" style="display: none;"></div>
+                </button>
+            </div>
+
+            <div class="session-info">
+                <div class="info-box">
+                    <h4><i class="fas fa-shield-alt"></i> Información de Seguridad</h4>
+                    <ul>
+                        <li>Su sesión expira automáticamente por inactividad</li>
+                        <li>Cierre sesión al usar equipos compartidos</li>
+                        <li>Reporte actividad sospechosa al administrador</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Registro (Solo Admin) -->
+        <div class="register-card" id="register-card" style="display: none;">
+            <div class="register-header">
+                <h2><i class="fas fa-user-plus"></i> Registro de Usuario</h2>
+                <p class="register-subtitle">Solo administradores pueden crear cuentas</p>
+            </div>
+
+            <form id="register-form" class="login-form">
+                <div class="form-group">
+                    <label for="register-email">
+                        <i class="fas fa-envelope"></i> Email
+                    </label>
+                    <input 
+                        type="email" 
+                        id="register-email" 
+                        class="form-input" 
+                        required 
+                        placeholder="nuevo.usuario@aifa.aero"
+                    >
+                    <div class="form-error" id="register-email-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="register-password">
+                        <i class="fas fa-lock"></i> Contraseña Temporal
+                    </label>
+                    <input 
+                        type="password" 
+                        id="register-password" 
+                        class="form-input" 
+                        required 
+                        minlength="6"
+                        placeholder="••••••••"
+                    >
+                    <small class="form-help">El usuario debe cambiarla en su primer acceso</small>
+                    <div class="form-error" id="register-password-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="register-nombre">
+                        <i class="fas fa-user"></i> Nombre Completo
+                    </label>
+                    <input 
+                        type="text" 
+                        id="register-nombre" 
+                        class="form-input" 
+                        required 
+                        placeholder="Martín Fernando Juárez González"
+                    >
+                    <div class="form-error" id="register-nombre-error"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="register-rol">
+                        <i class="fas fa-user-tag"></i> Rol
+                    </label>
+                    <select id="register-rol" class="form-input" required>
+                        <option value="">Seleccione un rol...</option>
+                        <option value="capturista">Capturista</option>
+                        <option value="jefe_area">Jefe de Área</option>
+                        <option value="subdirector">Subdirector</option>
+                        <option value="director">Director</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                    <div class="form-error" id="register-rol-error"></div>
+                </div>
+
+                <button type="submit" id="register-btn" class="login-btn">
+                    <i class="fas fa-user-plus"></i>
+                    <span class="btn-text">Crear Usuario</span>
+                    <div class="btn-loading spinner" style="display: none;"></div>
+                </button>
+            </form>
+        </div>
+
+        <!-- Estado del Sistema -->
+        <div class="system-status">
+            <h4><i class="fas fa-server"></i> Estado del Sistema</h4>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span class="status-label">Base de Datos:</span>
+                    <span id="db-status" class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Verificando...</span>
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Autenticación:</span>
+                    <span id="auth-status" class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Verificando...</span>
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">API:</span>
+                    <span id="api-status" class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Verificando...</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="login-info">
+            <div class="info-card">
+                <h4><i class="fas fa-info-circle"></i> Información del Sistema</h4>
+                <ul>
+                    <li>Utilice las credenciales proporcionadas por su administrador</li>
+                    <li>Si olvidó su contraseña, contacte al área de sistemas</li>
+                    <li>El sistema cerrará automáticamente su sesión por inactividad</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <p><i class="fas fa-question-circle"></i> ¿Necesita ayuda?</p>
+                <p>Contacte al administrador del sistema o al área de TI</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="login-footer">
         <div class="container">
-            <p>&copy; 2025 Aeropuerto Internacional Felipe Ángeles (AIFA) - Sistema de Indicadores v2.0</p>
+            <p>&copy; 2025 Aeropuerto Internacional Felipe Ángeles (AIFA). Todos los derechos reservados.</p>
+            <p>Sistema de Indicadores 2.0 - Versión 1.0</p>
         </div>
     </footer>
 
@@ -333,6 +321,7 @@
     <!-- Live region for screen readers -->
     <div id="live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
+    <!-- Scripts -->
     <script src="utils.js"></script>
     <script src="login.js"></script>
 </body>
