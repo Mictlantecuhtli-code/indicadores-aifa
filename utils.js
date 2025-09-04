@@ -699,3 +699,8 @@ window.AIFA_Utils = {
     deepClone,
     truncateText
 };
+
+console.log('utils.js cargado completamente');
+console.log('createClient definido:', typeof createClient);
+console.log('notify definido:', typeof notify);
+console.log('supabase definido:', typeof supabase);
