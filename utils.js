@@ -661,6 +661,54 @@ document.addEventListener('DOMContentLoaded', () => {
     cleanExpiredStorage();
 });
 
+/**
+ * Obtiene información del usuario actual
+ */
+async function getCurrentUser() {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session || !session.user) {
+            return null;
+        }
+
+        // Obtener datos extendidos del usuario
+        const { data: userData, error } = await supabase
+            .from('users')
+            .select(`
+                id, nombre, email, activo,
+                roles(id, nombre),
+                user_areas(areas(id, nombre))
+            `)
+            .eq('id', session.user.id)
+            .single();
+
+        if (error) {
+            console.error('Error getting user data:', error);
+            return {
+                id: session.user.id,
+                email: session.user.email,
+                nombre: session.user.user_metadata?.full_name || session.user.email,
+                rol: null,
+                areas: []
+            };
+        }
+
+        return {
+            id: userData.id,
+            email: userData.email,
+            nombre: userData.nombre || userData.email,
+            activo: userData.activo,
+            rol: userData.roles,
+            areas: userData.user_areas?.map(ua => ua.areas) || []
+        };
+
+    } catch (error) {
+        console.error('Error in getCurrentUser:', error);
+        return null;
+    }
+}
+
 // Exportar funciones para otros scripts
 window.AIFA_Utils = {
     // Notificaciones
