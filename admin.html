@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - AIFA</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .admin-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        
+        .admin-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .tab-button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .tab-button:not(.active) {
+            color: #6b7280;
+            background: #f9fafb;
+            border-color: #e5e7eb;
+        }
+        
+        .tab-button:not(.active):hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-active {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-inactive {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .role-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        
+        .role-admin {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .role-director {
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .role-subdirector {
+            background-color: #ecfdf5;
+            color: #047857;
+        }
+        
+        .role-jefe {
+            background-color: #ede9fe;
+            color: #6b21a8;
+        }
+        
+        .role-capturista {
+            background-color: #f0f9ff;
+            color: #0369a1;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+        }
+        
+        .input-field {
+            transition: all 0.2s ease;
+        }
+        
+        .input-field:focus {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: #3b82f6;
+        }
+        
+        .table-row:hover {
+            background-color: #f9fafb;
+        }
+        
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navbar Container -->
+    <div id="navbar"></div>
+    
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                        Panel de Administración
+                    </h1>
+                    <p class="text-gray-600">
+                        Gestiona usuarios, roles, áreas e indicadores del sistema
+                    </p>
+                </div>
+                <div class="mt-4 sm:mt-0">
+                    <div class="flex items-center space-x-2 text-sm text-gray-500">
+                        <span class="material-icons text-lg">admin_panel_settings</span>
+                        <span>Solo administradores</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navigation Tabs -->
+        <div class="admin-card p-6 mb-8">
+            <div class="flex flex-wrap gap-2">
+                <button 
+                    id="tabUsers" 
+                    class="tab-button active" 
+                    onclick="switchTab('users')"
+                >
+                    <span class="material-icons text-sm mr-2 align-middle">people</span>
+                    Usuarios
+                </button>
+                <button 
+                    id="tabAreas" 
+                    class="tab-button" 
+                    onclick="switchTab('areas')"
+                >
+                    <span class="material-icons text-sm mr-2 align-middle">business</span>
+                    Áreas
+                </button>
+                <button 
+                    id="tabIndicators" 
+                    class="tab-button" 
+                    onclick="switchTab('indicators')"
+                >
+                    <span class="material-icons text-sm mr-2 align-middle">analytics</span>
+                    Indicadores
+                </button>
+                <button 
+                    id="tabSettings" 
+                    class="tab-button" 
+                    onclick="switchTab('settings')"
+                >
+                    <span class="material-icons text-sm mr-2 align-middle">settings</span>
+                    Configuración
+                </button>
+            </div>
+        </div>
+        
+        <!-- Tab Content: Users -->
+        <div id="contentUsers" class="tab-content">
+            <div class="admin-card">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 border-b border-gray-200">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Gestión de Usuarios</h2>
+                        <p class="text-gray-600">Administra cuentas de usuario y asignación de roles</p>
+                    </div>
+                    <div class="mt-4 lg:mt-0 flex flex-col sm:flex-row gap-3">
+                        <div class="relative">
+                            <input 
+                                type="text" 
+                                id="searchUsers" 
+                                placeholder="Buscar usuarios..."
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg input-field focus:outline-none w-full sm:w-64"
+                            >
+                            <span class="material-icons absolute left-3 top-2.5 text-gray-400 text-lg">search</span>
+                        </div>
+                        <button 
+                            id="newUserBtn" 
+                            class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center justify-center"
+                        >
+                            <span class="material-icons text-sm mr-2">person_add</span>
+                            Nuevo Usuario
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Users Table Loading -->
+                <div id="usersTableLoading" class="p-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-4">
+                            <div class="loading-skeleton w-12 h-12 rounded-full"></div>
+                            <div class="flex-1">
+                                <div class="loading-skeleton w-1/3 h-4 rounded mb-2"></div>
+                                <div class="loading-skeleton w-1/4 h-3 rounded"></div>
+                            </div>
+                            <div class="loading-skeleton w-20 h-6 rounded"></div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="loading-skeleton w-12 h-12 rounded-full"></div>
+                            <div class="flex-1">
+                                <div class="loading-skeleton w-1/3 h-4 rounded mb-2"></div>
+                                <div class="loading-skeleton w-1/4 h-3 rounded"></div>
+                            </div>
+                            <div class="loading-skeleton w-20 h-6 rounded"></div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="loading-skeleton w-12 h-12 rounded-full"></div>
+                            <div class="flex-1">
+                                <div class="loading-skeleton w-1/3 h-4 rounded mb-2"></div>
+                                <div class="loading-skeleton w-1/4 h-3 rounded"></div>
+                            </div>
+                            <div class="loading-skeleton w-20 h-6 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Users Table -->
+                <div id="usersTable" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Usuario
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Rol
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Áreas Asignadas
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Estado
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Acciones
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Se llena dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Users Empty State -->
+                <div id="usersEmpty" class="p-12 text-center hidden">
+                    <span class="material-icons text-6xl text-gray-300 mb-4">people_outline</span>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No hay usuarios</h3>
+                    <p class="text-gray-600 mb-4">Comienza creando el primer usuario del sistema</p>
+                    <button 
+                        onclick="openNewUserModal()" 
+                        class="btn-primary text-white px-4 py-2 rounded-lg font-medium inline-flex items-center"
+                    >
+                        <span class="material-icons text-sm mr-1">person_add</span>
+                        Crear Primer Usuario
+                    </button>
+                </div>
+            </div>
+        </div>
+                <!-- Tab Content: Areas -->
+        <div id="contentAreas" class="tab-content hidden">
+            <div class="admin-card">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 border-b border-gray-200">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Gestión de Áreas</h2>
+                        <p class="text-gray-600">Administra las áreas organizacionales del sistema</p>
+                    </div>
+                    <div class="mt-4 lg:mt-0">
+                        <button 
+                            id="newAreaBtn" 
+                            class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center"
+                        >
+                            <span class="material-icons text-sm mr-2">add_business</span>
+                            Nueva Área
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Areas Grid -->
+                <div id="areasGrid" class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+                
+                <!-- Areas Loading -->
+                <div id="areasLoading" class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="loading-skeleton w-3/4 h-5 rounded mb-3"></div>
+                            <div class="loading-skeleton w-1/2 h-4 rounded mb-2"></div>
+                            <div class="loading-skeleton w-full h-3 rounded"></div>
+                        </div>
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="loading-skeleton w-3/4 h-5 rounded mb-3"></div>
+                            <div class="loading-skeleton w-1/2 h-4 rounded mb-2"></div>
+                            <div class="loading-skeleton w-full h-3 rounded"></div>
+                        </div>
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="loading-skeleton w-3/4 h-5 rounded mb-3"></div>
+                            <div class="loading-skeleton w-1/2 h-4 rounded mb-2"></div>
+                            <div class="loading-skeleton w-full h-3 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Areas Empty State -->
+                <div id="areasEmpty" class="p-12 text-center hidden">
+                    <span class="material-icons text-6xl text-gray-300 mb-4">business_center</span>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No hay áreas configuradas</h3>
+                    <p class="text-gray-600 mb-4">Las áreas son necesarias para organizar los indicadores</p>
+                    <button 
+                        onclick="openNewAreaModal()" 
+                        class="btn-primary text-white px-4 py-2 rounded-lg font-medium inline-flex items-center"
+                    >
+                        <span class="material-icons text-sm mr-1">add_business</span>
+                        Crear Primera Área
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Content: Indicators -->
+        <div id="contentIndicators" class="tab-content hidden">
+            <div class="admin-card">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 border-b border-gray-200">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Gestión de Indicadores</h2>
+                        <p class="text-gray-600">Configura los indicadores de gestión del sistema</p>
+                    </div>
+                    <div class="mt-4 lg:mt-0 flex flex-col sm:flex-row gap-3">
+                        <select 
+                            id="filterIndicatorArea" 
+                            class="px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                        >
+                            <option value="">Todas las áreas</option>
+                        </select>
+                        <button 
+                            id="newIndicatorBtn" 
+                            class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center justify-center"
+                        >
+                            <span class="material-icons text-sm mr-2">add_chart</span>
+                            Nuevo Indicador
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Indicators Table -->
+                <div id="indicatorsTable" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Indicador
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Área
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Periodicidad
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Meta
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Acciones
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="indicatorsTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Se llena dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Indicators Loading -->
+                <div id="indicatorsLoading" class="p-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-4">
+                            <div class="loading-skeleton w-16 h-16 rounded"></div>
+                            <div class="flex-1">
+                                <div class="loading-skeleton w-2/3 h-4 rounded mb-2"></div>
+                                <div class="loading-skeleton w-1/3 h-3 rounded"></div>
+                            </div>
+                            <div class="loading-skeleton w-24 h-6 rounded"></div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="loading-skeleton w-16 h-16 rounded"></div>
+                            <div class="flex-1">
+                                <div class="loading-skeleton w-2/3 h-4 rounded mb-2"></div>
+                                <div class="loading-skeleton w-1/3 h-3 rounded"></div>
+                            </div>
+                            <div class="loading-skeleton w-24 h-6 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Indicators Empty State -->
+                <div id="indicatorsEmpty" class="p-12 text-center hidden">
+                    <span class="material-icons text-6xl text-gray-300 mb-4">analytics</span>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No hay indicadores configurados</h3>
+                    <p class="text-gray-600 mb-4">Crea indicadores para comenzar a medir el desempeño</p>
+                    <button 
+                        onclick="openNewIndicatorModal()" 
+                        class="btn-primary text-white px-4 py-2 rounded-lg font-medium inline-flex items-center"
+                    >
+                        <span class="material-icons text-sm mr-1">add_chart</span>
+                        Crear Primer Indicador
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Content: Settings -->
+        <div id="contentSettings" class="tab-content hidden">
+            <div class="space-y-8">
+                <!-- System Information -->
+                <div class="admin-card p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Información del Sistema</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <span class="material-icons text-blue-600 mr-3">people</span>
+                                <div>
+                                    <p class="text-sm font-medium text-blue-900">Total Usuarios</p>
+                                    <p class="text-2xl font-bold text-blue-600" id="totalUsersCount">--</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <span class="material-icons text-green-600 mr-3">business</span>
+                                <div>
+                                    <p class="text-sm font-medium text-green-900">Total Áreas</p>
+                                    <p class="text-2xl font-bold text-green-600" id="totalAreasCount">--</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <span class="material-icons text-purple-600 mr-3">analytics</span>
+                                <div>
+                                    <p class="text-sm font-medium text-purple-900">Total Indicadores</p>
+                                    <p class="text-2xl font-bold text-purple-600" id="totalIndicatorsCount">--</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <span class="material-icons text-yellow-600 mr-3">assessment</span>
+                                <div>
+                                    <p class="text-sm font-medium text-yellow-900">Total Mediciones</p>
+                                    <p class="text-2xl font-bold text-yellow-600" id="totalMeasurementsCount">--</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- System Settings -->
+                <div class="admin-card p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Configuración del Sistema</h2>
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between py-4 border-b border-gray-200">
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900">Backup de Datos</h3>
+                                <p class="text-sm text-gray-600">Generar respaldo de la base de datos</p>
+                            </div>
+                            <button class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                                <span class="material-icons text-sm mr-1">backup</span>
+                                Generar Backup
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between py-4 border-b border-gray-200">
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900">Exportar Datos</h3>
+                                <p class="text-sm text-gray-600">Descargar todos los datos en formato Excel</p>
+                            </div>
+                            <button class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                                <span class="material-icons text-sm mr-1">download</span>
+                                Exportar Excel
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between py-4">
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900">Limpiar Cache</h3>
+                                <p class="text-sm text-gray-600">Limpiar datos temporales del sistema</p>
+                            </div>
+                            <button class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                                <span class="material-icons text-sm mr-1">refresh</span>
+                                Limpiar Cache
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Modal Nuevo/Editar Usuario -->
+    <div id="userModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-screen overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-900" id="userModalTitle">Nuevo Usuario</h3>
+                <button onclick="closeUserModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-icons text-2xl">close</span>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6">
+                <form id="userForm" class="space-y-6">
+                    <!-- Campo oculto para ID -->
+                    <input type="hidden" id="userId" name="userId">
+                    
+                    <!-- Información Personal -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Información Personal</h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Email -->
+                            <div class="md:col-span-2">
+                                <label for="userEmail" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">email</span>
+                                    Correo Electrónico *
+                                </label>
+                                <input 
+                                    type="email" 
+                                    id="userEmail" 
+                                    name="email" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                    placeholder="usuario@aifa.aero"
+                                >
+                                <div id="userEmailError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Solo se permiten correos del dominio @aifa.aero</p>
+                            </div>
+                            
+                            <!-- Nombre Completo -->
+                            <div class="md:col-span-2">
+                                <label for="userDisplayName" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">person</span>
+                                    Nombre Completo *
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="userDisplayName" 
+                                    name="displayName" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                    placeholder="Ej: Juan Pérez López"
+                                >
+                                <div id="userDisplayNameError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Contraseña (solo para nuevo usuario) -->
+                            <div id="passwordSection" class="md:col-span-2">
+                                <label for="userPassword" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">lock</span>
+                                    Contraseña *
+                                </label>
+                                <div class="relative">
+                                    <input 
+                                        type="password" 
+                                        id="userPassword" 
+                                        name="password" 
+                                        required 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none pr-12"
+                                        placeholder="Mínimo 8 caracteres"
+                                        minlength="8"
+                                    >
+                                    <button 
+                                        type="button" 
+                                        id="toggleUserPassword" 
+                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    >
+                                        <span class="material-icons">visibility</span>
+                                    </button>
+                                </div>
+                                <div id="userPasswordError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Debe tener al menos 8 caracteres</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Rol y Permisos -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Rol y Permisos</h4>
+                        
+                        <!-- Rol -->
+                        <div class="mb-4">
+                            <label for="userRole" class="block text-sm font-medium text-gray-700 mb-1">
+                                <span class="material-icons text-sm mr-1 align-middle">admin_panel_settings</span>
+                                Rol del Usuario *
+                            </label>
+                            <select 
+                                id="userRole" 
+                                name="roleId" 
+                                required 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                            >
+                                <option value="">Seleccionar rol...</option>
+                            </select>
+                            <div id="userRoleError" class="text-red-500 text-sm mt-1 hidden">
+                                <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                <span></span>
+                            </div>
+                        </div>
+                        
+                        <!-- Descripción del Rol -->
+                        <div id="roleDescription" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg hidden">
+                            <div class="flex items-start space-x-2">
+                                <span class="material-icons text-blue-600 text-sm mt-0.5">info</span>
+                                <div class="text-sm">
+                                    <p class="font-medium text-blue-900" id="roleDescriptionTitle">-</p>
+                                    <p class="text-blue-700" id="roleDescriptionText">-</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Áreas Asignadas -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">
+                                <span class="material-icons text-sm mr-1 align-middle">business</span>
+                                Áreas Asignadas
+                            </label>
+                            <div id="userAreasContainer" class="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                                <div class="text-center text-gray-500 text-sm py-4">
+                                    Primero selecciona un rol
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Selecciona las áreas que puede gestionar este usuario
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Estado del Usuario -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Estado</h4>
+                        <div class="flex items-center space-x-3">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="userIsActive" name="isActive" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span class="ml-3 text-sm font-medium text-gray-700">Usuario Activo</span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            Los usuarios inactivos no pueden iniciar sesión en el sistema
+                        </p>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button 
+                    type="button" 
+                    onclick="closeUserModal()" 
+                    class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    form="userForm" 
+                    id="saveUserBtn" 
+                    class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center"
+                >
+                    <span id="saveUserBtnText">Crear Usuario</span>
+                    <span id="saveUserBtnSpinner" class="hidden ml-2">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Nuevo/Editar Área -->
+    <div id="areaModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-900" id="areaModalTitle">Nueva Área</h3>
+                <button onclick="closeAreaModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-icons text-2xl">close</span>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6">
+                <form id="areaForm" class="space-y-6">
+                    <!-- Campo oculto para ID -->
+                    <input type="hidden" id="areaId" name="areaId">
+                    
+                    <!-- Nombre del Área -->
+                    <div>
+                        <label for="areaName" class="block text-sm font-medium text-gray-700 mb-1">
+                            <span class="material-icons text-sm mr-1 align-middle">business</span>
+                            Nombre del Área *
+                        </label>
+                        <input 
+                            type="text" 
+                            id="areaName" 
+                            name="name" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                            placeholder="Ej: Dirección General"
+                        >
+                        <div id="areaNameError" class="text-red-500 text-sm mt-1 hidden">
+                            <span class="material-icons text-sm mr-1 align-middle">error</span>
+                            <span></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Código del Área -->
+                    <div>
+                        <label for="areaCode" class="block text-sm font-medium text-gray-700 mb-1">
+                            <span class="material-icons text-sm mr-1 align-middle">tag</span>
+                            Código del Área *
+                        </label>
+                        <input 
+                            type="text" 
+                            id="areaCode" 
+                            name="code" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                            placeholder="Ej: DG"
+                            maxlength="10"
+                            style="text-transform: uppercase;"
+                        >
+                        <div id="areaCodeError" class="text-red-500 text-sm mt-1 hidden">
+                            <span class="material-icons text-sm mr-1 align-middle">error</span>
+                            <span></span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Máximo 10 caracteres, se convertirá a mayúsculas</p>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button 
+                    type="button" 
+                    onclick="closeAreaModal()" 
+                    class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    form="areaForm" 
+                    id="saveAreaBtn" 
+                    class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center"
+                >
+                    <span id="saveAreaBtnText">Crear Área</span>
+                    <span id="saveAreaBtnSpinner" class="hidden ml-2">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Nuevo/Editar Indicador -->
+    <div id="indicatorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-screen overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-900" id="indicatorModalTitle">Nuevo Indicador</h3>
+                <button onclick="closeIndicatorModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-icons text-2xl">close</span>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6">
+                <form id="indicatorForm" class="space-y-6">
+                    <!-- Campo oculto para ID -->
+                    <input type="hidden" id="indicatorId" name="indicatorId">
+                    
+                    <!-- Información Básica -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Información Básica</h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Código -->
+                            <div>
+                                <label for="indicatorCode" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">tag</span>
+                                    Código *
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="indicatorCode" 
+                                    name="code" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                    placeholder="Ej: IND-001"
+                                    maxlength="20"
+                                >
+                                <div id="indicatorCodeError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Área -->
+                            <div>
+                                <label for="indicatorArea" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">business</span>
+                                    Área *
+                                </label>
+                                <select 
+                                    id="indicatorArea" 
+                                    name="areaId" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                >
+                                    <option value="">Seleccionar área...</option>
+                                </select>
+                                <div id="indicatorAreaError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Nombre -->
+                            <div class="md:col-span-2">
+                                <label for="indicatorName" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">analytics</span>
+                                    Nombre del Indicador *
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="indicatorName" 
+                                    name="name" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                    placeholder="Ej: Porcentaje de cumplimiento operacional"
+                                >
+                                <div id="indicatorNameError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuración -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Configuración</h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Periodicidad -->
+                            <div>
+                                <label for="indicatorPeriodicity" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">schedule</span>
+                                    Periodicidad *
+                                </label>
+                                <select 
+                                    id="indicatorPeriodicity" 
+                                    name="periodicity" 
+                                    required 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    <option value="mensual">Mensual</option>
+                                    <option value="trimestral">Trimestral</option>
+                                    <option value="semestral">Semestral</option>
+                                    <option value="anual">Anual</option>
+                                </select>
+                                <div id="indicatorPeriodicityError" class="text-red-500 text-sm mt-1 hidden">
+                                    <span class="material-icons text-sm mr-1 align-middle">error</span>
+                                    <span></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Unidad -->
+                            <div>
+                                <label for="indicatorUnit" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <span class="material-icons text-sm mr-1 align-middle">straighten</span>
+                                    Unidad de Medida
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="indicatorUnit" 
+                                    name="unit" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                    placeholder="Ej: %, unidades, minutos"
+                                    maxlength="20"
+                                >
+                                <p class="text-xs text-gray-500 mt-1">Opcional. Ej: %, unidades, kg, etc.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Meta y Notas -->
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-4">Meta y Descripción</h4>
+                        
+                        <!-- Meta -->
+                        <div class="mb-4">
+                            <label for="indicatorGoal" class="block text-sm font-medium text-gray-700 mb-1">
+                                <span class="material-icons text-sm mr-1 align-middle">flag</span>
+                                Meta del Indicador
+                            </label>
+                            <input 
+                                type="text" 
+                                id="indicatorGoal" 
+                                name="goal" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
+                                placeholder="Ej: 95%, Mayor a 1000 unidades"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">Opcional. Define el objetivo a alcanzar</p>
+                        </div>
+                        
+                        <!-- Notas -->
+                        <div>
+                            <label for="indicatorNotes" class="block text-sm font-medium text-gray-700 mb-1">
+                                <span class="material-icons text-sm mr-1 align-middle">note</span>
+                                Notas y Descripción
+                            </label>
+                            <textarea 
+                                id="indicatorNotes" 
+                                name="notes" 
+                                rows="4"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none resize-none"
+                                placeholder="Describe el indicador, metodología de cálculo, fuentes de información, etc."
+                            ></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Opcional. Información adicional sobre el indicador</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button 
+                    type="button" 
+                    onclick="closeIndicatorModal()" 
+                    class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    form="indicatorForm" 
+                    id="saveIndicatorBtn" 
+                    class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center"
+                >
+                    <span id="saveIndicatorBtnText">Crear Indicador</span>
+                    <span id="saveIndicatorBtnSpinner" class="hidden ml-2">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Confirmación de Eliminación -->
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                            <span class="material-icons text-red-600 text-2xl">warning</span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">Confirmar Eliminación</h3>
+                        <p class="text-sm text-gray-600">Esta acción no se puede deshacer</p>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <p class="text-gray-700 mb-3" id="deleteConfirmMessage">
+                        ¿Estás seguro de que deseas eliminar este elemento?
+                    </p>
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <p class="text-sm font-medium text-gray-900" id="deleteItemName">-</p>
+                        <p class="text-xs text-gray-600" id="deleteItemDetails">-</p>
+                    </div>
+                    <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p class="text-sm text-red-800">
+                            <span class="material-icons text-sm mr-1 align-middle">info</span>
+                            <span id="deleteWarningText">Esta acción eliminará permanentemente el elemento.</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button 
+                        type="button" 
+                        onclick="closeDeleteConfirmModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        type="button" 
+                        id="confirmDeleteBtn" 
+                        class="btn-danger text-white px-4 py-2 rounded-lg font-medium flex items-center"
+                    >
+                        <span id="confirmDeleteBtnText">Eliminar</span>
+                        <span id="confirmDeleteBtnSpinner" class="hidden ml-2">
+                            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Asignación de Áreas -->
+    <div id="assignAreasModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900">Asignar Áreas</h3>
+                    <p class="text-sm text-gray-600" id="assignAreasUserName">Usuario</p>
+                </div>
+                <button onclick="closeAssignAreasModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-icons text-2xl">close</span>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6">
+                <form id="assignAreasForm">
+                    <input type="hidden" id="assignAreasUserId" name="userId">
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">
+                            <span class="material-icons text-sm mr-1 align-middle">business</span>
+                            Selecciona las áreas que puede gestionar:
+                        </label>
+                        <div id="assignAreasContainer" class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <span class="material-icons text-sm mr-1 align-middle text-blue-600">info</span>
+                        El usuario podrá capturar y gestionar indicadores de las áreas seleccionadas según su rol.
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button 
+                    type="button" 
+                    onclick="closeAssignAreasModal()" 
+                    class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    form="assignAreasForm" 
+                    id="saveAssignAreasBtn" 
+                    class="btn-primary text-white px-6 py-2 rounded-lg font-medium flex items-center"
+                >
+                    <span id="saveAssignAreasBtnText">Guardar Asignación</span>
+                    <span id="saveAssignAreasBtnSpinner" class="hidden ml-2">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Scripts -->
+    <script src="js/supabaseClient.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/guards.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/api.js"></script>
+    
+    <script>
+        // Variables globales
+        let currentUser = null;
+        let currentProfile = null;
+        let currentTab = 'users';
+        let users = [];
+        let areas = [];
+        let indicators = [];
+        let roles = [];
+        let currentEditingUserId = null;
+        let currentEditingAreaId = null;
+        let currentEditingIndicatorId = null;
+        let currentDeleteItem = null;
+        
+        // Inicializar página de administración
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Verificar permisos de administrador
+                await window.guards.requireAdmin(async (user, profile) => {
+                    currentUser = user;
+                    currentProfile = profile;
+                    
+                    await initializeAdminPage();
+                });
+                
+            } catch (error) {
+                console.error('Error inicializando panel de administración:', error);
+                window.ui.showToast('Error cargando el panel de administración', 'error');
+            }
+        });
+        
+        // Inicializar página completa
+        async function initializeAdminPage() {
+            try {
+                // Cargar datos básicos
+                await Promise.all([
+                    loadRoles(),
+                    loadAreas(),
+                    setupEventListeners()
+                ]);
+                
+                // Cargar tab inicial (usuarios)
+                await loadUsersData();
+                
+                // Cargar estadísticas del sistema
+                await loadSystemStats();
+                
+                console.log('Panel de administración inicializado correctamente');
+                
+            } catch (error) {
+                console.error('Error en initializeAdminPage:', error);
+                window.ui.showToast('Error cargando algunos componentes', 'warning');
+            }
+        }
+        
+        // Cargar roles disponibles
+        async function loadRoles() {
+            try {
+                roles = await window.api.getRoles();
+                
+                // Llenar selector de roles en modal de usuario
+                const roleSelect = document.getElementById('userRole');
+                roleSelect.innerHTML = '<option value="">Seleccionar rol...</option>';
+                
+                roles.forEach(role => {
+                    const option = document.createElement('option');
+                    option.value = role.id;
+                    option.textContent = role.name.charAt(0).toUpperCase() + role.name.slice(1);
+                    roleSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error cargando roles:', error);
+            }
+        }
+        
+        // Cargar áreas
+        async function loadAreas() {
+            try {
+                areas = await window.api.getAreas();
+                
+                // Llenar selectores de área
+                const selectors = ['indicatorArea', 'filterIndicatorArea'];
+                selectors.forEach(selectorId => {
+                    const select = document.getElementById(selectorId);
+                    const isFilter = selectorId.startsWith('filter');
+                    
+                    select.innerHTML = isFilter ? '<option value="">Todas las áreas</option>' : '<option value="">Seleccionar área...</option>';
+                    
+                    areas.forEach(area => {
+                        const option = document.createElement('option');
+                        option.value = area.id;
+                        option.textContent = `${area.name} (${area.code})`;
+                        select.appendChild(option);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error cargando áreas:', error);
+            }
+        }
+        
+        // Configurar event listeners
+        function setupEventListeners() {
+            // Botones principales
+            document.getElementById('newUserBtn').addEventListener('click', openNewUserModal);
+            document.getElementById('newAreaBtn').addEventListener('click', openNewAreaModal);
+            document.getElementById('newIndicatorBtn').addEventListener('click', openNewIndicatorModal);
+            
+            // Formularios
+            document.getElementById('userForm').addEventListener('submit', saveUser);
+            document.getElementById('areaForm').addEventListener('submit', saveArea);
+            document.getElementById('indicatorForm').addEventListener('submit', saveIndicator);
+            document.getElementById('assignAreasForm').addEventListener('submit', saveUserAreas);
+            
+            // Búsqueda de usuarios
+            document.getElementById('searchUsers').addEventListener('input', filterUsers);
+            
+            // Filtro de indicadores por área
+            document.getElementById('filterIndicatorArea').addEventListener('change', loadIndicatorsData);
+            
+            // Cambio de rol en modal de usuario
+            document.getElementById('userRole').addEventListener('change', onUserRoleChange);
+            
+            // Toggle de contraseña
+            document.getElementById('toggleUserPassword').addEventListener('click', togglePasswordVisibility);
+            
+            // Auto-uppercase para código de área
+            document.getElementById('areaCode').addEventListener('input', function(e) {
+                e.target.value = e.target.value.toUpperCase();
+            });
+            
+            // Cerrar modales con escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeAllModals();
+                }
+            });
+            
+            // Cerrar modales al hacer clic fuera
+            const modals = ['userModal', 'areaModal', 'indicatorModal', 'deleteConfirmModal', 'assignAreasModal'];
+            modals.forEach(modalId => {
+                document.getElementById(modalId).addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeModal(modalId);
+                    }
+                });
+            });
+        }
+        
+        // Cambiar tab activo
+        function switchTab(tabName) {
+            // Actualizar botones de tab
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+            
+            // Mostrar/ocultar contenido
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.remove('hidden');
+            
+            currentTab = tabName;
+            
+            // Cargar datos del tab
+            switch (tabName) {
+                case 'users':
+                    loadUsersData();
+                    break;
+                case 'areas':
+                    loadAreasData();
+                    break;
+                case 'indicators':
+                    loadIndicatorsData();
+                    break;
+                case 'settings':
+                    loadSystemStats();
+                    break;
+            }
+        }
+        
+        // Cargar datos de usuarios
+        async function loadUsersData() {
+            try {
+                showUsersLoading();
+                
+                users = await window.api.getUsers();
+                
+                if (users.length === 0) {
+                    showUsersEmpty();
+                } else {
+                    renderUsersTable();
+                    showUsersTable();
+                }
+                
+            } catch (error) {
+                console.error('Error cargando usuarios:', error);
+                window.ui.showToast('Error cargando usuarios', 'error');
+                showUsersEmpty();
+            }
+        }
+        
+        // Renderizar tabla de usuarios
+        function renderUsersTable() {
+            const tbody = document.getElementById('usersTableBody');
+            
+            tbody.innerHTML = users.map(user => {
+                const isActive = user.is_active;
+                const statusBadge = isActive 
+                    ? '<span class="status-badge status-active">Activo</span>'
+                    : '<span class="status-badge status-inactive">Inactivo</span>';
+                
+                const roleBadge = `<span class="role-badge role-${user.role.name}">${user.role.name}</span>`;
+                
+                const userAreas = user.user_areas && user.user_areas.length > 0
+                    ? user.user_areas.map(ua => ua.area.code).join(', ')
+                    : 'Sin áreas asignadas';
+                
+                const avatar = user.display_name 
+                    ? user.display_name.charAt(0).toUpperCase()
+                    : user.email.charAt(0).toUpperCase();
+                
+                return `
+                    <tr class="table-row">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-10 w-10">
+                                    <div class="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">${avatar}</span>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-gray-900">${user.display_name || 'Sin nombre'}</div>
+                                    <div class="text-sm text-gray-500">${user.email}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            ${roleBadge}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${userAreas}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            ${statusBadge}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div class="flex justify-end space-x-2">
+                                <button onclick="editUser('${user.id}')" class="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors" title="Editar usuario">
+                                    <span class="material-icons text-sm">edit</span>
+                                </button>
+                                <button onclick="assignUserAreas('${user.id}')" class="text-green-600 hover:text-green-900 p-1 rounded transition-colors" title="Asignar áreas">
+                                    <span class="material-icons text-sm">business</span>
+                                </button>
+                                <button onclick="toggleUserStatus('${user.id}', ${!isActive})" class="text-yellow-600 hover:text-yellow-900 p-1 rounded transition-colors" title="${isActive ? 'Desactivar' : 'Activar'} usuario">
+                                    <span class="material-icons text-sm">${isActive ? 'person_off' : 'person'}</span>
+                                </button>
+                                <button onclick="deleteUser('${user.id}')" class="text-red-600 hover:text-red-900 p-1 rounded transition-colors" title="Eliminar usuario">
+                                    <span class="material-icons text-sm">delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Estados de la tabla de usuarios
+        function showUsersLoading() {
+            document.getElementById('usersTableLoading').classList.remove('hidden');
+            document.getElementById('usersTable').classList.add('hidden');
+            document.getElementById('usersEmpty').classList.add('hidden');
+        }
+        
+        function showUsersTable() {
+            document.getElementById('usersTableLoading').classList.add('hidden');
+            document.getElementById('usersTable').classList.remove('hidden');
+            document.getElementById('usersEmpty').classList.add('hidden');
+        }
+        
+        function showUsersEmpty() {
+            document.getElementById('usersTableLoading').classList.add('hidden');
+            document.getElementById('usersTable').classList.add('hidden');
+            document.getElementById('usersEmpty').classList.remove('hidden');
+        }
+        
+        // Filtrar usuarios por búsqueda
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchUsers').value.toLowerCase();
+            
+            if (!searchTerm) {
+                renderUsersTable();
+                return;
+            }
+            
+            const filteredUsers = users.filter(user => 
+                user.display_name?.toLowerCase().includes(searchTerm) ||
+                user.email.toLowerCase().includes(searchTerm) ||
+                user.role.name.toLowerCase().includes(searchTerm)
+            );
+            
+            const tbody = document.getElementById('usersTableBody');
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                            <span class="material-icons text-4xl mb-2">search_off</span>
+                            <p>No se encontraron usuarios que coincidan con "${searchTerm}"</p>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                // Renderizar usuarios filtrados (similar a renderUsersTable pero con filteredUsers)
+                // ... código similar al de renderUsersTable
+            }
+        }
+        
+        // Cargar estadísticas del sistema
+        async function loadSystemStats() {
+            try {
+                const [usersData, areasData, indicatorsData] = await Promise.all([
+                    window.api.getUsers(),
+                    window.api.getAreas(),
+                    window.api.getIndicators()
+                ]);
+                
+                // Actualizar contadores
+                document.getElementById('totalUsersCount').textContent = usersData.length;
+                document.getElementById('totalAreasCount').textContent = areasData.length;
+                document.getElementById('totalIndicatorsCount').textContent = indicatorsData.length;
+                
+                // Obtener total de mediciones (placeholder)
+                document.getElementById('totalMeasurementsCount').textContent = '--';
+                
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+                // Mostrar valores por defecto
+                document.getElementById('totalUsersCount').textContent = '--';
+                document.getElementById('totalAreasCount').textContent = '--';
+                document.getElementById('totalIndicatorsCount').textContent = '--';
+                document.getElementById('totalMeasurementsCount').textContent = '--';
+            }
+        }
+      // Modal de usuario
+        function openNewUserModal() {
+            currentEditingUserId = null;
+            document.getElementById('userModalTitle').textContent = 'Nuevo Usuario';
+            document.getElementById('saveUserBtnText').textContent = 'Crear Usuario';
+            document.getElementById('userForm').reset();
+            document.getElementById('passwordSection').classList.remove('hidden');
+            document.getElementById('userPassword').required = true;
+            document.getElementById('userIsActive').checked = true;
+            clearAllUserErrors();
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+        
+        function closeUserModal() {
+            document.getElementById('userModal').classList.add('hidden');
+            currentEditingUserId = null;
+        }
+        
+        // Cambio de rol de usuario
+        function onUserRoleChange() {
+            const roleId = document.getElementById('userRole').value;
+            const role = roles.find(r => r.id == roleId);
+            
+            const roleDescription = document.getElementById('roleDescription');
+            const areasContainer = document.getElementById('userAreasContainer');
+            
+            if (role) {
+                // Mostrar descripción del rol
+                const descriptions = {
+                    'capturista': 'Puede capturar datos solo en sus áreas asignadas. No puede editar registros existentes.',
+                    'jefe': 'Puede capturar y editar información de las áreas que gestiona. No puede eliminar registros.',
+                    'subdirector': 'Puede ver, editar y eliminar información de todas las áreas del sistema.',
+                    'director': 'Control total del sistema incluyendo gestión de usuarios.',
+                    'admin': 'Control total del sistema más gestión de usuarios, roles, áreas e indicadores.'
+                };
+                
+                document.getElementById('roleDescriptionTitle').textContent = role.name.charAt(0).toUpperCase() + role.name.slice(1);
+                document.getElementById('roleDescriptionText').textContent = descriptions[role.name] || 'Rol del sistema';
+                roleDescription.classList.remove('hidden');
+                
+                // Mostrar áreas solo si no es subdirector, director o admin
+                if (['subdirector', 'director', 'admin'].includes(role.name)) {
+                    areasContainer.innerHTML = `
+                        <div class="text-center text-gray-500 text-sm py-4">
+                            <span class="material-icons mb-2">all_inclusive</span>
+                            <p>Este rol tiene acceso a todas las áreas automáticamente</p>
+                        </div>
+                    `;
+                } else {
+                    // Mostrar checkboxes de áreas
+                    areasContainer.innerHTML = areas.map(area => `
+                        <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" name="userAreas" value="${area.id}" class="text-blue-600 focus:ring-blue-500 mr-3">
+                            <div class="flex-1">
+                                <div class="text-sm font-medium text-gray-900">${area.name}</div>
+                                <div class="text-xs text-gray-500">${area.code}</div>
+                            </div>
+                        </label>
+                    `).join('');
+                }
+            } else {
+                roleDescription.classList.add('hidden');
+                areasContainer.innerHTML = '<div class="text-center text-gray-500 text-sm py-4">Primero selecciona un rol</div>';
+            }
+        }
+        
+        // Guardar usuario
+        async function saveUser(event) {
+            event.preventDefault();
+            
+            try {
+                showUserSaveLoading(true);
+                clearAllUserErrors();
+                
+                const formData = new FormData(event.target);
+                const userData = {
+                    email: formData.get('email'),
+                    display_name: formData.get('displayName'),
+                    role_id: parseInt(formData.get('roleId')),
+                    is_active: formData.get('isActive') === 'on'
+                };
+                
+                // Agregar contraseña solo para nuevos usuarios
+                if (!currentEditingUserId) {
+                    userData.password = formData.get('password');
+                }
+                
+                // Validar datos
+                if (!validateUserData(userData)) {
+                    return;
+                }
+                
+                // Guardar usuario
+                let savedUser;
+                if (currentEditingUserId) {
+                    savedUser = await window.api.updateUser(currentEditingUserId, userData);
+                } else {
+                    savedUser = await window.api.createUser(userData);
+                }
+                
+                // Asignar áreas si aplica
+                const roleCheckboxes = document.querySelectorAll('input[name="userAreas"]:checked');
+                const selectedAreas = Array.from(roleCheckboxes).map(cb => parseInt(cb.value));
+                
+                if (selectedAreas.length > 0) {
+                    await window.api.assignUserAreas(savedUser.id, selectedAreas);
+                }
+                
+                window.ui.showToast(
+                    currentEditingUserId ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
+                    'success'
+                );
+                
+                closeUserModal();
+                await loadUsersData();
+                
+            } catch (error) {
+                console.error('Error guardando usuario:', error);
+                window.ui.showToast('Error guardando el usuario', 'error');
+            } finally {
+                showUserSaveLoading(false);
+            }
+        }
+        
+        // Validar datos de usuario
+        function validateUserData(userData) {
+            let isValid = true;
+            
+            if (!userData.email || !window.supabaseClient.validateAifaEmail(userData.email)) {
+                showFieldError('userEmail', 'Ingresa un correo válido del dominio @aifa.aero');
+                isValid = false;
+            }
+            
+            if (!userData.display_name?.trim()) {
+                showFieldError('userDisplayName', 'El nombre completo es requerido');
+                isValid = false;
+            }
+            
+            if (!userData.role_id) {
+                showFieldError('userRole', 'Selecciona un rol');
+                isValid = false;
+            }
+            
+            if (!currentEditingUserId && (!userData.password || userData.password.length < 8)) {
+                showFieldError('userPassword', 'La contraseña debe tener al menos 8 caracteres');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        // Funciones de áreas
+        function openNewAreaModal() {
+            currentEditingAreaId = null;
+            document.getElementById('areaModalTitle').textContent = 'Nueva Área';
+            document.getElementById('saveAreaBtnText').textContent = 'Crear Área';
+            document.getElementById('areaForm').reset();
+            clearAllAreaErrors();
+            document.getElementById('areaModal').classList.remove('hidden');
+        }
+        
+        function closeAreaModal() {
+            document.getElementById('areaModal').classList.add('hidden');
+            currentEditingAreaId = null;
+        }
+        
+        async function saveArea(event) {
+            event.preventDefault();
+            
+            try {
+                showAreaSaveLoading(true);
+                clearAllAreaErrors();
+                
+                const formData = new FormData(event.target);
+                const areaData = {
+                    name: formData.get('name').trim(),
+                    code: formData.get('code').trim().toUpperCase()
+                };
+                
+                if (!validateAreaData(areaData)) {
+                    return;
+                }
+                
+                if (currentEditingAreaId) {
+                    await window.api.updateArea(currentEditingAreaId, areaData);
+                } else {
+                    await window.api.createArea(areaData);
+                }
+                
+                window.ui.showToast(
+                    currentEditingAreaId ? 'Área actualizada correctamente' : 'Área creada correctamente',
+                    'success'
+                );
+                
+                closeAreaModal();
+                await loadAreas();
+                if (currentTab === 'areas') {
+                    await loadAreasData();
+                }
+                
+            } catch (error) {
+                console.error('Error guardando área:', error);
+                window.ui.showToast('Error guardando el área', 'error');
+            } finally {
+                showAreaSaveLoading(false);
+            }
+        }
+        
+        function validateAreaData(areaData) {
+            let isValid = true;
+            
+            if (!areaData.name) {
+                showFieldError('areaName', 'El nombre del área es requerido');
+                isValid = false;
+            }
+            
+            if (!areaData.code) {
+                showFieldError('areaCode', 'El código del área es requerido');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        // Cargar datos de áreas
+        async function loadAreasData() {
+            try {
+                showAreasLoading();
+                
+                if (areas.length === 0) {
+                    showAreasEmpty();
+                } else {
+                    renderAreasGrid();
+                    showAreasGrid();
+                }
+                
+            } catch (error) {
+                console.error('Error cargando áreas:', error);
+                showAreasEmpty();
+            }
+        }
+        
+        function renderAreasGrid() {
+            const grid = document.getElementById('areasGrid').querySelector('.grid');
+            
+            grid.innerHTML = areas.map(area => `
+                <div class="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <span class="material-icons text-blue-600">business</span>
+                            </div>
+                            <div>
+                                <h3 class="font-medium text-gray-900">${area.name}</h3>
+                                <p class="text-sm text-gray-500">${area.code}</p>
+                            </div>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button onclick="editArea(${area.id})" class="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors">
+                                <span class="material-icons text-sm">edit</span>
+                            </button>
+                            <button onclick="deleteArea(${area.id})" class="text-red-600 hover:text-red-900 p-1 rounded transition-colors">
+                                <span class="material-icons text-sm">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <p>${getAreaIndicatorsCount(area.id)} indicadores</p>
+                        <p>${getAreaUsersCount(area.id)} usuarios asignados</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Estados de áreas
+        function showAreasLoading() {
+            document.getElementById('areasLoading').classList.remove('hidden');
+            document.getElementById('areasGrid').classList.add('hidden');
+            document.getElementById('areasEmpty').classList.add('hidden');
+        }
+        
+        function showAreasGrid() {
+            document.getElementById('areasLoading').classList.add('hidden');
+            document.getElementById('areasGrid').classList.remove('hidden');
+            document.getElementById('areasEmpty').classList.add('hidden');
+        }
+        
+        function showAreasEmpty() {
+            document.getElementById('areasLoading').classList.add('hidden');
+            document.getElementById('areasGrid').classList.add('hidden');
+            document.getElementById('areasEmpty').classList.remove('hidden');
+        }
+        
+        // Funciones auxiliares
+        function getAreaIndicatorsCount(areaId) {
+            return indicators.filter(ind => ind.area_id === areaId).length;
+        }
+        
+        function getAreaUsersCount(areaId) {
+            return users.filter(user => 
+                user.user_areas && user.user_areas.some(ua => ua.area.id === areaId)
+            ).length;
+        }
+        
+        function togglePasswordVisibility() {
+            const passwordField = document.getElementById('userPassword');
+            const toggleButton = document.getElementById('toggleUserPassword');
+            const icon = toggleButton.querySelector('.material-icons');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                passwordField.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        }
+        
+        // Estados de loading para botones
+        function showUserSaveLoading(isLoading) {
+            const btn = document.getElementById('saveUserBtn');
+            const text = document.getElementById('saveUserBtnText');
+            const spinner = document.getElementById('saveUserBtnSpinner');
+            
+            btn.disabled = isLoading;
+            text.textContent = isLoading ? 'Guardando...' : (currentEditingUserId ? 'Actualizar' : 'Crear Usuario');
+            spinner.classList.toggle('hidden', !isLoading);
+        }
+        
+        function showAreaSaveLoading(isLoading) {
+            const btn = document.getElementById('saveAreaBtn');
+            const text = document.getElementById('saveAreaBtnText');
+            const spinner = document.getElementById('saveAreaBtnSpinner');
+            
+            btn.disabled = isLoading;
+            text.textContent = isLoading ? 'Guardando...' : (currentEditingAreaId ? 'Actualizar' : 'Crear Área');
+            spinner.classList.toggle('hidden', !isLoading);
+        }
+        
+        // Funciones de error
+        function showFieldError(fieldId, message) {
+            const errorDiv = document.getElementById(fieldId + 'Error');
+            const errorSpan = errorDiv.querySelector('span:last-child');
+            const field = document.getElementById(fieldId);
+            
+            errorSpan.textContent = message;
+            errorDiv.classList.remove('hidden');
+            field.classList.add('border-red-500');
+        }
+        
+        function clearAllUserErrors() {
+            const fields = ['userEmail', 'userDisplayName', 'userPassword', 'userRole'];
+            fields.forEach(clearFieldError);
+        }
+        
+        function clearAllAreaErrors() {
+            const fields = ['areaName', 'areaCode'];
+            fields.forEach(clearFieldError);
+        }
+        
+        function clearFieldError(fieldId) {
+            const errorDiv = document.getElementById(fieldId + 'Error');
+            const field = document.getElementById(fieldId);
+            
+            if (errorDiv) errorDiv.classList.add('hidden');
+            if (field) field.classList.remove('border-red-500');
+        }
+        
+        // Cerrar todos los modales
+        function closeAllModals() {
+            const modals = ['userModal', 'areaModal', 'indicatorModal', 'deleteConfirmModal', 'assignAreasModal'];
+            modals.forEach(modalId => {
+                document.getElementById(modalId).classList.add('hidden');
+            });
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+        
+        // Funciones placeholder para completar funcionalidad
+        function editUser(userId) {
+            window.ui.showToast('Función de edición de usuario próximamente', 'info');
+        }
+        
+        function assignUserAreas(userId) {
+            window.ui.showToast('Función de asignación de áreas próximamente', 'info');
+        }
+        
+        function toggleUserStatus(userId, newStatus) {
+            window.ui.showToast('Función de cambio de estado próximamente', 'info');
+        }
+        
+        function deleteUser(userId) {
+            window.ui.showToast('Función de eliminación de usuario próximamente', 'info');
+        }
+        
+        function editArea(areaId) {
+            window.ui.showToast('Función de edición de área próximamente', 'info');
+        }
+        
+        function deleteArea(areaId) {
+            window.ui.showToast('Función de eliminación de área próximamente', 'info');
+        }
+        
+        function openNewIndicatorModal() {
+            window.ui.showToast('Función de creación de indicador próximamente', 'info');
+        }
+        
+        function loadIndicatorsData() {
+            console.log('Cargando datos de indicadores...');
+        }
+        
+        function closeIndicatorModal() {
+            document.getElementById('indicatorModal').classList.add('hidden');
+        }
+        
+        function saveIndicator() {
+            window.ui.showToast('Función de guardar indicador próximamente', 'info');
+        }
+        
+        function closeDeleteConfirmModal() {
+            document.getElementById('deleteConfirmModal').classList.add('hidden');
+        }
+        
+        function closeAssignAreasModal() {
+            document.getElementById('assignAreasModal').classList.add('hidden');
+        }
+        
+        function saveUserAreas() {
+            window.ui.showToast('Función de asignación de áreas próximamente', 'info');
+        }
+    </script>
+</body>
+</html>
