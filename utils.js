@@ -1,15 +1,16 @@
 /**
- * utils.js - Funciones Comunes y Utilidades
- * Sistema de Indicadores AIFA 2.0
- * 
- * Funciones compartidas entre todos los módulos del sistema
+ * utils.js - Utilidades comunes para Sistema de Indicadores AIFA 2.0
+ * Funciones helper, cliente Supabase, y utilities compartidas
  */
 
-// Configuración de Supabase
+// Variables de entorno (usar exactamente estos nombres)
 const SUPABASE_URL = "https://kxjldzcaeayguiqkqqyh.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw";
 
-// Cliente de Supabase
+// Cliente Supabase global
+let globalSupabaseClient = null;
+
+// Crear cliente Supabase
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
@@ -18,10 +19,6 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 function createClient() {
     return supabase;
 }
-
-/**
- * SISTEMA DE NOTIFICACIONES
- */
 
 // Container para notificaciones
 let notificationContainer = null;
@@ -39,641 +36,297 @@ function initNotificationContainer() {
 }
 
 /**
- * Mostrar notificación
+ * Sistema de notificaciones tipo toast
+ * @param {string} type - Tipo de notificación: 'success', 'error', 'warning', 'info'
+ * @param {string} message - Mensaje a mostrar
+ * @param {number} duration - Duración en ms (default: 5000)
  */
-async function notify(message, type = 'info', duration = 5000) {
-    initNotificationContainer();
-    
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    
-    // Icono según el tipo
+function notify(type, message, duration = 5000) {
+    // Crear contenedor si no existe
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    // Crear toast
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
+
+    // Icono según tipo
     const icons = {
-        success: 'fas fa-check-circle',
-        error: 'fas fa-exclamation-circle',
-        warning: 'fas fa-exclamation-triangle',
-        info: 'fas fa-info-circle'
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
     };
-    
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="${icons[type] || icons.info}"></i>
-            <span class="notification-message">${message}</span>
-            <button class="notification-close" onclick="closeNotification(this)">
-                <i class="fas fa-times"></i>
+
+    toast.innerHTML = `
+        <div class="toast-content">
+            <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+            <span class="toast-message">${message}</span>
+            <button type="button" class="toast-close" aria-label="Cerrar notificación">
+                <span aria-hidden="true">&times;</span>
             </button>
         </div>
-        <div class="notification-progress"></div>
     `;
-    
-    notificationContainer.appendChild(notification);
-    
+
+    // Agregar al contenedor
+    container.appendChild(toast);
+
+    // Evento de cierre manual
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => {
+        removeToast(toast);
+    });
+
+    // Auto-cerrar después de duration
+    setTimeout(() => {
+        removeToast(toast);
+    }, duration);
+
     // Animar entrada
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 10);
-    
-    // Animar barra de progreso
-    const progressBar = notification.querySelector('.notification-progress');
-    if (duration > 0) {
-        progressBar.style.animationDuration = `${duration}ms`;
-        progressBar.classList.add('animate');
-    }
-    
-    // Auto-cerrar después de la duración especificada
-    if (duration > 0) {
+    requestAnimationFrame(() => {
+        toast.classList.add('toast-show');
+    });
+
+    // Actualizar live region para screen readers
+    updateLiveRegion(`${type}: ${message}`);
+}
+
+/**
+ * Remueve un toast con animación
+ * @param {HTMLElement} toast - Elemento toast a remover
+ */
+function removeToast(toast) {
+    if (toast && toast.parentNode) {
+        toast.classList.add('toast-hide');
         setTimeout(() => {
-            closeNotification(notification.querySelector('.notification-close'));
-        }, duration);
-    }
-    
-    return notification;
-}
-
-/**
- * Cerrar notificación
- */
-function closeNotification(closeButton) {
-    const notification = closeButton.closest('.notification');
-    notification.classList.add('hide');
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
-        }
-    }, 300);
-}
-
-/**
- * FUNCIONES DE DATOS E INDICADORES
- */
-
-/**
- * Obtener lista de indicadores con filtros
- */
-async function fetchIndicadores(filters = {}) {
-    try {
-        let query = supabase
-            .from('vw_indicadores_catalogo')
-            .select('*');
-
-        // Aplicar filtros
-        if (filters.area_id) {
-            query = query.eq('area_id', filters.area_id);
-        }
-        
-        if (filters.activo !== undefined) {
-            query = query.eq('activo', filters.activo);
-        }
-        
-        if (filters.frecuencia_id) {
-            query = query.eq('frecuencia_id', filters.frecuencia_id);
-        }
-
-        // Ordenamiento por defecto
-        query = query.order('area_nombre, nombre');
-
-        const { data, error } = await query;
-        
-        if (error) throw error;
-        
-        return data || [];
-
-    } catch (error) {
-        console.error('Error obteniendo indicadores:', error);
-        throw error;
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
     }
 }
 
 /**
- * Obtener valores de un indicador específico
+ * Actualiza la live region para screen readers
+ * @param {string} message - Mensaje para anunciar
  */
-async function fetchIndicadorValues(indicadorId, filters = {}) {
+function updateLiveRegion(message) {
+    const liveRegion = document.getElementById('live-region');
+    if (liveRegion) {
+        liveRegion.textContent = message;
+    }
+}
+
+/**
+ * Obtiene listado de indicadores con nombres de área
+ * @param {boolean} soloAreasUsuario - Si filtrar solo áreas del usuario actual
+ * @returns {Promise<Array>} Array de indicadores
+ */
+async function fetchIndicadores(soloAreasUsuario = false) {
     try {
-        let query = supabase
-            .from('indicador_valores')
+        const client = createClient();
+        
+        let query = client
+            .from("indicadores")
             .select(`
-                id, anio, mes, valor_num, fuente, comentario, estado,
-                created_at, updated_at, deleted_at
+                id, 
+                nombre, 
+                area_id,
+                activo,
+                areas(id, nombre),
+                unidades(clave, descripcion),
+                frecuencias(clave, descripcion)
             `)
-            .eq('indicador_id', indicadorId);
+            .eq('activo', true)
+            .order("area_id", { ascending: true })
+            .order("nombre", { ascending: true });
 
-        // Filtros adicionales
-        if (filters.anio) {
-            if (Array.isArray(filters.anio)) {
-                query = query.in('anio', filters.anio);
-            } else {
-                query = query.eq('anio', filters.anio);
+        // Si se requiere filtrar por áreas del usuario
+        if (soloAreasUsuario) {
+            const { data: { session } } = await client.auth.getSession();
+            
+            if (session && session.user) {
+                // Obtener áreas del usuario
+                const { data: userAreas, error: userAreasError } = await client
+                    .from('user_areas')
+                    .select('area_id')
+                    .eq('user_id', session.user.id);
+
+                if (userAreasError) {
+                    throw userAreasError;
+                }
+
+                if (userAreas && userAreas.length > 0) {
+                    const areaIds = userAreas.map(ua => ua.area_id);
+                    query = query.in('area_id', areaIds);
+                }
             }
         }
 
-        if (filters.includeDeleted !== true) {
-            query = query.is('deleted_at', null);
-        }
-
-        if (filters.estado) {
-            query = query.eq('estado', filters.estado);
-        }
-
-        // Ordenamiento
-        query = query.order('anio', { ascending: false })
-                    .order('mes', { ascending: false });
-
         const { data, error } = await query;
-        
-        if (error) throw error;
-        
+
+        if (error) {
+            throw error;
+        }
+
         return data || [];
 
     } catch (error) {
-        console.error('Error obteniendo valores del indicador:', error);
-        throw error;
+        console.error('Error fetching indicadores:', error);
+        notify('error', 'Error cargando indicadores: ' + error.message);
+        return [];
     }
 }
 
 /**
- * FUNCIONES ESTADÍSTICAS
+ * Calcula estadísticas básicas de un array de valores
+ * @param {Array<number>} values - Array de valores numéricos
+ * @returns {Object} Objeto con estadísticas: {min, max, mean, median, count}
  */
-
-/**
- * Calcular estadísticas básicas de un array de números
- */
-function calculateStats(numbers) {
-    if (!numbers || numbers.length === 0) {
+function stats(values) {
+    // Filtrar valores válidos (números no nulos)
+    const validValues = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+    
+    if (validValues.length === 0) {
         return {
-            count: 0,
             min: null,
             max: null,
-            sum: 0,
             mean: null,
             median: null,
-            mode: null,
-            range: null,
-            variance: null,
-            standardDeviation: null
+            count: 0
         };
     }
 
-    // Filtrar valores válidos
-    const validNumbers = numbers.filter(n => n !== null && n !== undefined && !isNaN(n));
-    
-    if (validNumbers.length === 0) {
-        return {
-            count: 0,
-            min: null,
-            max: null,
-            sum: 0,
-            mean: null,
-            median: null,
-            mode: null,
-            range: null,
-            variance: null,
-            standardDeviation: null
-        };
-    }
-
-    // Ordenar números
-    const sorted = [...validNumbers].sort((a, b) => a - b);
-    
-    // Estadísticas básicas
-    const count = validNumbers.length;
-    const min = sorted[0];
-    const max = sorted[count - 1];
-    const sum = validNumbers.reduce((acc, val) => acc + val, 0);
+    const sorted = [...validValues].sort((a, b) => a - b);
+    const count = validValues.length;
+    const sum = validValues.reduce((acc, val) => acc + val, 0);
     const mean = sum / count;
     
-    // Mediana
     let median;
     if (count % 2 === 0) {
         median = (sorted[count / 2 - 1] + sorted[count / 2]) / 2;
     } else {
         median = sorted[Math.floor(count / 2)];
     }
-    
-    // Moda
-    const frequency = {};
-    let maxFreq = 0;
-    let mode = null;
-    
-    validNumbers.forEach(num => {
-        frequency[num] = (frequency[num] || 0) + 1;
-        if (frequency[num] > maxFreq) {
-            maxFreq = frequency[num];
-            mode = num;
-        }
-    });
-    
-    // Si todos los valores aparecen la misma cantidad de veces, no hay moda
-    if (maxFreq === 1) mode = null;
-    
-    // Varianza y desviación estándar
-    const variance = validNumbers.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / count;
-    const standardDeviation = Math.sqrt(variance);
-    
+
     return {
-        count,
-        min,
-        max,
-        sum,
-        mean,
-        median,
-        mode,
-        range: max - min,
-        variance,
-        standardDeviation
+        min: sorted[0],
+        max: sorted[count - 1],
+        mean: Math.round(mean * 100) / 100, // 2 decimales
+        median: Math.round(median * 100) / 100, // 2 decimales
+        count: count
     };
 }
 
 /**
- * Calcular percentiles
+ * Convierte array de valores mensuales a formato de 12 elementos
+ * Rellena valores faltantes según estrategia (para histogramas, excluir nulls)
+ * @param {Array} valuesByMonth - Array con objetos {mes, valor_num}
+ * @param {string} strategy - 'exclude' (excluir nulls) o 'zero' (rellenar con 0)
+ * @returns {Array<number>} Array de 12 elementos o filtrado
  */
-function calculatePercentile(numbers, percentile) {
-    if (!numbers || numbers.length === 0) return null;
+function ensureArray12(valuesByMonth, strategy = 'exclude') {
+    // Crear array base de 12 meses
+    const monthlyValues = new Array(12).fill(null);
     
-    const validNumbers = numbers.filter(n => n !== null && n !== undefined && !isNaN(n));
-    if (validNumbers.length === 0) return null;
-    
-    const sorted = [...validNumbers].sort((a, b) => a - b);
-    const index = (percentile / 100) * (sorted.length - 1);
-    
-    if (Number.isInteger(index)) {
-        return sorted[index];
-    } else {
-        const lower = Math.floor(index);
-        const upper = Math.ceil(index);
-        const weight = index - lower;
-        return sorted[lower] * (1 - weight) + sorted[upper] * weight;
-    }
-}
-
-/**
- * FUNCIONES DE FORMATO
- */
-
-/**
- * Formatear números para mostrar
- */
-function formatNumber(value, options = {}) {
-    if (value === null || value === undefined || isNaN(value)) {
-        return options.nullText || '-';
-    }
-    
-    const {
-        decimals = 2,
-        locale = 'es-MX',
-        currency = false,
-        compact = false,
-        percentage = false
-    } = options;
-    
-    let formattedValue = value;
-    
-    if (percentage) {
-        formattedValue = value * 100;
-    }
-    
-    const formatOptions = {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals
-    };
-    
-    if (currency) {
-        formatOptions.style = 'currency';
-        formatOptions.currency = 'MXN';
-    }
-    
-    if (compact && Math.abs(value) >= 1000) {
-        formatOptions.notation = 'compact';
-        formatOptions.compactDisplay = 'short';
-    }
-    
-    let result = new Intl.NumberFormat(locale, formatOptions).format(formattedValue);
-    
-    if (percentage && !currency) {
-        result += '%';
-    }
-    
-    return result;
-}
-
-/**
- * Formatear fechas
- */
-function formatDate(date, options = {}) {
-    if (!date) return '';
-    
-    const {
-        format = 'short',
-        locale = 'es-MX',
-        includeTime = false
-    } = options;
-    
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
-    if (isNaN(dateObj.getTime())) return '';
-    
-    let formatOptions = {};
-    
-    switch (format) {
-        case 'short':
-            formatOptions = { 
-                year: 'numeric', 
-                month: '2-digit', 
-                day: '2-digit' 
-            };
-            break;
-        case 'medium':
-            formatOptions = { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-            };
-            break;
-        case 'long':
-            formatOptions = { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            break;
-        case 'full':
-            formatOptions = { 
-                weekday: 'long',
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            break;
-    }
-    
-    if (includeTime) {
-        formatOptions.hour = '2-digit';
-        formatOptions.minute = '2-digit';
-    }
-    
-    return new Intl.DateTimeFormat(locale, formatOptions).format(dateObj);
-}
-
-/**
- * FUNCIONES DE VALIDACIÓN
- */
-
-/**
- * Validar email
- */
-function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-/**
- * Validar número
- */
-function isValidNumber(value, options = {}) {
-    const { min, max, allowNegative = true, allowDecimals = true } = options;
-    
-    if (value === null || value === undefined || value === '') {
-        return false;
-    }
-    
-    const num = parseFloat(value);
-    
-    if (isNaN(num)) return false;
-    
-    if (!allowNegative && num < 0) return false;
-    
-    if (!allowDecimals && !Number.isInteger(num)) return false;
-    
-    if (min !== undefined && num < min) return false;
-    
-    if (max !== undefined && num > max) return false;
-    
-    return true;
-}
-
-/**
- * FUNCIONES DE URL Y NAVEGACIÓN
- */
-
-/**
- * Obtener parámetros de la URL
- */
-function getURLParams() {
-    const params = new URLSearchParams(window.location.search);
-    const result = {};
-    
-    for (const [key, value] of params.entries()) {
-        result[key] = value;
-    }
-    
-    return result;
-}
-
-/**
- * Actualizar parámetros de la URL sin recargar
- */
-function updateURLParams(params, replace = false) {
-    const url = new URL(window.location);
-    
-    Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined) {
-            url.searchParams.set(key, params[key]);
-        } else {
-            url.searchParams.delete(key);
-        }
-    });
-    
-    if (replace) {
-        window.history.replaceState({}, '', url);
-    } else {
-        window.history.pushState({}, '', url);
-    }
-}
-
-/**
- * FUNCIONES DE ALMACENAMIENTO LOCAL
- */
-
-/**
- * Guardar en localStorage con manejo de errores
- */
-function saveToStorage(key, data, options = {}) {
-    try {
-        const { expiry = null, compress = false } = options;
-        
-        let dataToStore = {
-            data: data,
-            timestamp: Date.now()
-        };
-        
-        if (expiry) {
-            dataToStore.expiry = Date.now() + expiry;
-        }
-        
-        const serialized = JSON.stringify(dataToStore);
-        localStorage.setItem(`aifa_${key}`, serialized);
-        
-        return true;
-    } catch (error) {
-        console.warn('Error guardando en localStorage:', error);
-        return false;
-    }
-}
-
-/**
- * Leer de localStorage con manejo de errores y expiración
- */
-function loadFromStorage(key, defaultValue = null) {
-    try {
-        const stored = localStorage.getItem(`aifa_${key}`);
-        
-        if (!stored) return defaultValue;
-        
-        const parsed = JSON.parse(stored);
-        
-        // Verificar expiración
-        if (parsed.expiry && Date.now() > parsed.expiry) {
-            localStorage.removeItem(`aifa_${key}`);
-            return defaultValue;
-        }
-        
-        return parsed.data;
-    } catch (error) {
-        console.warn('Error leyendo de localStorage:', error);
-        return defaultValue;
-    }
-}
-
-/**
- * Limpiar localStorage de datos expirados
- */
-function cleanExpiredStorage() {
-    try {
-        const keys = Object.keys(localStorage);
-        
-        keys.forEach(key => {
-            if (key.startsWith('aifa_')) {
-                try {
-                    const stored = localStorage.getItem(key);
-                    const parsed = JSON.parse(stored);
-                    
-                    if (parsed.expiry && Date.now() > parsed.expiry) {
-                        localStorage.removeItem(key);
-                    }
-                } catch (error) {
-                    // Si no se puede parsear, eliminar
-                    localStorage.removeItem(key);
-                }
+    // Llenar con valores existentes
+    if (Array.isArray(valuesByMonth)) {
+        valuesByMonth.forEach(item => {
+            if (item.mes >= 1 && item.mes <= 12 && item.valor_num !== null) {
+                monthlyValues[item.mes - 1] = item.valor_num;
             }
         });
-    } catch (error) {
-        console.warn('Error limpiando localStorage:', error);
+    }
+
+    if (strategy === 'exclude') {
+        // Para histogramas: excluir valores null/undefined
+        return monthlyValues.filter(v => v !== null && v !== undefined);
+    } else if (strategy === 'zero') {
+        // Reemplazar nulls con 0
+        return monthlyValues.map(v => v === null ? 0 : v);
+    } else {
+        // Retornar array completo de 12 elementos
+        return monthlyValues;
     }
 }
 
 /**
- * FUNCIONES DE UTILIDAD GENERAL
+ * Formatea un número con separadores de miles y decimales
+ * @param {number} value - Valor a formatear
+ * @param {number} decimals - Número de decimales (default: 2)
+ * @returns {string} Número formateado
  */
-
-/**
- * Generar ID único
- */
-function generateUID() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+function formatNumber(value, decimals = 2) {
+    if (value === null || value === undefined || isNaN(value)) {
+        return '-';
+    }
+    
+    return new Intl.NumberFormat('es-MX', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(value);
 }
 
 /**
- * Debounce function
+ * Formatea una fecha en formato legible
+ * @param {string|Date} date - Fecha a formatear
+ * @param {string} format - Formato: 'short', 'long', 'datetime' (default: 'short')
+ * @returns {string} Fecha formateada
  */
-function debounce(func, wait, immediate = false) {
-    let timeout;
+function formatDate(date, format = 'short') {
+    if (!date) return '-';
     
-    return function executedFunction(...args) {
-        const later = () => {
-            timeout = null;
-            if (!immediate) func.apply(this, args);
-        };
-        
-        const callNow = immediate && !timeout;
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-        
-        if (callNow) func.apply(this, args);
-    };
-}
-
-/**
- * Throttle function
- */
-function throttle(func, limit) {
-    let inThrottle;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '-';
     
-    return function(...args) {
-        if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
+    const options = {
+        short: { year: 'numeric', month: 'short', day: 'numeric' },
+        long: { year: 'numeric', month: 'long', day: 'numeric' },
+        datetime: { 
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
         }
     };
+    
+    return new Intl.DateTimeFormat('es-MX', options[format] || options.short).format(d);
 }
 
 /**
- * Deep clone object
+ * Obtiene el nombre del mes en español
+ * @param {number} monthNumber - Número del mes (1-12)
+ * @returns {string} Nombre del mes
  */
-function deepClone(obj) {
-    if (obj === null || typeof obj !== "object") {
-        return obj;
-    }
+function getMonthName(monthNumber) {
+    const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
     
-    if (obj instanceof Date) {
-        return new Date(obj.getTime());
-    }
-    
-    if (obj instanceof Array) {
-        return obj.map(item => deepClone(item));
-    }
-    
-    if (typeof obj === "object") {
-        const clonedObj = {};
-        for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-                clonedObj[key] = deepClone(obj[key]);
-            }
-        }
-        return clonedObj;
-    }
+    return months[monthNumber - 1] || '-';
 }
 
 /**
- * Truncar texto
- */
-function truncateText(text, maxLength, ellipsis = '...') {
-    if (!text || text.length <= maxLength) return text || '';
-    return text.substring(0, maxLength - ellipsis.length) + ellipsis;
-}
-
-/**
- * INICIALIZACIÓN
- */
-
-// Limpiar localStorage al cargar
-document.addEventListener('DOMContentLoaded', () => {
-    cleanExpiredStorage();
-});
-
-/**
- * Obtiene información del usuario actual
+ * Obtiene información del usuario actual desde la base de datos
+ * @returns {Promise<Object>} Información del usuario o null
  */
 async function getCurrentUser() {
     try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const client = createClient();
+        const { data: { session } } = await client.auth.getSession();
         
         if (!session || !session.user) {
             return null;
         }
 
         // Obtener datos extendidos del usuario
-        const { data: userData, error } = await supabase
+        const { data: userData, error } = await client
             .from('users')
             .select(`
                 id, nombre, email, activo,
@@ -709,45 +362,203 @@ async function getCurrentUser() {
     }
 }
 
-// Exportar funciones para otros scripts
-window.AIFA_Utils = {
-    // Notificaciones
+/**
+ * Verifica si el usuario tiene permisos para una acción específica
+ * @param {string} entidad - Entidad sobre la que se quiere actuar
+ * @param {string} accion - Acción que se quiere realizar
+ * @param {Object} user - Usuario actual (opcional, se obtiene automáticamente)
+ * @returns {Promise<boolean>} True si tiene permisos
+ */
+async function hasPermission(entidad, accion, user = null) {
+    try {
+        if (!user) {
+            user = await getCurrentUser();
+        }
+
+        if (!user || !user.rol) {
+            return false;
+        }
+
+        const client = createClient();
+        const { data: permissions, error } = await client
+            .from('permisos')
+            .select('allow_bool')
+            .eq('rol_id', user.rol.id)
+            .eq('entidad', entidad)
+            .eq('accion', accion)
+            .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+            console.error('Error checking permissions:', error);
+            return false;
+        }
+
+        return permissions ? permissions.allow_bool : false;
+
+    } catch (error) {
+        console.error('Error in hasPermission:', error);
+        return false;
+    }
+}
+
+/**
+ * Valida si un email tiene formato correcto
+ * @param {string} email - Email a validar
+ * @returns {boolean} True si es válido
+ */
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+/**
+ * Valida si un valor numérico está en un rango válido
+ * @param {number} value - Valor a validar
+ * @param {number} min - Valor mínimo (default: 0)
+ * @param {number} max - Valor máximo (default: Infinity)
+ * @returns {boolean} True si es válido
+ */
+function isValidNumber(value, min = 0, max = Infinity) {
+    const num = parseFloat(value);
+    return !isNaN(num) && num >= min && num <= max;
+}
+
+/**
+ * Debounce function para limitar frecuencia de llamadas
+ * @param {Function} func - Función a ejecutar
+ * @param {number} wait - Tiempo de espera en ms
+ * @returns {Function} Función debounced
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+/**
+ * Maneja errores de Supabase de forma consistente
+ * @param {Object} error - Error de Supabase
+ * @param {string} defaultMessage - Mensaje por defecto si no se puede interpretar
+ * @returns {string} Mensaje de error legible
+ */
+function handleSupabaseError(error, defaultMessage = 'Error inesperado') {
+    if (!error) return defaultMessage;
+    
+    // Errores RLS (Row Level Security)
+    if (error.code === '42501') {
+        return 'No tiene permisos para realizar esta acción';
+    }
+    
+    // Violación de constraint único
+    if (error.code === '23505') {
+        return 'Ya existe un registro con estos datos';
+    }
+    
+    // Violación de foreign key
+    if (error.code === '23503') {
+        return 'Error de integridad: referencia inválida';
+    }
+    
+    // Error de conexión
+    if (error.message && error.message.includes('Failed to fetch')) {
+        return 'Error de conexión. Verifique su conexión a internet';
+    }
+    
+    // Mensaje específico si está disponible
+    if (error.message) {
+        return error.message;
+    }
+    
+    return defaultMessage;
+}
+
+/**
+ * Exporta datos a CSV
+ * @param {Array} data - Array de objetos a exportar
+ * @param {string} filename - Nombre del archivo (sin extensión)
+ * @param {Array} columns - Columnas a incluir (opcional)
+ */
+function exportToCSV(data, filename, columns = null) {
+    if (!data || data.length === 0) {
+        notify('warning', 'No hay datos para exportar');
+        return;
+    }
+
+    try {
+        // Determinar columnas
+        const keys = columns || Object.keys(data[0]);
+        
+        // Crear header CSV
+        const csvHeader = keys.join(',');
+        
+        // Crear filas CSV
+        const csvRows = data.map(row => {
+            return keys.map(key => {
+                const value = row[key];
+                // Escapar valores que contengan comas o comillas
+                if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                    return `"${value.replace(/"/g, '""')}"`;
+                }
+                return value;
+            }).join(',');
+        });
+        
+        // Combinar header y filas
+        const csvContent = [csvHeader, ...csvRows].join('\n');
+        
+        // Crear y descargar archivo
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        notify('success', `Archivo ${filename}.csv descargado exitosamente`);
+        
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        notify('error', 'Error al exportar datos: ' + error.message);
+    }
+}
+
+// Exportar funciones para uso global
+window.AIFAUtils = {
+    createClient,
     notify,
-    closeNotification,
-    
-    // Datos
     fetchIndicadores,
-    fetchIndicadorValues,
-    
-    // Estadísticas
-    calculateStats,
-    calculatePercentile,
-    
-    // Formato
+    stats,
+    ensureArray12,
     formatNumber,
     formatDate,
-    
-    // Validación
+    getMonthName,
+    getCurrentUser,
+    hasPermission,
     isValidEmail,
     isValidNumber,
-    
-    // URL
-    getURLParams,
-    updateURLParams,
-    
-    // Almacenamiento
-    saveToStorage,
-    loadFromStorage,
-    cleanExpiredStorage,
-    
-    // Utilidades
-    generateUID,
     debounce,
-    throttle,
-    deepClone,
-    truncateText
+    handleSupabaseError,
+    exportToCSV,
+    updateLiveRegion
 };
 
+// Inicialización automática del cliente al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    createClient();
+});
+
+// Líneas de debug
 console.log('utils.js cargado completamente');
 console.log('createClient definido:', typeof createClient);
 console.log('notify definido:', typeof notify);
