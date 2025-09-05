@@ -101,7 +101,7 @@ async function getCurrentUserProfile() {
         if (data && data.rol_id) {
             const { data: roleData } = await supabase
                 .from('roles')
-                .select('id, name')
+                .select('id, nombre')  // CORREGIDO: 'nombre' no 'name'
                 .eq('id', data.rol_id)
                 .single();
             
@@ -114,8 +114,8 @@ async function getCurrentUserProfile() {
                 .from('user_areas')
                 .select(`
                     area_id,
-                    areas(id, name, code)
-                `)
+                    areas(id, nombre)
+                `)  // CORREGIDO: 'nombre' no 'name', eliminado 'code'
                 .eq('user_id', userId);
             
             if (userAreas) {
@@ -141,7 +141,7 @@ async function checkUserPermissions(action, context = {}) {
         const profile = await getCurrentUserProfile();
         if (!profile || !profile.roles) return false;
         
-        const roleName = profile.roles.name.toLowerCase();
+        const roleName = profile.roles.nombre.toLowerCase();  // CORREGIDO: 'nombre' no 'name'
         
         switch (action) {
             case 'read':
@@ -189,27 +189,38 @@ async function checkUserPermissions(action, context = {}) {
 async function getUserAreas() {
     try {
         const profile = await getCurrentUserProfile();
-        if (!profile) return [];
+        if (!profile) {
+            console.warn('No se pudo obtener el perfil del usuario');
+            return [];
+        }
+        
+        // Si no tiene rol, retornar array vacío
+        if (!profile.roles || !profile.roles.nombre) {
+            console.warn('Usuario sin rol asignado');
+            return [];
+        }
         
         // Si es subdirector, director o admin, puede ver todas las áreas
-        const roleName = profile.roles.name.toLowerCase();
+        const roleName = profile.roles.nombre.toLowerCase();  // CORREGIDO: 'nombre' no 'name'
         if (['subdirector', 'director', 'admin'].includes(roleName)) {
             const { data: allAreas, error } = await supabase
                 .from('areas')
                 .select('*')
-                .order('name');
+                .order('nombre');  // CORREGIDO: 'nombre' no 'name'
             
             if (error) {
                 console.error('Error obteniendo todas las áreas:', error);
                 return [];
             }
             
-            return allAreas;
+            return allAreas || [];
         }
         
         // Para otros roles, solo sus áreas asignadas
-        if (profile.user_areas) {
-            return profile.user_areas.map(ua => ua.areas);
+        if (profile.user_areas && Array.isArray(profile.user_areas)) {
+            return profile.user_areas
+                .map(ua => ua.areas)
+                .filter(area => area); // Filtrar áreas nulas
         }
         
         return [];
