@@ -114,6 +114,12 @@ async function renderNavbar(user, profile) {
     const navbarContainer = document.getElementById('navbar');
     if (!navbarContainer) return;
     
+    // Validar que tenemos los datos necesarios
+    if (!profile || !profile.roles || !profile.roles.nombre) {
+        console.error('Datos de perfil inválidos:', profile);
+        return;
+    }
+    
     const currentPage = getCurrentPageName();
     
     navbarContainer.innerHTML = `
@@ -144,7 +150,7 @@ async function renderNavbar(user, profile) {
                                 <span class="material-icons text-sm mr-1">search</span>
                                 Consulta
                             </a>
-                            ${profile.roles.nombre.toLowerCase() === 'admin' ? `  // CAMBIO: profile.role.name → profile.roles.nombre
+                            ${profile.roles.nombre.toLowerCase() === 'admin' ? `
                             <a href="admin.html" class="nav-link ${currentPage === 'admin' ? 'active' : ''}">
                                 <span class="material-icons text-sm mr-1">admin_panel_settings</span>
                                 Admin
@@ -158,12 +164,12 @@ async function renderNavbar(user, profile) {
                         <div class="relative">
                             <button onclick="toggleUserMenu()" class="flex items-center space-x-3 text-gray-700 hover:text-gray-900 focus:outline-none">
                                 <div class="text-right">
-                                   <div class="font-medium">${profile.nombre || user.email.split('@')[0]}</div>  // CAMBIO: profile.display_name → profile.nombre
-                                    <div class="text-xs text-gray-500 capitalize">${profile.role.name}</div>
+                                   <div class="font-medium">${profile.nombre || user.email.split('@')[0]}</div>
+                                    <div class="text-xs text-gray-500 capitalize">${profile.roles.nombre}</div>
                                 </div>
                                 <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                                     <span class="text-white text-sm font-medium">
-                                       ${(profile.nombre || user.email).charAt(0).toUpperCase()}  // CAMBIO: profile.display_name → profile.nombre
+                                       ${(profile.nombre || user.email).charAt(0).toUpperCase()}
                                     </span>
                                 </div>
                                 <span class="material-icons text-lg">arrow_drop_down</span>
@@ -172,8 +178,8 @@ async function renderNavbar(user, profile) {
                             <!-- Menú desplegable del usuario -->
                             <div id="user-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
                                 <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                                    <div class="text-sm font-medium">${profile.nombre || user.email.split('@')[0]}</div>  // CAMBIO: profile.display_name → profile.nombre
-                                    <div class="text-xs text-gray-500 capitalize">${profile.roles.nombre}</div>  // CAMBIO: profile.role.name → profile.roles.nombre
+                                    <div class="text-sm font-medium">${profile.nombre || user.email.split('@')[0]}</div>
+                                    <div class="text-xs text-gray-500 capitalize">${profile.roles.nombre}</div>
                                 </div>
                                 <button onclick="logout()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                     <span class="material-icons text-sm mr-2">logout</span>
@@ -198,7 +204,7 @@ async function renderNavbar(user, profile) {
                     <a href="index.html" class="mobile-nav-link ${currentPage === 'index' ? 'active' : ''}">Dashboard</a>
                     <a href="captura.html" class="mobile-nav-link ${currentPage === 'captura' ? 'active' : ''}">Captura</a>
                     <a href="consulta.html" class="mobile-nav-link ${currentPage === 'consulta' ? 'active' : ''}">Consulta</a>
-                    ${profile.roles.nombre.toLowerCase() === 'admin' ? `  // CAMBIO: profile.role.name → profile.roles.nombre
+                    ${profile.roles.nombre.toLowerCase() === 'admin' ? `
                     <a href="admin.html" class="mobile-nav-link ${currentPage === 'admin' ? 'active' : ''}">Admin</a>
                     ` : ''}
                 </div>
