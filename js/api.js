@@ -774,7 +774,7 @@ async function getDashboardStats() {
                 .select('id', { count: 'exact' })
                 .eq('anio', new Date().getFullYear())
                 .eq('mes', new Date().getMonth() + 1)
-                .in('indicador.area_id', areaIds)
+                .in('area_id', areaIds)
         ]);
 
         return {
