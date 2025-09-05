@@ -240,7 +240,7 @@ async function handleAuthRedirect(currentPage = '', requireAuth = true) {
  * @returns {Promise<boolean>} - true si tiene permisos, false si no
  */
 async function checkPagePermissions(page, profile) {
-    if (!profile || !profile.role) return false;
+    if (!profile || !profile.roles) return false; 
     
     const roleName = profile.roles.name.toLowerCase()
     
