@@ -621,7 +621,7 @@
                                 <input 
                                     type="text" 
                                     id="userDisplayName" 
-                                    name="displayName" 
+                                    name="nombre"  <!-- CAMBIO: name="displayName" → name="nombre" -->
                                     required 
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg input-field focus:outline-none"
                                     placeholder="Ej: Juan Pérez López"
@@ -1227,7 +1227,7 @@
                 roles.forEach(role => {
                     const option = document.createElement('option');
                     option.value = role.id;
-                    option.textContent = role.name.charAt(0).toUpperCase() + role.name.slice(1);
+                    option.textContent = role.nombre.charAt(0).toUpperCase() + role.nombre.slice(1); // CAMBIO: role.name → role.nombre
                     roleSelect.appendChild(option);
                 });
                 
@@ -1252,7 +1252,7 @@
                     areas.forEach(area => {
                         const option = document.createElement('option');
                         option.value = area.id;
-                        option.textContent = `${area.name} (${area.code})`;
+                        option.textContent = `${area.nombre} (${area.code})`; // CAMBIO: area.name → area.nombre
                         select.appendChild(option);
                     });
                 });
@@ -1369,18 +1369,18 @@
             const tbody = document.getElementById('usersTableBody');
             
             tbody.innerHTML = users.map(user => {
-                const isActive = user.is_active;
+                const isActive = user.activo; // CAMBIO: is_active → activo
                 const statusBadge = isActive 
                     ? '<span class="status-badge status-active">Activo</span>'
                     : '<span class="status-badge status-inactive">Inactivo</span>';
                 
-                const roleBadge = `<span class="role-badge role-${user.role.name}">${user.role.name}</span>`;
+                const roleBadge = `<span class="role-badge role-${user.roles.nombre}">${user.roles.nombre}</span>`; // CAMBIO: role.name → roles.nombre
                 
                 const userAreas = user.user_areas && user.user_areas.length > 0
-                    ? user.user_areas.map(ua => ua.area.code).join(', ')
+                    ? user.user_areas.map(ua => ua.areas.code).join(', ') // CAMBIO: ua.area.code → ua.areas.code
                     : 'Sin áreas asignadas';
                 
-                const avatar = user.display_name 
+                const avatar = user.nombre  // CAMBIO: display_name → nombre 
                     ? user.display_name.charAt(0).toUpperCase()
                     : user.email.charAt(0).toUpperCase();
                 
@@ -1394,7 +1394,7 @@
                                     </div>
                                 </div>
                                 <div class="ml-4">
-                                    <div class="text-sm font-medium text-gray-900">${user.display_name || 'Sin nombre'}</div>
+                                    <div class="text-sm font-medium text-gray-900">${user.nombre || 'Sin nombre'}</div> // CAMBIO: display_name → nombre
                                     <div class="text-sm text-gray-500">${user.email}</div>
                                 </div>
                             </div>
@@ -1458,9 +1458,9 @@
             }
             
             const filteredUsers = users.filter(user => 
-                user.display_name?.toLowerCase().includes(searchTerm) ||
+                user.nombre?.toLowerCase().includes(searchTerm) || // CAMBIO: display_name → nombre
                 user.email.toLowerCase().includes(searchTerm) ||
-                user.role.name.toLowerCase().includes(searchTerm)
+                user.roles.nombre.toLowerCase().includes(searchTerm) // CAMBIO: role.name → roles.nombre
             );
             
             const tbody = document.getElementById('usersTableBody');
@@ -1541,12 +1541,12 @@
                     'admin': 'Control total del sistema más gestión de usuarios, roles, áreas e indicadores.'
                 };
                 
-                document.getElementById('roleDescriptionTitle').textContent = role.name.charAt(0).toUpperCase() + role.name.slice(1);
-                document.getElementById('roleDescriptionText').textContent = descriptions[role.name] || 'Rol del sistema';
+                document.getElementById('roleDescriptionTitle').textContent = role.nombre.charAt(0).toUpperCase() + role.nombre.slice(1); // CAMBIO: role.name → role.nombre
+                document.getElementById('roleDescriptionText').textContent = descriptions[role.nombre] || 'Rol del sistema'; // CAMBIO: role.name → role.nombre
                 roleDescription.classList.remove('hidden');
                 
                 // Mostrar áreas solo si no es subdirector, director o admin
-                if (['subdirector', 'director', 'admin'].includes(role.name)) {
+                if (['subdirector', 'director', 'admin'].includes(role.nombre)) { // CAMBIO: role.name → role.nombre
                     areasContainer.innerHTML = `
                         <div class="text-center text-gray-500 text-sm py-4">
                             <span class="material-icons mb-2">all_inclusive</span>
@@ -1559,7 +1559,7 @@
                         <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
                             <input type="checkbox" name="userAreas" value="${area.id}" class="text-blue-600 focus:ring-blue-500 mr-3">
                             <div class="flex-1">
-                                <div class="text-sm font-medium text-gray-900">${area.name}</div>
+                                <div class="text-sm font-medium text-gray-900">${area.nombre}</div> // CAMBIO: area.name → area.nombre
                                 <div class="text-xs text-gray-500">${area.code}</div>
                             </div>
                         </label>
@@ -1582,9 +1582,9 @@
                 const formData = new FormData(event.target);
                 const userData = {
                     email: formData.get('email'),
-                    display_name: formData.get('displayName'),
-                    role_id: parseInt(formData.get('roleId')),
-                    is_active: formData.get('isActive') === 'on'
+                    nombre: formData.get('displayName'), // CAMBIO: display_name → nombre
+                    rol_id: parseInt(formData.get('roleId')), // CAMBIO: role_id → rol_id  
+                    activo: formData.get('isActive') === 'on' // CAMBIO: is_active → activo
                 };
                 
                 // Agregar contraseña solo para nuevos usuarios
@@ -1638,12 +1638,12 @@
                 isValid = false;
             }
             
-            if (!userData.display_name?.trim()) {
+            if (!userData.nombre?.trim()) { // CAMBIO: display_name → nombre
                 showFieldError('userDisplayName', 'El nombre completo es requerido');
                 isValid = false;
             }
             
-            if (!userData.role_id) {
+            if (!userData.rol_id) { // CAMBIO: role_id → rol_id
                 showFieldError('userRole', 'Selecciona un rol');
                 isValid = false;
             }
@@ -1680,7 +1680,7 @@
                 
                 const formData = new FormData(event.target);
                 const areaData = {
-                    name: formData.get('name').trim(),
+                    nombre: formData.get('name').trim(), // CAMBIO: name → nombre
                     code: formData.get('code').trim().toUpperCase()
                 };
                 
@@ -1758,7 +1758,7 @@
                                 <span class="material-icons text-blue-600">business</span>
                             </div>
                             <div>
-                                <h3 class="font-medium text-gray-900">${area.name}</h3>
+                                <h3 class="font-medium text-gray-900">${area.nombre}</h3> // CAMBIO: area.name → area.nombre
                                 <p class="text-sm text-gray-500">${area.code}</p>
                             </div>
                         </div>
@@ -1805,7 +1805,7 @@
         
         function getAreaUsersCount(areaId) {
             return users.filter(user => 
-                user.user_areas && user.user_areas.some(ua => ua.area.id === areaId)
+                user.user_areas && user.user_areas.some(ua => ua.areas.id === areaId) // CAMBIO: ua.area.id → ua.areas.id
             ).length;
         }
         
