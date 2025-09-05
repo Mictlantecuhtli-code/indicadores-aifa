@@ -57,7 +57,7 @@ async function requireRole(allowedRoles, callback, errorCallback = null) {
             return;
         }
 
-        const userRole = authState.profile.role.name.toLowerCase();
+        const userRole = authState.profile.roles.nombre.toLowerCase();  // CAMBIO: profile.role.name → profile.roles.nombre
         const rolesArray = Array.isArray(allowedRoles) 
             ? allowedRoles.map(r => r.toLowerCase()) 
             : [allowedRoles.toLowerCase()];
@@ -298,7 +298,7 @@ async function initPageGuards(pageName) {
         
         // Verificar autenticación básica
         await requireAuth(async (user, profile) => {
-            console.log(`Usuario autenticado: ${profile.display_name} (${profile.role.name})`);
+            console.log(`Usuario autenticado: ${profile.nombre} (${profile.roles.nombre})`);  // CAMBIO: profile.display_name → profile.nombre, profile.role.name → profile.roles.nombre
             
             // Aplicar protecciones específicas por página
             switch (pageName) {
