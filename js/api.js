@@ -771,7 +771,7 @@ async function getDashboardStats() {
             
             // Mediciones del mes actual
             window.supabaseClient.supabase
-                .from('indicator_valores')
+                .from('indicador_valores')
                 .select('id', { count: 'exact' })
                 .eq('año', new Date().getFullYear())
                 .eq('mes', new Date().getMonth() + 1)
