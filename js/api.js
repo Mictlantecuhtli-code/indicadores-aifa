@@ -520,7 +520,7 @@ async function getFrecuencias() {
 async function getMeasurements(filters = {}) {
     try {
         let query = window.supabaseClient.supabase
-            .from('indicator_valores')
+            .from('indicador_valores')
             .select(`
                 *,
                 indicador:indicadores!indicador_id(
@@ -587,7 +587,7 @@ async function createMeasurement(measurementData) {
         };
 
         const { data, error } = await window.supabaseClient.supabase
-            .from('indicator_valores')
+            .from('indicador_valores')
             .insert([dataToInsert])
             .select(`
                 *,
@@ -631,7 +631,7 @@ async function updateMeasurement(measurementId, updateData) {
         if (updateData.mes !== undefined) dataToUpdate.mes = updateData.mes;
 
         const { data, error } = await window.supabaseClient.supabase
-            .from('indicator_valores')
+            .from('indicador_valores')
             .update(dataToUpdate)
             .eq('id', measurementId)
             .select(`
@@ -664,7 +664,7 @@ async function updateMeasurement(measurementId, updateData) {
 async function deleteMeasurement(measurementId) {
     try {
         const { error } = await window.supabaseClient.supabase
-            .from('indicator_valores')
+            .from('indicador_valores')
             .delete()
             .eq('id', measurementId);
 
@@ -694,7 +694,7 @@ async function deleteMeasurement(measurementId) {
 async function getHistogramData(indicatorId, yearA, yearB) {
     try {
         const { data, error } = await window.supabaseClient.supabase
-            .from('indicator_valores')
+            .from('indicador_valores')
             .select('año, mes, valor_num')
             .eq('indicador_id', indicatorId)
             .in('año', [yearA, yearB])
