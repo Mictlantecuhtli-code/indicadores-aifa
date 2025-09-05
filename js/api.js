@@ -182,6 +182,7 @@ async function assignUserAreas(userId, areaIds) {
         throw error;
     }
 }
+
 /**
  * GESTIÓN DE ROLES
  */
@@ -311,6 +312,7 @@ async function deleteArea(areaId) {
         throw error;
     }
 }
+
 /**
  * GESTIÓN DE INDICADORES
  */
@@ -505,6 +507,7 @@ async function getFrecuencias() {
         throw error;
     }
 }
+
 /**
  * GESTIÓN DE MEDICIONES
  */
@@ -543,7 +546,6 @@ async function getMeasurements(filters = {}) {
         if (filters.month) {
             query = query.eq('mes', filters.month);
         }
-        // ELIMINADO: filtros startDate y endDate ya que usamos año/mes separados
 
         const { data, error } = await query;
 
@@ -737,7 +739,27 @@ async function getDashboardStats() {
     try {
         // Obtener áreas del usuario
         const userAreas = await window.supabaseClient.getUserAreas();
-        const areaIds = userAreas.map(area => area.id);
+        
+        // Verificar que userAreas sea válido
+        if (!userAreas || !Array.isArray(userAreas)) {
+            console.warn('getUserAreas retornó datos inválidos:', userAreas);
+            return {
+                totalIndicators: 0,
+                monthlyMeasurements: 0,
+                userAreas: 0
+            };
+        }
+
+        const areaIds = userAreas.map(area => area.id).filter(id => id);
+
+        // Si no hay áreas válidas, retornar estadísticas vacías
+        if (areaIds.length === 0) {
+            return {
+                totalIndicators: 0,
+                monthlyMeasurements: 0,
+                userAreas: 0
+            };
+        }
 
         // Estadísticas básicas
         const [indicatorsData, measurementsData] = await Promise.all([
@@ -794,8 +816,8 @@ window.api = {
     createIndicator,
     updateIndicator,
     deleteIndicator,
-    getUnidades, // AGREGADO: función para unidades
-    getFrecuencias, // AGREGADO: función para frecuencias
+    getUnidades,
+    getFrecuencias,
     
     // Mediciones
     getMeasurements,
