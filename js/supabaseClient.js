@@ -29,7 +29,6 @@ function validateAifaEmail(email) {
  * Obtener información del usuario actual
  * @returns {Promise<Object|null>} - Datos del usuario o null si no está autenticado
  */
-// Función para obtener usuario actual (CORREGIDA)
 async function getCurrentUser() {
     try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -41,7 +40,7 @@ async function getCurrentUser() {
 
         return user;
     } catch (error) {
-        // ✅ CORRECCIÓN: Error normal si no hay sesión - no mostrar como error
+        // Error normal si no hay sesión - no mostrar como error
         console.log('No hay sesión activa');
         return null;
     }
@@ -51,19 +50,15 @@ async function getCurrentUser() {
  * Obtener perfil completo del usuario actual con rol y áreas
  * @returns {Promise<Object|null>} - Perfil completo o null
  */
-// Función para obtener perfil del usuario actual (CORREGIDA)
 async function getCurrentUserProfile() {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
 
-        // ✅ CORRECCIÓN: Usar estructura exacta de tu DB
+        // CORRECCIÓN: Query simplificado para evitar errores de JOIN
         const { data, error } = await supabase
             .from('users')
-            .select(`
-                *,
-                roles!rol_id(id, name)
-            `)
+            .select('*')
             .eq('id', user.id)
             .eq('activo', true)
             .single();
@@ -71,6 +66,32 @@ async function getCurrentUserProfile() {
         if (error) {
             console.error('Error obteniendo perfil:', error);
             return null;
+        }
+
+        // Si encontramos el usuario, obtener el rol por separado
+        if (data && data.rol_id) {
+            const { data: roleData } = await supabase
+                .from('roles')
+                .select('id, name')
+                .eq('id', data.rol_id)
+                .single();
+            
+            if (roleData) {
+                data.roles = roleData; // Agregar rol al objeto usuario
+            }
+
+            // Obtener áreas del usuario si existen
+            const { data: userAreas } = await supabase
+                .from('user_areas')
+                .select(`
+                    area_id,
+                    areas(id, name, code)
+                `)
+                .eq('user_id', user.id);
+            
+            if (userAreas) {
+                data.user_areas = userAreas;
+            }
         }
 
         return data;
@@ -89,9 +110,9 @@ async function getCurrentUserProfile() {
 async function checkUserPermissions(action, context = {}) {
     try {
         const profile = await getCurrentUserProfile();
-        if (!profile || !profile.role) return false;
+        if (!profile || !profile.roles) return false; // CORRECCIÓN: profile.role -> profile.roles
         
-        const roleName = profile.role.name.toLowerCase();
+        const roleName = profile.roles.name.toLowerCase(); // CORRECCIÓN: profile.role.name -> profile.roles.name
         
         switch (action) {
             case 'read':
@@ -100,8 +121,8 @@ async function checkUserPermissions(action, context = {}) {
             case 'write':
                 if (roleName === 'capturista') {
                     // Solo puede escribir en sus áreas asignadas
-                    if (context.areaId) {
-                        const userAreas = profile.user_areas.map(ua => ua.area.id);
+                    if (context.areaId && profile.user_areas) {
+                        const userAreas = profile.user_areas.map(ua => ua.areas.id);
                         return userAreas.includes(context.areaId);
                     }
                     return false;
@@ -142,7 +163,7 @@ async function getUserAreas() {
         if (!profile) return [];
         
         // Si es subdirector, director o admin, puede ver todas las áreas
-        const roleName = profile.role.name.toLowerCase();
+        const roleName = profile.roles.name.toLowerCase(); // CORRECCIÓN: profile.role.name -> profile.roles.name
         if (['subdirector', 'director', 'admin'].includes(roleName)) {
             const { data: allAreas, error } = await supabase
                 .from('areas')
@@ -158,7 +179,11 @@ async function getUserAreas() {
         }
         
         // Para otros roles, solo sus áreas asignadas
-        return profile.user_areas.map(ua => ua.area);
+        if (profile.user_areas) {
+            return profile.user_areas.map(ua => ua.areas); // CORRECCIÓN: ua.area -> ua.areas
+        }
+        
+        return [];
     } catch (error) {
         console.error('Error obteniendo áreas del usuario:', error);
         return [];
@@ -204,3 +229,6 @@ window.supabaseClient = {
     onAuthStateChange,
     signOut
 };
+
+// Verificar inicialización exitosa
+console.log('Supabase Client inicializado correctamente');
