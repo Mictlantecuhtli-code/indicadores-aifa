@@ -528,7 +528,7 @@ async function getMeasurements(filters = {}) {
                     areas!area_id(id, nombre)
                 )
             `)
-            .order('año', { ascending: false })
+            .order('anio', { ascending: false })
             .order('mes', { ascending: false })
             .order('created_at', { ascending: false });
 
@@ -540,7 +540,7 @@ async function getMeasurements(filters = {}) {
             query = query.eq('indicador.area_id', filters.areaId);
         }
         if (filters.year) {
-            query = query.eq('año', filters.year);
+            query = query.eq('anio', filters.year);
         }
         if (filters.month) {
             query = query.eq('mes', filters.month);
@@ -576,7 +576,7 @@ async function createMeasurement(measurementData) {
         // Mapear datos del frontend a estructura de BD real
         const dataToInsert = {
             indicador_id: measurementData.indicator_id || measurementData.indicador_id,
-            año: measurementData.year || measurementData.año,
+            anio: measurementData.year || measurementData.anio,
             mes: measurementData.month || measurementData.mes,
             valor_num: measurementData.value_num || measurementData.valor_num,
             estado: measurementData.estado || 'activo',
@@ -626,7 +626,7 @@ async function updateMeasurement(measurementId, updateData) {
         if (updateData.valor_num !== undefined) dataToUpdate.valor_num = updateData.valor_num;
         if (updateData.fuente !== undefined) dataToUpdate.fuente = updateData.fuente;
         if (updateData.estado !== undefined) dataToUpdate.estado = updateData.estado;
-        if (updateData.año !== undefined) dataToUpdate.año = updateData.año;
+        if (updateData.anio !== undefined) dataToUpdate.anio = updateData.anio;
         if (updateData.mes !== undefined) dataToUpdate.mes = updateData.mes;
 
         const { data, error } = await window.supabaseClient.supabase
@@ -686,17 +686,17 @@ async function deleteMeasurement(measurementId) {
 /**
  * Obtener datos para histograma comparativo
  * @param {number} indicatorId - ID del indicador
- * @param {number} yearA - Primer año a comparar
- * @param {number} yearB - Segundo año a comparar
+ * @param {number} yearA - Primer anio a comparar
+ * @param {number} yearB - Segundo anio a comparar
  * @returns {Promise<Object>} - Datos para gráfica
  */
 async function getHistogramData(indicatorId, yearA, yearB) {
     try {
         const { data, error } = await window.supabaseClient.supabase
             .from('indicador_valores')
-            .select('año, mes, valor_num')
+            .select('anio, mes, valor_num')
             .eq('indicador_id', indicatorId)
-            .in('año', [yearA, yearB])
+            .in('anio', [yearA, yearB])
             .order('mes');
 
         if (error) {
@@ -716,9 +716,9 @@ async function getHistogramData(indicatorId, yearA, yearB) {
 
         data.forEach(record => {
             const monthIndex = record.mes - 1;
-            if (record.año === yearA) {
+            if (record.anio === yearA) {
                 processedData.yearA[monthIndex] = record.valor_num || 0;
-            } else if (record.año === yearB) {
+            } else if (record.anio === yearB) {
                 processedData.yearB[monthIndex] = record.valor_num || 0;
             }
         });
@@ -772,7 +772,7 @@ async function getDashboardStats() {
             window.supabaseClient.supabase
                 .from('indicador_valores')
                 .select('id', { count: 'exact' })
-                .eq('año', new Date().getFullYear())
+                .eq('anio', new Date().getFullYear())
                 .eq('mes', new Date().getMonth() + 1)
                 .in('indicador.area_id', areaIds)
         ]);
