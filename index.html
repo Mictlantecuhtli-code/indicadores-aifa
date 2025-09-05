@@ -441,7 +441,7 @@
                 animateCountUp('userAreas', stats.userAreas);
                 
                 // Mostrar rol del usuario
-                document.getElementById('userRole').textContent = currentProfile.role.name;
+                document.getElementById('userRole').textContent = currentProfile.roles.nombre;
                 
             } catch (error) {
                 console.error('Error cargando estadísticas:', error);
@@ -449,10 +449,10 @@
                 document.getElementById('totalIndicators').textContent = '--';
                 document.getElementById('monthlyMeasurements').textContent = '--';
                 document.getElementById('userAreas').textContent = '--';
-                document.getElementById('userRole').textContent = currentProfile.role.name || '--';
+                document.getElementById('userRole').textContent = currentProfile.roles.nombre || '--';
             }
         }
-        
+                
         // Animar contador hacia arriba
         function animateCountUp(elementId, targetValue) {
             const element = document.getElementById(elementId);
@@ -479,26 +479,25 @@
         }
         
         // Cargar lista de indicadores
-        async function loadIndicators() {
-            try {
-                indicators = await window.api.getIndicators();
-                
-                const select = document.getElementById('indicatorSelect');
-                select.innerHTML = '<option value="">Seleccionar indicador...</option>';
-                
-                indicators.forEach(indicator => {
-                    const option = document.createElement('option');
-                    option.value = indicator.id;
-                    option.textContent = `${indicator.name} (${indicator.area.name})`;
-                    select.appendChild(option);
-                });
-                
-            } catch (error) {
-                console.error('Error cargando indicadores:', error);
-                window.ui.showToast('Error cargando lista de indicadores', 'error');
-            }
+    async function loadIndicators() {
+        try {
+            indicators = await window.api.getIndicators();
+            
+            const select = document.getElementById('indicatorSelect');
+            select.innerHTML = '<option value="">Seleccionar indicador...</option>';
+            
+            indicators.forEach(indicator => {
+                const option = document.createElement('option');
+                option.value = indicator.id;
+                option.textContent = `${indicator.nombre} (${indicator.areas.nombre})`; // CAMBIO: indicator.name → indicator.nombre, indicator.area.name → indicator.areas.nombre
+                select.appendChild(option);
+            });
+            
+        } catch (error) {
+            console.error('Error cargando indicadores:', error);
+            window.ui.showToast('Error cargando lista de indicadores', 'error');
         }
-        
+    }
         // Configurar selectores de años
         function setupYearSelectors() {
             const currentYear = new Date().getFullYear();
@@ -535,7 +534,6 @@
         }
 
               
-        // Cargar actividad reciente
         async function loadRecentActivity() {
             try {
                 // Obtener últimas 5 mediciones
@@ -567,18 +565,18 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium text-gray-900 truncate">
-                                    ${measurement.indicator.name}
+                                    ${measurement.indicador.nombre}
                                 </p>
                                 <p class="text-xs text-gray-600">
-                                    ${measurement.indicator.area.name} • ${relativeTime}
+                                    ${measurement.indicador.areas.nombre} • ${relativeTime}
                                 </p>
                             </div>
                             <div class="text-right">
                                 <p class="text-sm font-medium text-gray-900">
-                                    ${measurement.value_num ? measurement.value_num.toLocaleString() : measurement.value_text || '--'}
+                                    ${measurement.valor_num ? measurement.valor_num.toLocaleString() : '--'}
                                 </p>
                                 <p class="text-xs text-gray-600">
-                                    ${measurement.indicator.unit || ''}
+                                    ${measurement.indicador.unidades?.descripcion || ''}
                                 </p>
                             </div>
                         </div>
