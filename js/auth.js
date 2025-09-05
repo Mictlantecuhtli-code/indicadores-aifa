@@ -76,7 +76,7 @@ async function signIn(email, password) {
             };
         }
 
-        if (!profile.is_active) {
+        if (!profile.activo) {
             // Si el perfil está inactivo, cerrar sesión
             await window.supabaseClient.signOut();
             return {
@@ -155,7 +155,7 @@ async function checkAuthState() {
         // Verificar que el usuario tenga un perfil válido
         const profile = await window.supabaseClient.getCurrentUserProfile();
         
-        if (!profile || !profile.is_active) {
+        if (!profile || !profile.activo) {
             // Cerrar sesión si el perfil no es válido
             await signOut();
             return {
