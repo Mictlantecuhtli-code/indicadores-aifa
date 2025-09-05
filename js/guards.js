@@ -57,7 +57,18 @@ async function requireRole(allowedRoles, callback, errorCallback = null) {
             return;
         }
 
-        const userRole = authState.profile.roles.nombre.toLowerCase();  // CAMBIO: profile.role.name → profile.roles.nombre
+        // Validar que el perfil y rol existan
+        if (!authState.profile || !authState.profile.roles || !authState.profile.roles.nombre) {
+            console.error('Perfil de usuario inválido:', authState.profile);
+            if (typeof errorCallback === 'function') {
+                errorCallback('Perfil de usuario inválido');
+            } else {
+                window.location.href = 'login.html';
+            }
+            return;
+        }
+
+        const userRole = authState.profile.roles.nombre.toLowerCase();
         const rolesArray = Array.isArray(allowedRoles) 
             ? allowedRoles.map(r => r.toLowerCase()) 
             : [allowedRoles.toLowerCase()];
@@ -298,7 +309,14 @@ async function initPageGuards(pageName) {
         
         // Verificar autenticación básica
         await requireAuth(async (user, profile) => {
-            console.log(`Usuario autenticado: ${profile.nombre} (${profile.roles.nombre})`);  // CAMBIO: profile.display_name → profile.nombre, profile.role.name → profile.roles.nombre
+            // Validar que el perfil tenga los datos necesarios
+            if (!profile || !profile.nombre || !profile.roles || !profile.roles.nombre) {
+                console.error('Perfil de usuario incompleto:', profile);
+                window.location.href = 'login.html';
+                return;
+            }
+
+            console.log(`Usuario autenticado: ${profile.nombre} (${profile.roles.nombre})`);
             
             // Aplicar protecciones específicas por página
             switch (pageName) {
