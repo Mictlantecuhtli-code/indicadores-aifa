@@ -1,4 +1,4 @@
-/**
+    /**
  * Indicadores 2.0 - AIFA
  * Módulo de API - Funciones CRUD con Supabase
  * Maneja todas las operaciones de base de datos con políticas RLS
@@ -766,7 +766,7 @@ async function getDashboardStats() {
             window.supabaseClient.supabase
                 .from('indicadores')
                 .select('id', { count: 'exact' })
-                .in('area_id', areaIds),
+                .in('indicadores.area_id', areaIds)
             
             // Mediciones del mes actual
             window.supabaseClient.supabase
