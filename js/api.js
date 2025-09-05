@@ -766,6 +766,8 @@ async function getDashboardStats() {
             window.supabaseClient.supabase
                 .from('indicadores')
                 .select('id', { count: 'exact' })
+                ..select('*, indicadores!indicador_id(area_id)', { count: 'exact' })  // ← Esta línea está rota
+                .in('indicadores.area_id', areaIds)
             
             // Mediciones del mes actual
             window.supabaseClient.supabase
@@ -774,8 +776,7 @@ async function getDashboardStats() {
                 .eq('anio', new Date().getFullYear())
                 .eq('mes', new Date().getMonth() + 1)
                 //.in('area_id', areaIds)
-        ]);
-
+            ]);
         return {
             totalIndicators: indicatorsData.count || 0,
             monthlyMeasurements: measurementsData.count || 0,
