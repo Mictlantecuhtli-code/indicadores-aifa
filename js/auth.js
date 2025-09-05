@@ -76,6 +76,7 @@ async function signIn(email, password) {
             };
         }
 
+        // CORRECCIÓN: is_active -> activo
         if (!profile.activo) {
             // Si el perfil está inactivo, cerrar sesión
             await window.supabaseClient.signOut();
@@ -155,6 +156,7 @@ async function checkAuthState() {
         // Verificar que el usuario tenga un perfil válido
         const profile = await window.supabaseClient.getCurrentUserProfile();
         
+        // CORRECCIÓN: is_active -> activo
         if (!profile || !profile.activo) {
             // Cerrar sesión si el perfil no es válido
             await signOut();
@@ -240,9 +242,11 @@ async function handleAuthRedirect(currentPage = '', requireAuth = true) {
  * @returns {Promise<boolean>} - true si tiene permisos, false si no
  */
 async function checkPagePermissions(page, profile) {
+    // CORRECCIÓN: profile.role -> profile.roles
     if (!profile || !profile.roles) return false; 
     
-    const roleName = profile.roles.name.toLowerCase()
+    // CORRECCIÓN: profile.role.name -> profile.roles.name y faltaba punto y coma
+    const roleName = profile.roles.name.toLowerCase();
     
     switch (page) {
         case 'index':
