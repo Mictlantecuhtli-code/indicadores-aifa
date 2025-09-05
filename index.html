@@ -489,7 +489,7 @@
             indicators.forEach(indicator => {
                 const option = document.createElement('option');
                 option.value = indicator.id;
-                option.textContent = `${indicator.nombre} (${indicator.areas.nombre})`; // CAMBIO: indicator.name → indicator.nombre, indicator.area.name → indicator.areas.nombre
+                option.textContent = `${indicador.nombre} (${indicador.areas.nombre})`;
                 select.appendChild(option);
             });
             
