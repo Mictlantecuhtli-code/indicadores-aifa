@@ -29,6 +29,7 @@ function validateAifaEmail(email) {
  * Obtener información del usuario actual
  * @returns {Promise<Object|null>} - Datos del usuario o null si no está autenticado
  */
+// Función para obtener usuario actual (CORREGIDA)
 async function getCurrentUser() {
     try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -37,10 +38,11 @@ async function getCurrentUser() {
             console.error('Error obteniendo usuario:', error);
             return null;
         }
-        
+
         return user;
     } catch (error) {
-        console.error('Error en getCurrentUser:', error);
+        // ✅ CORRECCIÓN: Error normal si no hay sesión - no mostrar como error
+        console.log('No hay sesión activa');
         return null;
     }
 }
@@ -49,31 +51,31 @@ async function getCurrentUser() {
  * Obtener perfil completo del usuario actual con rol y áreas
  * @returns {Promise<Object|null>} - Perfil completo o null
  */
+// Función para obtener perfil del usuario actual (CORREGIDA)
 async function getCurrentUserProfile() {
     try {
-        const user = await getCurrentUser();
+        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
-        
-        // Obtener perfil con rol
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
+
+        // ✅ CORRECCIÓN: Usar estructura exacta de tu DB
+        const { data, error } = await supabase
+            .from('users')
             .select(`
                 *,
-                role:roles(id, name),
-                user_areas(area:areas(id, name, code))
+                roles!rol_id(id, name)
             `)
             .eq('id', user.id)
-            .eq('is_active', true)
+            .eq('activo', true)
             .single();
-        
-        if (profileError) {
-            console.error('Error obteniendo perfil:', profileError);
+
+        if (error) {
+            console.error('Error obteniendo perfil:', error);
             return null;
         }
-        
-        return profile;
+
+        return data;
     } catch (error) {
-        console.error('Error en getCurrentUserProfile:', error);
+        console.error('Error obteniendo perfil:', error);
         return null;
     }
 }
