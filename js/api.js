@@ -526,8 +526,7 @@ async function getMeasurements(filters = {}) {
                 indicador:indicadores!indicador_id(
                     id, nombre, clave, objetivo,
                     areas!area_id(id, nombre)
-                ),
-                creator:users!created_by(nombre, email)
+                )
             `)
             .order('año', { ascending: false })
             .order('mes', { ascending: false })
