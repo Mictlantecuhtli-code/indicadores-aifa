@@ -751,7 +751,7 @@
                 areas.forEach(area => {
                     const option = document.createElement('option');
                     option.value = area.id;
-                    option.textContent = `${area.name} (${area.code})`;
+                    option.textContent = `${area.nombre} (${area.code})`; // CAMBIO: area.name → area.nombre
                     select.appendChild(option);
                 });
                 
@@ -771,7 +771,7 @@
                 indicators.forEach(indicator => {
                     const option = document.createElement('option');
                     option.value = indicator.id;
-                    option.textContent = `${indicator.name} (${indicator.area.name})`;
+                    option.textContent = `${indicator.nombre} (${indicator.areas.nombre})`; // CAMBIO: indicator.name → indicator.nombre, indicator.area.name → indicator.areas.nombre
                     select.appendChild(option);
                 });
                 
@@ -929,11 +929,11 @@
             if (!searchText) return data;
             
             return data.filter(measurement => {
-                const indicatorName = measurement.indicator.name.toLowerCase();
-                const areaName = measurement.indicator.area.name.toLowerCase();
-                const source = (measurement.source || '').toLowerCase();
-                const valueText = (measurement.value_text || '').toLowerCase();
-                const valueNum = measurement.value_num ? measurement.value_num.toString() : '';
+                const indicatorName = measurement.indicador.nombre.toLowerCase(); // CAMBIO: indicator.name → indicador.nombre
+                const areaName = measurement.indicador.areas.nombre.toLowerCase(); // CAMBIO: indicator.area.name → indicador.areas.nombre
+                const source = (measurement.fuente || '').toLowerCase(); // CAMBIO: source → fuente
+                const valueNum = measurement.valor_num ? measurement.valor_num.toString() : ''; // CAMBIO: value_num → valor_num
+                // ELIMINAR: value_text (no existe)
                 
                 return indicatorName.includes(searchText) ||
                        areaName.includes(searchText) ||
@@ -950,24 +950,24 @@
                 
                 switch (sortColumn) {
                     case 'indicator':
-                        valueA = a.indicator.name.toLowerCase();
-                        valueB = b.indicator.name.toLowerCase();
+                        valueA = a.indicador.nombre.toLowerCase(); // CAMBIO: indicator.name → indicador.nombre
+                        valueB = b.indicador.nombre.toLowerCase();
                         break;
                     case 'area':
-                        valueA = a.indicator.area.name.toLowerCase();
-                        valueB = b.indicator.area.name.toLowerCase();
+                        valueA = a.indicador.areas.nombre.toLowerCase(); // CAMBIO: indicator.area.name → indicador.areas.nombre
+                        valueB = b.indicador.areas.nombre.toLowerCase();
                         break;
                     case 'period':
-                        valueA = new Date(a.period_date);
-                        valueB = new Date(b.period_date);
+                        valueA = new Date(a.año, a.mes - 1); // CAMBIO: period_date → año, mes
+                        valueB = new Date(b.año, b.mes - 1);
                         break;
                     case 'value':
-                        valueA = a.value_num || 0;
-                        valueB = b.value_num || 0;
+                        valueA = a.valor_num || 0; // CAMBIO: value_num → valor_num
+                        valueB = b.valor_num || 0;
                         break;
                     case 'source':
-                        valueA = (a.source || '').toLowerCase();
-                        valueB = (b.source || '').toLowerCase();
+                        valueA = (a.fuente || '').toLowerCase(); // CAMBIO: source → fuente
+                        valueB = (b.fuente || '').toLowerCase();
                         break;
                     case 'created':
                     default:
@@ -985,7 +985,7 @@
         // Actualizar estadísticas de resultados
         function updateResultsStats() {
             const numericValues = filteredMeasurements
-                .map(m => m.value_num)
+                .map(m => m.valor_num) // CAMBIO: value_num → valor_num
                 .filter(v => v !== null && v !== undefined);
             
             // Total de registros
@@ -1019,27 +1019,28 @@
             
             tbody.innerHTML = pageData.map(measurement => {
                 const period = `${getMonthName(measurement.month)} ${measurement.year}`;
-                const value = measurement.value_num 
-                    ? `${measurement.value_num.toLocaleString()} ${measurement.indicator.unit || ''}`
-                    : measurement.value_text || '--';
+                const period = `${getMonthName(measurement.mes)} ${measurement.año}`; // CAMBIO: month, year → mes, año
+                const value = measurement.valor_num  // CAMBIO: value_num → valor_num
+                    ? `${measurement.valor_num.toLocaleString()} ${measurement.indicador.unidades?.descripcion || ''}` // CAMBIO: indicator.unit → indicador.unidades?.descripcion
+                    : '--'; // ELIMINAR: value_text (no existe)
                 
                 const createdDate = new Date(measurement.created_at).toLocaleDateString('es-MX');
                 
                 // Verificar permisos para acciones
-                const canEdit = currentProfile.role.name.toLowerCase() !== 'capturista';
+                const canEdit = currentProfile.roles.nombre.toLowerCase() !== 'capturista'; // CAMBIO: role.name → roles.nombre
                 
                 return `
                     <tr class="table-row">
                         <td class="px-6 py-4">
                             <div>
-                                <div class="text-sm font-medium text-gray-900">${measurement.indicator.name}</div>
-                                <div class="text-xs text-gray-500">${measurement.indicator.code}</div>
+                                <div class="text-sm font-medium text-gray-900">${measurement.indicador.nombre}</div> // CAMBIO: indicator.name → indicador.nombre
+                                <div class="text-xs text-gray-500">${measurement.indicador.clave}</div> // CAMBIO: indicator.code → indicador.clave
                             </div>
                         </td>
                         <td class="px-6 py-4">
                             <div>
-                                <div class="text-sm text-gray-900">${measurement.indicator.area.name}</div>
-                                <div class="text-xs text-gray-500">${measurement.indicator.area.code}</div>
+                                <div class="text-sm text-gray-900">${measurement.indicador.areas.nombre}</div> // CAMBIO: indicator.area.name → indicador.areas.nombre
+                                <div class="text-xs text-gray-500">${measurement.indicador.areas.code}</div> // CAMBIO: indicator.area.code → indicador.areas.code
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1494,21 +1495,21 @@
             if (!measurement) return;
             
             // Llenar datos del modal
-            document.getElementById('detailIndicatorName').textContent = measurement.indicator.name;
-            document.getElementById('detailIndicatorCode').textContent = measurement.indicator.code;
-            document.getElementById('detailArea').textContent = `${measurement.indicator.area.name} (${measurement.indicator.area.code})`;
+            document.getElementById('detailIndicatorName').textContent = measurement.indicador.nombre; // CAMBIO: indicator.name → indicador.nombre
+            document.getElementById('detailIndicatorCode').textContent = measurement.indicador.clave; // CAMBIO: indicator.code → indicador.clave
+            document.getElementById('detailArea').textContent = `${measurement.indicador.areas.nombre} (${measurement.indicador.areas.code})`; // CAMBIO: indicator.area → indicador.areas
             document.getElementById('detailPeriodicity').textContent = measurement.indicator.periodicity || '--';
             document.getElementById('detailGoal').textContent = measurement.indicator.goal || 'No definida';
             
-            document.getElementById('detailPeriod').textContent = `${getMonthName(measurement.month)} ${measurement.year}`;
-            const value = measurement.value_num 
-                ? `${measurement.value_num.toLocaleString()} ${measurement.indicator.unit || ''}`
-                : measurement.value_text || '--';
+            document.getElementById('detailPeriod').textContent = `${getMonthName(measurement.mes)} ${measurement.año}`; // CAMBIO: month, year → mes, año
+            const value = measurement.valor_num  // CAMBIO: value_num → valor_num
+                ? `${measurement.valor_num.toLocaleString()} ${measurement.indicador.unidades?.descripcion || ''}` // CAMBIO: indicator.unit → indicador.unidades?.descripcion
+                : '--'; // ELIMINAR: value_text
             document.getElementById('detailValue').textContent = value;
             document.getElementById('detailUnit').textContent = measurement.indicator.unit || '--';
-            document.getElementById('detailSource').textContent = measurement.source || '--';
+            document.getElementById('detailSource').textContent = measurement.fuente || '--'; // CAMBIO: source → fuente
             
-            document.getElementById('detailCreatedBy').textContent = measurement.creator?.display_name || '--';
+            document.getElementById('detailCreatedBy').textContent = measurement.creator?.nombre || '--'; // CAMBIO: display_name → nombre
             document.getElementById('detailCreatedAt').textContent = new Date(measurement.created_at).toLocaleString('es-MX');
             document.getElementById('detailUpdatedAt').textContent = measurement.updated_at 
                 ? new Date(measurement.updated_at).toLocaleString('es-MX') 
@@ -1525,7 +1526,7 @@
             
             // Configurar botón de editar
             const editBtn = document.getElementById('editRecordBtn');
-            const canEdit = currentProfile.role.name.toLowerCase() !== 'capturista';
+            const canEdit = currentProfile.roles.nombre.toLowerCase() !== 'capturista'; // CAMBIO: role.name → roles.nombre
             
             if (canEdit) {
                 editBtn.classList.remove('hidden');
@@ -1564,12 +1565,12 @@
                 // Preparar datos CSV
                 const headers = ['Indicador', 'Área', 'Período', 'Valor', 'Unidad', 'Fuente', 'Fecha de Registro'];
                 const rows = filteredMeasurements.map(m => [
-                    m.indicator.name,
-                    m.indicator.area.name,
-                    `${getMonthName(m.month)} ${m.year}`,
-                    m.value_num || m.value_text || '',
-                    m.indicator.unit || '',
-                    m.source || '',
+                    m.indicador.nombre, // CAMBIO: indicator.name → indicador.nombre
+                    m.indicador.areas.nombre, // CAMBIO: indicator.area.name → indicador.areas.nombre
+                    `${getMonthName(m.mes)} ${m.año}`, // CAMBIO: month, year → mes, año
+                    m.valor_num || '', // CAMBIO: value_num → valor_num, ELIMINAR: value_text
+                    m.indicador.unidades?.descripcion || '', // CAMBIO: indicator.unit → indicador.unidades?.descripcion
+                    m.fuente || '', // CAMBIO: source → fuente
                     new Date(m.created_at).toLocaleDateString('es-MX')
                 ]);
                 
