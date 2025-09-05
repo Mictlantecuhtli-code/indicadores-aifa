@@ -827,3 +827,5 @@ window.api = {
     getHistogramData,
     getDashboardStats
 };
+
+console.log('api.js se ejecutó correctamente');
