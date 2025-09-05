@@ -625,7 +625,7 @@
                     areas.forEach(area => {
                         const option = document.createElement('option');
                         option.value = area.id;
-                        option.textContent = `${area.name} (${area.code})`;
+                        option.textContent = `${area.nombre} (${area.code})`; // CAMBIO: area.name → area.nombre
                         select.appendChild(option);
                     });
                 });
@@ -648,7 +648,7 @@
                 indicators.forEach(indicator => {
                     const option = document.createElement('option');
                     option.value = indicator.id;
-                    option.textContent = `${indicator.name} (${indicator.area.name})`;
+                    option.textContent = `${indicator.nombre} (${indicator.areas.nombre})`; // CAMBIO: indicator.name → indicator.nombre, indicator.area.name → indicator.areas.nombre
                     filterSelect.appendChild(option);
                 });
                 
@@ -780,22 +780,22 @@
                 const date = new Date(measurement.created_at);
                 const formattedDate = date.toLocaleDateString('es-MX');
                 
-                const value = measurement.value_num 
-                    ? `${measurement.value_num.toLocaleString()} ${measurement.indicator.unit || ''}`
-                    : measurement.value_text || '--';
+                const value = measurement.valor_num  // CAMBIO: value_num → valor_num
+                    ? `${measurement.valor_num.toLocaleString()} ${measurement.indicador.unidades?.descripcion || ''}` // CAMBIO: indicator.unit → indicador.unidades?.descripcion
+                    : '--'; // ELIMINAR: value_text (no existe)
                 
-                const period = `${getMonthName(measurement.month)} ${measurement.year}`;
+                const period = `${getMonthName(measurement.mes)} ${measurement.año}`; // CAMBIO: month, year → mes, año
                 
                 // Verificar permisos para acciones
-                const canEdit = currentProfile.role.name.toLowerCase() !== 'capturista';
-                const canDelete = ['subdirector', 'director', 'admin'].includes(currentProfile.role.name.toLowerCase());
+                const canEdit = currentProfile.roles.nombre.toLowerCase() !== 'capturista'; // CAMBIO: role.name → roles.nombre
+                const canDelete = ['subdirector', 'director', 'admin'].includes(currentProfile.roles.nombre.toLowerCase()); // CAMBIO: role.name → roles.nombre
                 
                 return `
                     <tr class="table-row">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div>
-                                <div class="text-sm font-medium text-gray-900">${measurement.indicator.name}</div>
-                                <div class="text-xs text-gray-500">${measurement.indicator.area.name}</div>
+                                <div class="text-sm font-medium text-gray-900">${measurement.indicador.nombre}</div> // CAMBIO: indicator.name → indicador.nombre
+                                <div class="text-xs text-gray-500">${measurement.indicador.areas.nombre}</div> // CAMBIO: indicator.area.name → indicador.areas.nombre
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -878,7 +878,7 @@
                 areaIndicators.forEach(indicator => {
                     const option = document.createElement('option');
                     option.value = indicator.id;
-                    option.textContent = indicator.name;
+                     option.textContent = indicator.nombre; // CAMBIO: indicator.name → indicator.nombre
                     indicatorSelect.appendChild(option);
                 });
             }
@@ -896,10 +896,10 @@
                 const indicator = indicators.find(ind => ind.id == indicatorId);
                 if (indicator) {
                     // Mostrar info del indicador
-                    document.getElementById('indicatorName').textContent = indicator.name;
-                    document.getElementById('indicatorDetails').textContent = `${indicator.area.name} • ${indicator.periodicity}`;
-                    document.getElementById('indicatorGoal').textContent = indicator.goal || 'No definida';
-                    document.getElementById('valueUnit').textContent = indicator.unit || '';
+                    document.getElementById('indicatorName').textContent = indicator.nombre; // CAMBIO: indicator.name → indicator.nombre
+                    document.getElementById('indicatorDetails').textContent = `${indicator.areas.nombre} • ${indicator.periodicity}`; // CAMBIO: indicator.area.name → indicator.areas.nombre
+                    document.getElementById('indicatorGoal').textContent = indicator.objetivo || 'No definida'; // CAMBIO: indicator.goal → indicator.objetivo
+                    document.getElementById('valueUnit').textContent = indicator.unidades?.descripcion || ''; // CAMBIO: indicator.unit → indicator.unidades?.descripcion
                     document.getElementById('indicatorInfo').classList.remove('hidden');
                 }
             } else {
@@ -938,13 +938,12 @@
                 const valueType = formData.get('valueType');
                 
                 const measurementData = {
-                    indicator_id: parseInt(formData.get('indicator')),
-                    year: parseInt(formData.get('year')),
-                    month: parseInt(formData.get('month')),
-                    period_date: `${formData.get('year')}-${formData.get('month').padStart(2, '0')}-01`,
-                    value_num: valueType === 'numeric' ? parseFloat(formData.get('valueNum')) || null : null,
+                    indicador_id: parseInt(formData.get('indicator')), // CAMBIO: indicator_id → indicador_id
+                    año: parseInt(formData.get('year')), // CAMBIO: year → año
+                    mes: parseInt(formData.get('month')), // CAMBIO: month → mes
+                    valor_num: valueType === 'numeric' ? parseFloat(formData.get('valueNum')) || null : null, // CAMBIO: value_num → valor_num
                     value_text: valueType === 'text' ? formData.get('valueText') : null,
-                    source: formData.get('source') || null
+                    fuente: formData.get('source') || null // CAMBIO: source → fuente
                 };
                 
                 // Validar datos
