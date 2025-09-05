@@ -242,7 +242,7 @@ async function handleAuthRedirect(currentPage = '', requireAuth = true) {
 async function checkPagePermissions(page, profile) {
     if (!profile || !profile.role) return false;
     
-    const roleName = profile.role.name.toLowerCase();
+    const roleName = profile.roles.name.toLowerCase()
     
     switch (page) {
         case 'index':
