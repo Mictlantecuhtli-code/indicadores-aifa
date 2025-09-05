@@ -15,15 +15,15 @@
 async function getUsers() {
     try {
         const { data, error } = await window.supabaseClient.supabase
-            .from('profiles')
+            .from('users') // CORREGIDO: profiles → users
             .select(`
                 *,
-                role:roles(id, name),
+                roles!rol_id(id, nombre), // CORREGIDO: role:roles(id, name) → roles!rol_id(id, nombre)
                 user_areas(
-                    area:areas(id, name, code)
+                    areas!area_id(id, nombre) // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
                 )
             `)
-            .order('display_name');
+            .order('nombre'); // CORREGIDO: display_name → nombre
 
         if (error) {
             console.error('Error obteniendo usuarios:', error);
@@ -44,7 +44,7 @@ async function getUsers() {
  */
 async function createUser(userData) {
     try {
-        const { email, password, display_name, role_id } = userData;
+        const { email, password, nombre, rol_id } = userData; // CORREGIDO: display_name → nombre, role_id → rol_id
 
         // Validar email corporativo
         if (!window.supabaseClient.validateAifaEmail(email)) {
@@ -63,16 +63,16 @@ async function createUser(userData) {
             throw authError;
         }
 
-        // Crear perfil
+        // Crear perfil en tabla users
         const { data: profile, error: profileError } = await window.supabaseClient.supabase
-            .from('profiles')
+            .from('users') // CORREGIDO: profiles → users
             .insert([
                 {
                     id: authData.user.id,
                     email: email,
-                    display_name: display_name,
-                    role_id: role_id,
-                    is_active: true
+                    nombre: nombre, // CORREGIDO: display_name → nombre
+                    rol_id: rol_id, // CORREGIDO: role_id → rol_id
+                    activo: true // CORREGIDO: is_active → activo
                 }
             ])
             .select()
@@ -99,7 +99,7 @@ async function createUser(userData) {
 async function updateUser(userId, updateData) {
     try {
         const { data, error } = await window.supabaseClient.supabase
-            .from('profiles')
+            .from('users') // CORREGIDO: profiles → users
             .update(updateData)
             .eq('id', userId)
             .select()
@@ -125,8 +125,8 @@ async function updateUser(userId, updateData) {
 async function deactivateUser(userId) {
     try {
         const { error } = await window.supabaseClient.supabase
-            .from('profiles')
-            .update({ is_active: false })
+            .from('users') // CORREGIDO: profiles → users
+            .update({ activo: false }) // CORREGIDO: is_active → activo
             .eq('id', userId);
 
         if (error) {
@@ -182,7 +182,6 @@ async function assignUserAreas(userId, areaIds) {
         throw error;
     }
 }
-
 /**
  * GESTIÓN DE ROLES
  */
@@ -223,7 +222,7 @@ async function getAreas() {
         const { data, error } = await window.supabaseClient.supabase
             .from('areas')
             .select('*')
-            .order('name');
+            .order('nombre'); // CORREGIDO: name → nombre
 
         if (error) {
             console.error('Error obteniendo áreas:', error);
@@ -312,7 +311,6 @@ async function deleteArea(areaId) {
         throw error;
     }
 }
-
 /**
  * GESTIÓN DE INDICADORES
  */
@@ -325,12 +323,14 @@ async function deleteArea(areaId) {
 async function getIndicators(areaId = null) {
     try {
         let query = window.supabaseClient.supabase
-            .from('indicators')
+            .from('indicadores') // CORREGIDO: indicators → indicadores
             .select(`
                 *,
-                area:areas(id, name, code)
+                areas!area_id(id, nombre), // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
+                unidades!unidad_id(id, clave, descripcion), // AGREGADO: relación con unidades
+                frecuencias!frecuencia_id(id, clave, descripcion) // AGREGADO: relación con frecuencias
             `)
-            .order('name');
+            .order('nombre'); // CORREGIDO: name → nombre
 
         if (areaId) {
             query = query.eq('area_id', areaId);
@@ -357,12 +357,26 @@ async function getIndicators(areaId = null) {
  */
 async function createIndicator(indicatorData) {
     try {
+        // Mapear campos del frontend a la estructura de BD real
+        const mappedData = {
+            clave: indicatorData.code || indicatorData.clave, // CORREGIDO: code → clave
+            nombre: indicatorData.name || indicatorData.nombre, // CORREGIDO: name → nombre
+            area_id: indicatorData.area_id,
+            unidad_id: indicatorData.unit_id || indicatorData.unidad_id, // CORREGIDO: unit → unidad_id
+            frecuencia_id: indicatorData.periodicity_id || indicatorData.frecuencia_id, // CORREGIDO: periodicity → frecuencia_id
+            objetivo: indicatorData.goal || indicatorData.objetivo, // CORREGIDO: goal → objetivo
+            observaciones: indicatorData.notes || indicatorData.observaciones, // CORREGIDO: notes → observaciones
+            activo: true
+        };
+
         const { data, error } = await window.supabaseClient.supabase
-            .from('indicators')
-            .insert([indicatorData])
+            .from('indicadores') // CORREGIDO: indicators → indicadores
+            .insert([mappedData])
             .select(`
                 *,
-                area:areas(id, name, code)
+                areas!area_id(id, nombre), // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
+                unidades!unidad_id(id, clave, descripcion),
+                frecuencias!frecuencia_id(id, clave, descripcion)
             `)
             .single();
 
@@ -386,13 +400,27 @@ async function createIndicator(indicatorData) {
  */
 async function updateIndicator(indicatorId, updateData) {
     try {
+        // Mapear campos del frontend a la estructura de BD real
+        const mappedData = {};
+        
+        if (updateData.code !== undefined) mappedData.clave = updateData.code;
+        if (updateData.name !== undefined) mappedData.nombre = updateData.name;
+        if (updateData.area_id !== undefined) mappedData.area_id = updateData.area_id;
+        if (updateData.unit_id !== undefined) mappedData.unidad_id = updateData.unit_id;
+        if (updateData.periodicity_id !== undefined) mappedData.frecuencia_id = updateData.periodicity_id;
+        if (updateData.goal !== undefined) mappedData.objetivo = updateData.goal;
+        if (updateData.notes !== undefined) mappedData.observaciones = updateData.notes;
+        if (updateData.active !== undefined) mappedData.activo = updateData.active;
+
         const { data, error } = await window.supabaseClient.supabase
-            .from('indicators')
-            .update(updateData)
+            .from('indicadores') // CORREGIDO: indicators → indicadores
+            .update(mappedData)
             .eq('id', indicatorId)
             .select(`
                 *,
-                area:areas(id, name, code)
+                areas!area_id(id, nombre), // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
+                unidades!unidad_id(id, clave, descripcion),
+                frecuencias!frecuencia_id(id, clave, descripcion)
             `)
             .single();
 
@@ -416,7 +444,7 @@ async function updateIndicator(indicatorId, updateData) {
 async function deleteIndicator(indicatorId) {
     try {
         const { error } = await window.supabaseClient.supabase
-            .from('indicators')
+            .from('indicadores') // CORREGIDO: indicators → indicadores
             .delete()
             .eq('id', indicatorId);
 
@@ -433,6 +461,51 @@ async function deleteIndicator(indicatorId) {
 }
 
 /**
+ * Obtener unidades disponibles
+ * @returns {Promise<Array>} - Lista de unidades
+ */
+async function getUnidades() {
+    try {
+        const { data, error } = await window.supabaseClient.supabase
+            .from('unidades')
+            .select('*')
+            .order('clave');
+
+        if (error) {
+            console.error('Error obteniendo unidades:', error);
+            throw error;
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('Error en getUnidades:', error);
+        throw error;
+    }
+}
+
+/**
+ * Obtener frecuencias disponibles
+ * @returns {Promise<Array>} - Lista de frecuencias
+ */
+async function getFrecuencias() {
+    try {
+        const { data, error } = await window.supabaseClient.supabase
+            .from('frecuencias')
+            .select('*')
+            .order('clave');
+
+        if (error) {
+            console.error('Error obteniendo frecuencias:', error);
+            throw error;
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('Error en getFrecuencias:', error);
+        throw error;
+    }
+}
+/**
  * GESTIÓN DE MEDICIONES
  */
 
@@ -444,37 +517,33 @@ async function deleteIndicator(indicatorId) {
 async function getMeasurements(filters = {}) {
     try {
         let query = window.supabaseClient.supabase
-            .from('measurements')
+            .from('indicator_valores') // CORREGIDO: measurements → indicator_valores
             .select(`
                 *,
-                indicator:indicators(
-                    id, name, code, unit, goal,
-                    area:areas(id, name, code)
+                indicador:indicadores!indicador_id( // CORREGIDO: indicator:indicators → indicador:indicadores!indicador_id
+                    id, nombre, clave, objetivo, // CORREGIDO: name, code, unit, goal → nombre, clave, objetivo
+                    areas!area_id(id, nombre) // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
                 ),
-                creator:profiles!created_by(display_name, email)
+                creator:users!created_by(nombre, email) // CORREGIDO: creator:profiles!created_by(display_name, email) → creator:users!created_by(nombre, email)
             `)
-            .order('period_date', { ascending: false })
+            .order('año', { ascending: false }) // CORREGIDO: period_date → año
+            .order('mes', { ascending: false }) // AGREGADO: ordenar por mes también
             .order('created_at', { ascending: false });
 
         // Aplicar filtros
         if (filters.indicatorId) {
-            query = query.eq('indicator_id', filters.indicatorId);
+            query = query.eq('indicador_id', filters.indicatorId); // CORREGIDO: indicator_id → indicador_id
         }
         if (filters.areaId) {
-            query = query.eq('indicator.area_id', filters.areaId);
-        }
-        if (filters.startDate) {
-            query = query.gte('period_date', filters.startDate);
-        }
-        if (filters.endDate) {
-            query = query.lte('period_date', filters.endDate);
+            query = query.eq('indicador.area_id', filters.areaId); // CORREGIDO: indicator.area_id → indicador.area_id
         }
         if (filters.year) {
-            query = query.eq('year', filters.year);
+            query = query.eq('año', filters.year); // CORREGIDO: year → año
         }
         if (filters.month) {
-            query = query.eq('month', filters.month);
+            query = query.eq('mes', filters.month); // CORREGIDO: month → mes
         }
+        // ELIMINADO: filtros startDate y endDate ya que usamos año/mes separados
 
         const { data, error } = await query;
 
@@ -503,23 +572,28 @@ async function createMeasurement(measurementData) {
             throw new Error('Usuario no autenticado');
         }
 
-        // Preparar datos con created_by
+        // Mapear datos del frontend a estructura de BD real
         const dataToInsert = {
-            ...measurementData,
+            indicador_id: measurementData.indicator_id || measurementData.indicador_id, // CORREGIDO: indicator_id → indicador_id
+            año: measurementData.year || measurementData.año, // CORREGIDO: Extraer año de period_date o usar año directo
+            mes: measurementData.month || measurementData.mes, // CORREGIDO: Extraer mes de period_date o usar mes directo
+            valor_num: measurementData.value_num || measurementData.valor_num, // CORREGIDO: Mantener valor_num
+            estado: measurementData.estado || 'activo', // AGREGADO: estado por defecto
+            fuente: measurementData.source || measurementData.fuente, // CORREGIDO: source → fuente
             created_by: user.id,
             created_at: new Date().toISOString()
         };
 
         const { data, error } = await window.supabaseClient.supabase
-            .from('measurements')
+            .from('indicator_valores') // CORREGIDO: measurements → indicator_valores
             .insert([dataToInsert])
             .select(`
                 *,
-                indicator:indicators(
-                    id, name, code, unit, goal,
-                    area:areas(id, name, code)
+                indicador:indicadores!indicador_id( // CORREGIDO: indicator:indicators → indicador:indicadores!indicador_id
+                    id, nombre, clave, objetivo, // CORREGIDO: name, code, unit, goal → nombre, clave, objetivo
+                    areas!area_id(id, nombre) // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
                 ),
-                creator:profiles!created_by(display_name, email)
+                creator:users!created_by(nombre, email) // CORREGIDO: creator:profiles!created_by(display_name, email) → creator:users!created_by(nombre, email)
             `)
             .single();
 
@@ -543,23 +617,28 @@ async function createMeasurement(measurementData) {
  */
 async function updateMeasurement(measurementId, updateData) {
     try {
-        // Agregar timestamp de actualización
+        // Mapear datos del frontend a estructura de BD real
         const dataToUpdate = {
-            ...updateData,
             updated_at: new Date().toISOString()
         };
 
+        if (updateData.valor_num !== undefined) dataToUpdate.valor_num = updateData.valor_num;
+        if (updateData.fuente !== undefined) dataToUpdate.fuente = updateData.fuente;
+        if (updateData.estado !== undefined) dataToUpdate.estado = updateData.estado;
+        if (updateData.año !== undefined) dataToUpdate.año = updateData.año;
+        if (updateData.mes !== undefined) dataToUpdate.mes = updateData.mes;
+
         const { data, error } = await window.supabaseClient.supabase
-            .from('measurements')
+            .from('indicator_valores') // CORREGIDO: measurements → indicator_valores
             .update(dataToUpdate)
             .eq('id', measurementId)
             .select(`
                 *,
-                indicator:indicators(
-                    id, name, code, unit, goal,
-                    area:areas(id, name, code)
+                indicador:indicadores!indicador_id( // CORREGIDO: indicator:indicators → indicador:indicadores!indicador_id
+                    id, nombre, clave, objetivo, // CORREGIDO: name, code, unit, goal → nombre, clave, objetivo
+                    areas!area_id(id, nombre) // CORREGIDO: area:areas(id, name, code) → areas!area_id(id, nombre)
                 ),
-                creator:profiles!created_by(display_name, email)
+                creator:users!created_by(nombre, email) // CORREGIDO: creator:profiles!created_by(display_name, email) → creator:users!created_by(nombre, email)
             `)
             .single();
 
@@ -583,7 +662,7 @@ async function updateMeasurement(measurementId, updateData) {
 async function deleteMeasurement(measurementId) {
     try {
         const { error } = await window.supabaseClient.supabase
-            .from('measurements')
+            .from('indicator_valores') // CORREGIDO: measurements → indicator_valores
             .delete()
             .eq('id', measurementId);
 
@@ -613,11 +692,11 @@ async function deleteMeasurement(measurementId) {
 async function getHistogramData(indicatorId, yearA, yearB) {
     try {
         const { data, error } = await window.supabaseClient.supabase
-            .from('v_medicion')
-            .select('*')
-            .eq('indicator_id', indicatorId)
-            .in('year', [yearA, yearB])
-            .order('month');
+            .from('indicator_valores') // CORREGIDO: v_medicion → indicator_valores (usar tabla directa)
+            .select('año, mes, valor_num') // CORREGIDO: year, month, value_num → año, mes, valor_num
+            .eq('indicador_id', indicatorId) // CORREGIDO: indicator_id → indicador_id
+            .in('año', [yearA, yearB]) // CORREGIDO: year → año
+            .order('mes'); // CORREGIDO: month → mes
 
         if (error) {
             console.error('Error obteniendo datos para histograma:', error);
@@ -635,11 +714,11 @@ async function getHistogramData(indicatorId, yearA, yearB) {
         };
 
         data.forEach(record => {
-            const monthIndex = record.month - 1;
-            if (record.year === yearA) {
-                processedData.yearA[monthIndex] = record.value_num || 0;
-            } else if (record.year === yearB) {
-                processedData.yearB[monthIndex] = record.value_num || 0;
+            const monthIndex = record.mes - 1; // CORREGIDO: month → mes
+            if (record.año === yearA) { // CORREGIDO: year → año
+                processedData.yearA[monthIndex] = record.valor_num || 0; // CORREGIDO: value_num → valor_num
+            } else if (record.año === yearB) { // CORREGIDO: year → año
+                processedData.yearB[monthIndex] = record.valor_num || 0; // CORREGIDO: value_num → valor_num
             }
         });
 
@@ -664,16 +743,17 @@ async function getDashboardStats() {
         const [indicatorsData, measurementsData] = await Promise.all([
             // Total de indicadores
             window.supabaseClient.supabase
-                .from('indicators')
+                .from('indicadores') // CORREGIDO: indicators → indicadores
                 .select('id', { count: 'exact' })
                 .in('area_id', areaIds),
             
             // Mediciones del mes actual
             window.supabaseClient.supabase
-                .from('measurements')
+                .from('indicator_valores') // CORREGIDO: measurements → indicator_valores
                 .select('id', { count: 'exact' })
-                .gte('period_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
-                .in('indicator.area_id', areaIds)
+                .eq('año', new Date().getFullYear()) // CORREGIDO: usar año actual en lugar de period_date
+                .eq('mes', new Date().getMonth() + 1) // CORREGIDO: usar mes actual
+                .in('indicador.area_id', areaIds) // CORREGIDO: indicator.area_id → indicador.area_id
         ]);
 
         return {
@@ -714,6 +794,8 @@ window.api = {
     createIndicator,
     updateIndicator,
     deleteIndicator,
+    getUnidades, // AGREGADO: función para unidades
+    getFrecuencias, // AGREGADO: función para frecuencias
     
     // Mediciones
     getMeasurements,
