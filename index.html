@@ -210,63 +210,78 @@
     </div>
     
     <!-- Scripts -->
-    <script>
-        // Variable global para Supabase (se inicializa en config.js)
-        window.supabase = null;
+   <script>
+// Configuración embebida directamente
+const SUPABASE_URL = 'https://kxjldzcaeayguiqkqqyh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw';
+const DEBUG = { enabled: true };
+const MESSAGES = {
+    errors: {
+        network: 'Error de conexión',
+        server: 'Error del servidor', 
+        generic: 'Error inesperado'
+    }
+};
+
+// Inicializar Supabase
+console.log('Inicializando Supabase...');
+if (window.supabase && window.supabase.createClient) {
+    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Cliente Supabase inicializado');
+} else {
+    console.error('Supabase no disponible');
+}
+
+// Hacer variables globales
+window.SUPABASE_URL = SUPABASE_URL;
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+window.DEBUG = DEBUG;
+window.MESSAGES = MESSAGES;
+
+// Inicializar Lucide icons
+lucide.createIcons();
+
+// Función de inicialización simplificada
+async function initApp() {
+    try {
+        // Importar módulos
+        const routerModule = await import('./js/lib/router.js');
         
-        // Inicializar Lucide icons
-        lucide.createIcons();
+        // Configurar listeners
+        document.getElementById('user-menu-button').addEventListener('click', () => {
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('hidden');
+        });
         
-        // Función de inicialización
-        async function initApp() {
-            try {
-                // Importar módulos en orden
-                await import('./js/config.js');
-                await import('./js/lib/supa.js');
-                await import('./js/lib/ui.js');
-                const routerModule = await import('./js/lib/router.js');
-                
-                // Inicializar router
-                routerModule.initRouter();
-                
-                // Manejar toggle del menú de usuario
-                document.getElementById('user-menu-button').addEventListener('click', () => {
-                    const menu = document.getElementById('user-menu');
-                    menu.classList.toggle('hidden');
-                });
-                
-                // Cerrar menú al hacer click fuera
-                document.addEventListener('click', (e) => {
-                    const button = document.getElementById('user-menu-button');
-                    const menu = document.getElementById('user-menu');
-                    if (!button.contains(e.target) && !menu.contains(e.target)) {
-                        menu.classList.add('hidden');
-                    }
-                });
-                
-                console.log('✅ Sistema de Indicadores AIFA inicializado correctamente');
-            } catch (error) {
-                console.error('❌ Error al inicializar la aplicación:', error);
-                document.getElementById('app-container').innerHTML = `
-                    <div class="text-center py-12">
-                        <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar la aplicación</h2>
-                        <p class="text-gray-600 mb-4">Ha ocurrido un error al inicializar el sistema.</p>
-                        <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                            Recargar página
-                        </button>
-                    </div>
-                `;
-                lucide.createIcons();
+        document.addEventListener('click', (e) => {
+            const button = document.getElementById('user-menu-button');
+            const menu = document.getElementById('user-menu');
+            if (!button.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.add('hidden');
             }
-        }
+        });
         
-        // Inicializar cuando el DOM esté listo
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initApp);
-        } else {
-            initApp();
-        }
-    </script>
+        console.log('Sistema inicializado correctamente');
+    } catch (error) {
+        console.error('Error al inicializar:', error);
+        document.getElementById('app-container').innerHTML = `
+            <div class="text-center py-12">
+                <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar la aplicación</h2>
+                <p class="text-gray-600 mb-4">Error: ${error.message}</p>
+                <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
+                    Recargar página
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Inicializar cuando esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
+</script>
 </body>
 </html>
