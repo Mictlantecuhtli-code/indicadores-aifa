@@ -542,3 +542,10 @@ export async function initRouter() {
         throw error;
     }
 }
+
+window.router = {
+  navigateTo,
+  goBack,
+  reloadCurrentRoute,
+  parseCurrentRoute
+};
