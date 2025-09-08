@@ -9,14 +9,14 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Chart.js para gráficas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    <!-- Chart.js para gráficas - VERSIÓN UMD -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     
-    <!-- Supabase Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase Client - VERSIÓN UMD CORRECTA -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.38.0/index.umd.js"></script>
     
     <!-- Configuración personalizada de Tailwind -->
     <script>
@@ -210,51 +210,63 @@
     </div>
     
     <!-- Scripts -->
-    <script type="module">
+    <script>
+        // Variable global para Supabase (se inicializa en config.js)
+        window.supabase = null;
+        
         // Inicializar Lucide icons
         lucide.createIcons();
         
-        // Importar y inicializar la aplicación
-        import('./js/config.js').then(() => {
-            return import('./js/lib/supa.js');
-        }).then(() => {
-            return import('./js/lib/ui.js');
-        }).then(() => {
-            return import('./js/lib/router.js');
-        }).then((routerModule) => {
-            // Inicializar router
-            routerModule.initRouter();
-            
-            // Manejar toggle del menú de usuario
-            document.getElementById('user-menu-button').addEventListener('click', () => {
-                const menu = document.getElementById('user-menu');
-                menu.classList.toggle('hidden');
-            });
-            
-            // Cerrar menú al hacer click fuera
-            document.addEventListener('click', (e) => {
-                const button = document.getElementById('user-menu-button');
-                const menu = document.getElementById('user-menu');
-                if (!button.contains(e.target) && !menu.contains(e.target)) {
-                    menu.classList.add('hidden');
-                }
-            });
-            
-            console.log('✅ Sistema de Indicadores AIFA inicializado correctamente');
-        }).catch(error => {
-            console.error('❌ Error al inicializar la aplicación:', error);
-            document.getElementById('app-container').innerHTML = `
-                <div class="text-center py-12">
-                    <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar la aplicación</h2>
-                    <p class="text-gray-600 mb-4">Ha ocurrido un error al inicializar el sistema.</p>
-                    <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                        Recargar página
-                    </button>
-                </div>
-            `;
-            lucide.createIcons();
-        });
+        // Función de inicialización
+        async function initApp() {
+            try {
+                // Importar módulos en orden
+                await import('./js/config.js');
+                await import('./js/lib/supa.js');
+                await import('./js/lib/ui.js');
+                const routerModule = await import('./js/lib/router.js');
+                
+                // Inicializar router
+                routerModule.initRouter();
+                
+                // Manejar toggle del menú de usuario
+                document.getElementById('user-menu-button').addEventListener('click', () => {
+                    const menu = document.getElementById('user-menu');
+                    menu.classList.toggle('hidden');
+                });
+                
+                // Cerrar menú al hacer click fuera
+                document.addEventListener('click', (e) => {
+                    const button = document.getElementById('user-menu-button');
+                    const menu = document.getElementById('user-menu');
+                    if (!button.contains(e.target) && !menu.contains(e.target)) {
+                        menu.classList.add('hidden');
+                    }
+                });
+                
+                console.log('✅ Sistema de Indicadores AIFA inicializado correctamente');
+            } catch (error) {
+                console.error('❌ Error al inicializar la aplicación:', error);
+                document.getElementById('app-container').innerHTML = `
+                    <div class="text-center py-12">
+                        <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar la aplicación</h2>
+                        <p class="text-gray-600 mb-4">Ha ocurrido un error al inicializar el sistema.</p>
+                        <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
+                            Recargar página
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+        
+        // Inicializar cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
     </script>
 </body>
 </html>
