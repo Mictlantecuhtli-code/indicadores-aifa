@@ -9,31 +9,56 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Dominio organizacional para validación de usuarios
 const ORG_DOMAIN = 'aifa.aero';
 
-// Inicializar cliente Supabase INMEDIATAMENTE
-if (typeof window !== 'undefined' && window.supabase) {
-    console.log('🔍 Supabase disponible:', typeof window.supabase);
-    
-    // Intentar diferentes formas de acceso al createClient
-    let createClient = null;
-    
-    if (window.supabase.createClient) {
-        createClient = window.supabase.createClient;
-    } else if (window.supabase.supabase && window.supabase.supabase.createClient) {
-        createClient = window.supabase.supabase.createClient;
-    } else if (window.supabase.default && window.supabase.default.createClient) {
-        createClient = window.supabase.default.createClient;
-    }
-    
-    if (createClient) {
-        window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('✅ Cliente Supabase inicializado correctamente');
-    } else {
-        console.error('❌ Error: No se encontró createClient en window.supabase');
-        console.log('Objeto supabase disponible:', Object.keys(window.supabase || {}));
-    }
-} else {
-    console.error('❌ Error: window.supabase no está disponible');
+// Esperar a que Supabase esté disponible con timeout
+function waitForSupabase() {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        const checkSupabase = () => {
+            attempts++;
+            console.log(`🔍 Intento ${attempts}: Verificando Supabase...`);
+            
+            if (window.supabase && window.supabase.createClient) {
+                console.log('✅ Supabase.createClient encontrado');
+                resolve(true);
+            } else if (attempts >= maxAttempts) {
+                console.error('❌ Timeout: Supabase no se cargó después de', maxAttempts, 'intentos');
+                reject(new Error('Supabase CDN failed to load'));
+            } else {
+                setTimeout(checkSupabase, 100);
+            }
+        };
+        
+        checkSupabase();
+    });
 }
+
+// Inicializar cliente Supabase con espera
+waitForSupabase().then(() => {
+    try {
+        window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('✅ Cliente Supabase inicializado correctamente');
+    } catch (error) {
+        console.error('❌ Error al inicializar cliente Supabase:', error);
+    }
+}).catch(error => {
+    console.error('❌ Error: No se pudo cargar Supabase CDN:', error);
+    
+    // Fallback: mostrar mensaje de error al usuario
+    if (typeof window !== 'undefined') {
+        const errorDiv = document.createElement('div');
+        errorDiv.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; right: 0; background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 1rem; z-index: 9999;">
+                <strong>Error de conexión:</strong> No se pudo cargar el sistema. Por favor, recarga la página.
+                <button onclick="location.reload()" style="margin-left: 1rem; background: #dc2626; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer;">
+                    Recargar
+                </button>
+            </div>
+        `;
+        document.body.appendChild(errorDiv);
+    }
+});
 
 // Configuración de la aplicación
 const APP_CONFIG = {
