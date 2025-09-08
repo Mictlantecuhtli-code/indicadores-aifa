@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Indicadores - AIFA</title>
+    <meta name="description" content="Sistema de Gestión de Indicadores del Aeropuerto Internacional Felipe Ángeles">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js para gráficas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Configuración personalizada de Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'aifa-blue': '#1E40AF',
+                        'aifa-light': '#3B82F6',
+                        'aifa-dark': '#1E3A8A',
+                        'aifa-gray': '#64748B'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Estilos personalizados -->
+    <style>
+        .loading-spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3B82F6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toast {
+            transition: all 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .nav-button {
+            transition: all 0.2s ease;
+        }
+        
+        .nav-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .area-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .area-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        .indicator-button {
+            transition: all 0.2s ease;
+        }
+        
+        .indicator-button:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-lg border-b-4 border-aifa-blue">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <!-- Logo y título -->
+                <div class="flex items-center space-x-4">
+                    <div class="flex-shrink-0">
+                        <img src="./assets/AIFA_Logo.png" alt="Logo AIFA" class="h-12 w-auto" 
+                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iOCIgZmlsbD0iIzFFNDBBRiIvPgo8cGF0aCBkPSJNMTIgMzZIMzZWMTJIMTJWMzZaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz4KPHA+dGggZD0iTTE4IDI0TDI0IDE4TDMwIDI0IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K';">
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-aifa-dark">
+                            Aeropuerto Internacional Felipe Ángeles
+                        </h1>
+                        <p class="text-sm text-aifa-gray">Sistema de Gestión de Indicadores</p>
+                    </div>
+                </div>
+                
+                <!-- Navegación y usuario -->
+                <div class="flex items-center space-x-4">
+                    <!-- Navegación principal -->
+                    <nav class="hidden md:flex space-x-2" id="main-navigation">
+                        <button id="nav-home" class="nav-button px-4 py-2 text-sm font-medium text-aifa-blue bg-blue-50 rounded-lg hover:bg-blue-100">
+                            <i data-lucide="home" class="w-4 h-4 inline mr-2"></i>
+                            Inicio
+                        </button>
+                        <button id="nav-visualizacion" class="nav-button px-4 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg hover:bg-gray-100">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4 inline mr-2"></i>
+                            Visualización
+                        </button>
+                        <button id="nav-captura" class="nav-button px-4 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg hover:bg-gray-100">
+                            <i data-lucide="edit" class="w-4 h-4 inline mr-2"></i>
+                            Captura
+                        </button>
+                        <button id="nav-admin" class="nav-button px-4 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg hover:bg-gray-100 hidden">
+                            <i data-lucide="settings" class="w-4 h-4 inline mr-2"></i>
+                            Administración
+                        </button>
+                    </nav>
+                    
+                    <!-- Info del usuario -->
+                    <div class="flex items-center space-x-3">
+                        <div class="hidden sm:block text-right" id="user-info">
+                            <p class="text-sm font-medium text-gray-900" id="user-name">Cargando...</p>
+                            <p class="text-xs text-gray-500" id="user-role">Usuario</p>
+                        </div>
+                        <div class="relative">
+                            <button id="user-menu-button" class="bg-aifa-blue text-white rounded-full p-2 hover:bg-aifa-dark transition-colors">
+                                <i data-lucide="user" class="w-5 h-5"></i>
+                            </button>
+                            <!-- Dropdown del usuario -->
+                            <div id="user-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" id="logout-btn">
+                                    <i data-lucide="log-out" class="w-4 h-4 inline mr-2"></i>
+                                    Cerrar sesión
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Breadcrumb -->
+    <nav class="bg-white border-b" aria-label="Breadcrumb" id="breadcrumb-container">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ol class="flex items-center space-x-2 py-3 text-sm" id="breadcrumb">
+                <!-- Breadcrumb items se generan dinámicamente -->
+            </ol>
+        </div>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Loading spinner -->
+        <div id="loading-container" class="hidden flex justify-center items-center py-12">
+            <div class="loading-spinner"></div>
+            <span class="ml-3 text-gray-600">Cargando...</span>
+        </div>
+        
+        <!-- Contenedor de vistas -->
+        <div id="app-container" class="fade-in">
+            <!-- Las vistas se renderizan aquí dinámicamente -->
+        </div>
+    </main>
+    
+    <!-- Contenedor de toasts -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+        <!-- Los toasts se generan dinámicamente -->
+    </div>
+    
+    <!-- Modal genérico -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-40">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900" id="modal-title">Título</h3>
+                    <button id="modal-close" class="text-gray-400 hover:text-gray-600">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div id="modal-content">
+                    <!-- Contenido del modal -->
+                </div>
+                <div class="flex justify-end space-x-3 mt-6" id="modal-actions">
+                    <!-- Botones del modal -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script type="module">
+        // Inicializar Lucide icons
+        lucide.createIcons();
+        
+        // Importar y inicializar la aplicación
+        import('./js/config.js').then(() => {
+            return import('./js/lib/supa.js');
+        }).then(() => {
+            return import('./js/lib/ui.js');
+        }).then(() => {
+            return import('./js/lib/router.js');
+        }).then((routerModule) => {
+            // Inicializar router
+            routerModule.initRouter();
+            
+            // Manejar toggle del menú de usuario
+            document.getElementById('user-menu-button').addEventListener('click', () => {
+                const menu = document.getElementById('user-menu');
+                menu.classList.toggle('hidden');
+            });
+            
+            // Cerrar menú al hacer click fuera
+            document.addEventListener('click', (e) => {
+                const button = document.getElementById('user-menu-button');
+                const menu = document.getElementById('user-menu');
+                if (!button.contains(e.target) && !menu.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+            
+            console.log('✅ Sistema de Indicadores AIFA inicializado correctamente');
+        }).catch(error => {
+            console.error('❌ Error al inicializar la aplicación:', error);
+            document.getElementById('app-container').innerHTML = `
+                <div class="text-center py-12">
+                    <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar la aplicación</h2>
+                    <p class="text-gray-600 mb-4">Ha ocurrido un error al inicializar el sistema.</p>
+                    <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
+                        Recargar página
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
