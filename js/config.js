@@ -10,11 +10,29 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ORG_DOMAIN = 'aifa.aero';
 
 // Inicializar cliente Supabase INMEDIATAMENTE
-if (window.supabase && window.supabase.createClient) {
-    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Cliente Supabase inicializado correctamente');
+if (typeof window !== 'undefined' && window.supabase) {
+    console.log('🔍 Supabase disponible:', typeof window.supabase);
+    
+    // Intentar diferentes formas de acceso al createClient
+    let createClient = null;
+    
+    if (window.supabase.createClient) {
+        createClient = window.supabase.createClient;
+    } else if (window.supabase.supabase && window.supabase.supabase.createClient) {
+        createClient = window.supabase.supabase.createClient;
+    } else if (window.supabase.default && window.supabase.default.createClient) {
+        createClient = window.supabase.default.createClient;
+    }
+    
+    if (createClient) {
+        window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('✅ Cliente Supabase inicializado correctamente');
+    } else {
+        console.error('❌ Error: No se encontró createClient en window.supabase');
+        console.log('Objeto supabase disponible:', Object.keys(window.supabase || {}));
+    }
 } else {
-    console.error('❌ Error: window.supabase.createClient no está disponible');
+    console.error('❌ Error: window.supabase no está disponible');
 }
 
 // Configuración de la aplicación
