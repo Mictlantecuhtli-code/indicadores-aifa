@@ -1,6 +1,6 @@
 // =====================================================
 // VISTA DE VISUALIZACIÓN GLOBAL - GRÁFICAS COMPARATIVAS
-// Parte 1/3: Estado, renderizado y filtros
+// Estado, renderizado y filtros
 // =====================================================
 
 import { DEBUG, APP_CONFIG } from '../config.js';
@@ -587,7 +587,7 @@ function createStatsHTML() {
 }
 // =====================================================
 // VISTA DE VISUALIZACIÓN GLOBAL - GRÁFICAS COMPARATIVAS
-// Parte 2/3: Carga de datos y creación de gráficas
+// Carga de datos y creación de gráficas
 // =====================================================
 
 // =====================================================
@@ -1301,7 +1301,7 @@ function getIndicadorFromDatasetLabel(label) {
 }
 // =====================================================
 // VISTA DE VISUALIZACIÓN GLOBAL - GRÁFICAS COMPARATIVAS
-// Parte 3/3: Event listeners, handlers y funciones auxiliares
+// Event listeners, handlers y funciones auxiliares
 // =====================================================
 
 // =====================================================
