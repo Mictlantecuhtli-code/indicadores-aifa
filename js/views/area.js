@@ -1,6 +1,6 @@
 // =====================================================
 // VISTA DE ÁREA ESPECÍFICA - BOTONES DE INDICADORES
-// Parte 1/2: Renderizado y HTML
+// Renderizado y HTML
 // =====================================================
 
 import { DEBUG } from '../config.js';
@@ -339,7 +339,7 @@ function createAreaActionsHTML() {
 }
 // =====================================================
 // VISTA DE ÁREA ESPECÍFICA - BOTONES DE INDICADORES
-// Parte 2/2: Grid de indicadores, datos y eventos
+// Grid de indicadores, datos y eventos
 // =====================================================
 
 /**
