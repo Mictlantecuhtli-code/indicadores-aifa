@@ -5,11 +5,13 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
 
 // CORRECCIÓN: Usar window.supabase que ya fue inicializado en config.js
-export const supabase = window.supabase;
+export const supabase = window.supabase || window.supabaseClient;
 
 // Verificar que Supabase esté disponible
 if (!supabase) {
-    console.error('❌ Error: Supabase no está disponible. Asegúrate de que config.js se haya cargado correctamente.');
+    console.error('❌ Error: Cliente Supabase no está disponible. Verifica que config.js se haya ejecutado correctamente.');
+    console.log('window.supabase:', window.supabase);
+    console.log('window.supabaseClient:', window.supabaseClient);
     throw new Error('Supabase client not available');
 }
 
