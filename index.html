@@ -279,9 +279,9 @@
                 console.log('Iniciando sistema de indicadores AIFA...');
                 
                 // Importar módulos principales en orden (SIN config.js)
-                await import('./js/lib/supa.js');
-                await import('./js/lib/ui.js');
-                const routerModule = await import('./js/lib/router.js');
+                await import('./js/supa.js');
+                await import('./js/ui.js');
+                const routerModule = await import('./js/router.js');
                 
                 // Inicializar router
                 routerModule.initRouter();
