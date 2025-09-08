@@ -1,6 +1,6 @@
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Parte 1/4: Estado, renderizado y CRUD de áreas
+// Estado, renderizado y CRUD de áreas
 // =====================================================
 
 import { DEBUG, ROLES, VALIDATION } from '../config.js';
@@ -575,7 +575,7 @@ function getFilteredAreas() {
 }
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Parte 2/4: Gestión de usuarios
+// Gestión de usuarios
 // =====================================================
 
 // =====================================================
@@ -878,7 +878,7 @@ function getRoleColorClass(role) {
 }
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Parte 3/4: Gestión de permisos y asignaciones
+// Gestión de permisos y asignaciones
 // =====================================================
 
 // =====================================================
@@ -1388,7 +1388,7 @@ function setupPermissionsEventListeners() {
 }
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Parte 4/4: Handlers, modales y funciones auxiliares
+// Handlers, modales y funciones auxiliares
 // =====================================================
 
 // =====================================================
