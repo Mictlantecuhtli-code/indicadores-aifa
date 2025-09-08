@@ -1,6 +1,6 @@
 // =====================================================
 // VISTA DE INDICADOR ESPECÍFICO - PESTAÑAS COMPLETAS
-// Parte 1/4: Estado, renderizado y HTML base
+// Estado, renderizado y HTML base
 // =====================================================
 
 import { DEBUG, VALIDATION, APP_CONFIG } from '../config.js';
@@ -458,7 +458,7 @@ async function loadAuditoriaData() {
 }
 // =====================================================
 // VISTA DE INDICADOR ESPECÍFICO - PESTAÑAS COMPLETAS
-// Parte 2/4: Pestaña Histórico - Tabla y Gráfica
+// Pestaña Histórico - Tabla y Gráfica
 // =====================================================
 
 /**
@@ -928,7 +928,7 @@ function setupHistoricoEventListeners() {
 }
 // =====================================================
 // VISTA DE INDICADOR ESPECÍFICO - PESTAÑAS COMPLETAS
-// Parte 3/4: Pestañas Captura y Auditoría
+// Pestañas Captura y Auditoría
 // =====================================================
 
 /**
@@ -1401,7 +1401,7 @@ function setupAuditoriaEventListeners() {
 }
 // =====================================================
 // VISTA DE INDICADOR ESPECÍFICO - PESTAÑAS COMPLETAS
-// Parte 4/4: Event listeners, handlers y funciones auxiliares
+// Event listeners, handlers y funciones auxiliares
 // =====================================================
 
 // =====================================================
