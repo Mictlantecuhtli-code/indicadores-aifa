@@ -3,14 +3,22 @@
 // =====================================================
 
 // Configuración de Supabase
-export const SUPABASE_URL = 'https://kxjldzcaeayguiqkqqyh.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw';
+const SUPABASE_URL = 'https://kxjldzcaeayguiqkqqyh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw';
 
 // Dominio organizacional para validación de usuarios
-export const ORG_DOMAIN = 'aifa.aero';
+const ORG_DOMAIN = 'aifa.aero';
+
+// Inicializar cliente Supabase INMEDIATAMENTE
+if (window.supabase && window.supabase.createClient) {
+    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Cliente Supabase inicializado correctamente');
+} else {
+    console.error('❌ Error: window.supabase.createClient no está disponible');
+}
 
 // Configuración de la aplicación
-export const APP_CONFIG = {
+const APP_CONFIG = {
     name: 'Sistema de Indicadores AIFA',
     version: '1.0.0',
     description: 'Sistema de Gestión de Indicadores del Aeropuerto Internacional Felipe Ángeles',
@@ -54,7 +62,7 @@ export const APP_CONFIG = {
 };
 
 // Roles de usuario y sus permisos
-export const ROLES = {
+const ROLES = {
     CAPTURISTA: {
         name: 'Capturista',
         level: 1,
@@ -122,7 +130,7 @@ export const ROLES = {
 };
 
 // Configuración de rutas de la aplicación
-export const ROUTES = {
+const ROUTES = {
     // Rutas públicas (sin autenticación)
     public: {
         login: '/login',
@@ -148,7 +156,7 @@ export const ROUTES = {
 };
 
 // Configuración de validaciones
-export const VALIDATION = {
+const VALIDATION = {
     email: {
         pattern: /^[^\s@]+@aifa\.aero$/,
         message: 'Debe ser un email válido del dominio @aifa.aero'
@@ -200,7 +208,7 @@ export const VALIDATION = {
 };
 
 // Configuración de exportación
-export const EXPORT_CONFIG = {
+const EXPORT_CONFIG = {
     formats: ['csv', 'xlsx'],
     maxRecords: 10000,
     dateRange: {
@@ -214,7 +222,7 @@ export const EXPORT_CONFIG = {
 };
 
 // Configuración de notificaciones
-export const NOTIFICATIONS = {
+const NOTIFICATIONS = {
     types: {
         success: {
             icon: 'check-circle',
@@ -246,7 +254,7 @@ export const NOTIFICATIONS = {
 };
 
 // Mensajes predefinidos del sistema
-export const MESSAGES = {
+const MESSAGES = {
     auth: {
         loginSuccess: 'Sesión iniciada correctamente',
         loginError: 'Error al iniciar sesión',
@@ -288,7 +296,7 @@ export const MESSAGES = {
 };
 
 // Configuración de desarrollo/producción
-export const DEBUG = {
+const DEBUG = {
     enabled: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
     logLevel: 'info', // error, warn, info, debug
     showSQL: false,
@@ -296,7 +304,7 @@ export const DEBUG = {
 };
 
 // Utilidades de configuración
-export const CONFIG_UTILS = {
+const CONFIG_UTILS = {
     /**
      * Verifica si el usuario tiene un permiso específico
      */
@@ -341,12 +349,43 @@ export const CONFIG_UTILS = {
     }
 };
 
+// Hacer las variables disponibles globalmente para compatibilidad ES6
+window.SUPABASE_URL = SUPABASE_URL;
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+window.ORG_DOMAIN = ORG_DOMAIN;
+window.APP_CONFIG = APP_CONFIG;
+window.ROLES = ROLES;
+window.ROUTES = ROUTES;
+window.VALIDATION = VALIDATION;
+window.EXPORT_CONFIG = EXPORT_CONFIG;
+window.NOTIFICATIONS = NOTIFICATIONS;
+window.MESSAGES = MESSAGES;
+window.DEBUG = DEBUG;
+window.CONFIG_UTILS = CONFIG_UTILS;
+
+// También exportar para módulos ES6
+export {
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    ORG_DOMAIN,
+    APP_CONFIG,
+    ROLES,
+    ROUTES,
+    VALIDATION,
+    EXPORT_CONFIG,
+    NOTIFICATIONS,
+    MESSAGES,
+    DEBUG,
+    CONFIG_UTILS
+};
+
 // Log de configuración cargada
 if (DEBUG.enabled) {
     console.log('🔧 Configuración del sistema cargada:', {
         url: SUPABASE_URL,
         domain: ORG_DOMAIN,
         version: APP_CONFIG.version,
-        debug: DEBUG.enabled
+        debug: DEBUG.enabled,
+        supabaseInitialized: !!window.supabase?.auth
     });
 }
