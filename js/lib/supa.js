@@ -1,17 +1,17 @@
 // =====================================================
-// CLIENTE SUPABASE Y HELPERS GENÉRICOS
+// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 1/3
 // =====================================================
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
 
-// Inicializar cliente Supabase
-export const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true
-    }
-});
+// CORRECCIÓN: Usar window.supabase que ya fue inicializado en config.js
+export const supabase = window.supabase;
+
+// Verificar que Supabase esté disponible
+if (!supabase) {
+    console.error('❌ Error: Supabase no está disponible. Asegúrate de que config.js se haya cargado correctamente.');
+    throw new Error('Supabase client not available');
+}
 
 // Estado global de la aplicación
 export const appState = {
@@ -166,6 +166,9 @@ export async function updateData(table, data, filters, options = {}) {
         throw error;
     }
 }
+// =====================================================
+// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 2/3
+// =====================================================
 
 /**
  * Helper genérico para DELETE con manejo de errores
@@ -322,11 +325,20 @@ export async function setCurrentUser() {
     try {
         const user = await getCurrentUser();
         if (user) {
-            await supabase.rpc('set_config', {
-                setting_name: 'app.current_user_id',
-                setting_value: user.id,
-                is_local: true
-            });
+            // Intentar configurar para auditoría, pero no fallar si no existe la función
+            try {
+                await supabase.rpc('set_config', {
+                    setting_name: 'app.current_user_id',
+                    setting_value: user.id,
+                    is_local: true
+                });
+            } catch (rpcError) {
+                // Método alternativo: usar una variable de sesión simple
+                await supabase.rpc('set_config', {
+                    parameter: 'app.current_user_id',
+                    value: user.id
+                });
+            }
         }
     } catch (error) {
         if (DEBUG.enabled) console.warn('⚠️ No se pudo configurar usuario para auditoría:', error);
@@ -401,6 +413,9 @@ export function hasRoleLevel(userRole, minRole) {
     
     return userLevel >= minLevel;
 }
+// =====================================================
+// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 3/3
+// =====================================================
 
 // =====================================================
 // MANEJO DE ERRORES
@@ -437,14 +452,25 @@ export function handleError(error, context = 'Operación') {
             case 'PGRST301':
                 userMessage = MESSAGES.data.invalidData;
                 break;
+            case '23505':
+                userMessage = 'Ya existe un registro con estos datos';
+                break;
+            case '23503':
+                userMessage = 'No se puede eliminar porque existen registros relacionados';
+                break;
+            case '23502':
+                userMessage = 'Faltan datos obligatorios';
+                break;
             default:
                 userMessage = error.message || MESSAGES.errors.server;
         }
     } else if (error.name === 'NetworkError') {
         userMessage = MESSAGES.errors.network;
+    } else if (error.message) {
+        userMessage = error.message;
     }
     
-    // Aquí se puede integrar con el sistema de notificaciones
+    // Integrar con el sistema de notificaciones si está disponible
     if (typeof window !== 'undefined' && window.showToast) {
         window.showToast(userMessage, 'error');
     }
@@ -495,6 +521,22 @@ export function escapeSearchText(text) {
     return text.replace(/[%_]/g, '\\$&');
 }
 
+/**
+ * Formatear fechas para la base de datos
+ */
+export function formatDateForDB(date) {
+    if (!date) return null;
+    if (typeof date === 'string') return date;
+    return date.toISOString();
+}
+
+/**
+ * Validar email corporativo
+ */
+export function isValidCorpEmail(email) {
+    return email && email.endsWith('@aifa.aero');
+}
+
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
@@ -504,17 +546,30 @@ export function escapeSearchText(text) {
  */
 export async function initSupabase() {
     try {
+        if (!supabase) {
+            throw new Error('Cliente Supabase no disponible');
+        }
+
         // Configurar listener de cambios de autenticación
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (DEBUG.enabled) console.log('🔐 Auth state changed:', event, session?.user?.email);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (DEBUG.enabled) console.log('🔄 Auth state changed:', event, session?.user?.email);
             
             appState.session = session;
             appState.user = session?.user || null;
             
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
+                if (DEBUG.enabled) console.log('👤 Usuario logueado:', appState.profile?.email);
             } else if (event === 'SIGNED_OUT') {
                 appState.profile = null;
+                if (DEBUG.enabled) console.log('👋 Usuario deslogueado');
+            }
+            
+            // Disparar evento personalizado para que otros módulos puedan reaccionar
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('authStateChanged', {
+                    detail: { event, session, user: appState.user, profile: appState.profile }
+                }));
             }
         });
         
@@ -531,16 +586,126 @@ export async function initSupabase() {
             console.log('👤 Estado inicial:', {
                 authenticated: !!appState.user,
                 email: appState.user?.email,
-                role: appState.profile?.rol_principal
+                role: appState.profile?.rol_principal,
+                areas: appState.profile?.usuario_areas?.length || 0
             });
         }
         
-        return true;
+        return { success: true, subscription };
     } catch (error) {
         console.error('❌ Error al inicializar Supabase:', error);
+        appState.initialized = false;
         throw error;
     }
 }
 
-// Auto-inicializar cuando se carga el módulo
-initSupabase().catch(console.error);
+// =====================================================
+// FUNCIONES DE UTILIDAD PARA EL SISTEMA
+// =====================================================
+
+/**
+ * Obtener áreas del usuario actual
+ */
+export async function getUserAreas() {
+    if (!appState.profile) {
+        const profile = await getCurrentProfile();
+        if (!profile) return [];
+    }
+    
+    return appState.profile?.usuario_areas || [];
+}
+
+/**
+ * Verificar si el usuario puede acceder a un área
+ */
+export function canAccessArea(areaId) {
+    if (!appState.profile) return false;
+    
+    const role = appState.profile.rol_principal;
+    if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(role)) {
+        return true;
+    }
+    
+    const userAreas = appState.profile.usuario_areas || [];
+    return userAreas.some(ua => ua.area_id === areaId);
+}
+
+/**
+ * Obtener permisos del usuario para un área específica
+ */
+export function getAreaPermissions(areaId) {
+    if (!appState.profile) return null;
+    
+    const role = appState.profile.rol_principal;
+    if (['ADMIN', 'DIRECTOR'].includes(role)) {
+        return {
+            puede_capturar: true,
+            puede_editar: true,
+            puede_eliminar: true
+        };
+    }
+    
+    if (role === 'SUBDIRECTOR') {
+        return {
+            puede_capturar: true,
+            puede_editar: true,
+            puede_eliminar: true
+        };
+    }
+    
+    const userAreas = appState.profile.usuario_areas || [];
+    const areaPermission = userAreas.find(ua => ua.area_id === areaId);
+    
+    return areaPermission ? {
+        puede_capturar: areaPermission.puede_capturar,
+        puede_editar: areaPermission.puede_editar,
+        puede_eliminar: areaPermission.puede_eliminar
+    } : null;
+}
+
+/**
+ * Refresh del perfil del usuario
+ */
+export async function refreshUserProfile() {
+    try {
+        const profile = await getCurrentProfile();
+        appState.profile = profile;
+        return profile;
+    } catch (error) {
+        console.error('❌ Error al refrescar perfil:', error);
+        return null;
+    }
+}
+
+// Auto-inicializar cuando se carga el módulo, pero con manejo de errores
+if (typeof window !== 'undefined') {
+    // Esperar a que el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            initSupabase().catch(error => {
+                console.error('❌ Error en auto-inicialización de Supabase:', error);
+            });
+        });
+    } else {
+        // DOM ya está listo
+        initSupabase().catch(error => {
+            console.error('❌ Error en auto-inicialización de Supabase:', error);
+        });
+    }
+}
+
+// Hacer funciones principales disponibles globalmente para debugging
+if (DEBUG.enabled && typeof window !== 'undefined') {
+    window.supabaseHelpers = {
+        appState,
+        selectData,
+        insertData,
+        updateData,
+        deleteData,
+        getCurrentUser,
+        getCurrentProfile,
+        refreshUserProfile,
+        signOut
+    };
+    console.log('🛠️ Helpers de Supabase disponibles en window.supabaseHelpers');
+}
