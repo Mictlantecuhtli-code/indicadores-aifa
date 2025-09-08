@@ -3,20 +3,10 @@
 // =====================================================
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
-
-// Si cargas @supabase/supabase-js por CDN en index.html, existe window.supabase
-// Creamos la instancia sin colisionar con el nombre de exportación
 const supabaseInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
+  auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
 });
-
-// Exporta la instancia con el nombre que usan el resto de módulos
 export const supabase = supabaseInstance;
-
 // Estado global de la aplicación
 export const appState = {
     user: null,
