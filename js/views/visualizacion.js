@@ -1545,8 +1545,10 @@ async function handleRefreshVisualization() {
     try {
         const refreshBtn = document.getElementById('refresh-viz-btn');
         if (refreshBtn) {
-            const icon = refreshBtn.querySelector('i');
+        const icon = refreshBtn.querySelector('i');
+        if (icon) {
             icon.classList.add('animate-spin');
+        }
         }
         
         await Promise.all([
@@ -1566,12 +1568,21 @@ async function handleRefreshVisualization() {
                 years: visualizacionState.selectedYears.join(',')
             });
         }
-        
-        showToast('Visualización actualizada correctamente', 'success');
-        
-    } catch (error) {
+           showToast('Visualización actualizada correctamente', 'success');
+        } 
+        catch (error) {
         console.error('❌ Error al refrescar visualización:', error);
         showToast('Error al actualizar la visualización', 'error');
+    }
+     finally {
+        // Remover animación del icono
+        const refreshBtn = document.getElementById('refresh-viz-btn');
+        if (refreshBtn) {
+            const icon = refreshBtn.querySelector('i');
+            if (icon) {
+                icon.classList.remove('animate-spin');
+            }
+        }
     }
 }
 
