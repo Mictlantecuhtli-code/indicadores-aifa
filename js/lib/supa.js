@@ -796,6 +796,22 @@ export function hasRole(role) {
     return appState.profile?.rol_principal === role;
 }
 
+/**
+ * Verificar si el usuario tiene un nivel de rol específico o superior
+ */
+export function hasRoleLevel(userRole, minRole) {
+    const roleLevels = {
+        'CONSULTOR': 1,
+        'CAPTURADOR': 2,
+        'ADMIN': 3
+    };
+    
+    const userLevel = roleLevels[userRole] || 0;
+    const minLevel = roleLevels[minRole] || 999;
+    
+    return userLevel >= minLevel;
+}
+
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
