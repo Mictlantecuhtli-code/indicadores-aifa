@@ -133,7 +133,7 @@ export async function selectData(table, options = {}) {
         }
         
         // Aplicar ordenamiento
-        if (options.orderBy) {
+        /*if (options.orderBy) {
             if (Array.isArray(options.orderBy)) {
                 options.orderBy.forEach(order => {
                     query = query.order(order.column, { ascending: order.ascending !== false });
@@ -141,7 +141,23 @@ export async function selectData(table, options = {}) {
             } else {
                 query = query.order(options.orderBy, { ascending: options.ascending !== false });
             }
-        }
+        }*/
+
+            if (options.orderBy) {
+                if (Array.isArray(options.orderBy)) {
+                    options.orderBy.forEach(order => {
+                        if (typeof order === 'string') {
+                            query = query.order(order, { ascending: true });
+                        } else {
+                            query = query.order(order.column, { ascending: order.ascending !== false });
+                        }
+                    });
+                } else if (typeof options.orderBy === 'string') {
+                    query = query.order(options.orderBy, { ascending: options.ascending !== false });
+                } else if (options.orderBy.column) {
+                    query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending !== false });
+                }
+            }
         
         // Aplicar límite
         if (options.limit) {
