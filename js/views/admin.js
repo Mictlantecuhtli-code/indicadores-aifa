@@ -481,11 +481,7 @@ async function loadAreas() {
     try {
         // Cargar áreas con estadísticas adicionales
         const { data } = await selectData('areas', {
-            select: `
-                *,
-                (SELECT COUNT(*) FROM indicadores WHERE area_id = areas.id AND estado = 'ACTIVO') as total_indicadores,
-                (SELECT COUNT(DISTINCT usuario_id) FROM usuario_areas WHERE area_id = areas.id AND estado = 'ACTIVO') as usuarios_asignados
-            `,
+             select: '*',
             orderBy: { column: 'fecha_creacion', ascending: false }
         });
         
@@ -503,10 +499,7 @@ async function loadAreas() {
 async function loadUsuarios() {
     try {
         const { data } = await selectData('perfiles', {
-            select: `
-                *,
-                (SELECT COUNT(*) FROM usuario_areas WHERE usuario_id = perfiles.id AND estado = 'ACTIVO') as areas_asignadas
-            `,
+           select: '*',
             orderBy: { column: 'fecha_creacion', ascending: false }
         });
         
