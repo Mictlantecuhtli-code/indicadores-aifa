@@ -3,8 +3,8 @@
 // =====================================================
 
 import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG } from '../config.js';
-import { supabase, appState } from '../lib/supa.js';
-import { showToast, validateForm, getFormData, withLoading } from '../lib/ui.js';
+import { supabase, appState, signInWithPassword } from '../lib/supa.js';
+import { showToast, validateForm, getFormData } from '../lib/ui.js';
 
 // Estado del módulo de login
 const loginState = {
@@ -58,18 +58,7 @@ export async function render(container, params = {}, query = {}) {
         
     } catch (error) {
         console.error('❌ Error al renderizar login:', error);
-        container.innerHTML = `
-            <div class="min-h-screen flex items-center justify-center bg-gray-50">
-                <div class="text-center">
-                    <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar el login</h2>
-                    <p class="text-gray-600 mb-4">Ha ocurrido un error al cargar la página de inicio de sesión.</p>
-                    <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                        Recargar página
-                    </button>
-                </div>
-            </div>
-        `;
+        container.innerHTML = createErrorHTML('Error al cargar el login', error.message);
         
         if (window.lucide) {
             window.lucide.createIcons();
@@ -82,156 +71,157 @@ export async function render(container, params = {}, query = {}) {
  */
 function createLoginHTML() {
     const isLocked = loginState.isLocked;
-    const remainingTime = isLocked ? Math.ceil((loginState.lockoutEnd - Date.now()) / 1000 / 60) : 0;
+    const remainingTime = isLocked ? Math.ceil((loginState.lockoutEnd - Date.now()) / 1000) : 0;
     
     return `
-        <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="min-h-screen flex items-center justify-center bg-gray-50">
             <div class="max-w-md w-full space-y-8">
-                <!-- Header -->
-                <div class="text-center">
-                    <div class="mx-auto h-20 w-20 bg-aifa-blue rounded-full flex items-center justify-center mb-6">
-                        <i data-lucide="plane" class="w-10 h-10 text-white"></i>
+                <div>
+                    <div class="mx-auto h-16 w-16 bg-aifa-blue rounded-full flex items-center justify-center">
+                        <i data-lucide="activity" class="h-8 w-8 text-white"></i>
                     </div>
-                    <h2 class="text-3xl font-bold text-gray-900 mb-2">
-                        Sistema de Indicadores AIFA
+                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                        Sistema de Indicadores
                     </h2>
-                    <p class="text-sm text-gray-600">
-                        Ingrese sus credenciales para acceder al sistema
+                    <p class="mt-2 text-center text-sm text-gray-600">
+                        AIFA - Aeropuerto Internacional Felipe Ángeles
                     </p>
                 </div>
                 
-                <!-- Alerta de lockout -->
-                ${isLocked ? `
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div class="flex items-center">
-                            <i data-lucide="lock" class="w-5 h-5 text-red-500 mr-3"></i>
-                            <div>
-                                <h3 class="text-sm font-medium text-red-800">Cuenta temporalmente bloqueada</h3>
-                                <p class="text-sm text-red-700 mt-1">
-                                    Demasiados intentos fallidos. Intente nuevamente en ${remainingTime} minutos.
-                                </p>
+                <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                    ${isLocked ? `
+                        <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <div class="flex">
+                                <i data-lucide="lock" class="h-5 w-5 text-red-400"></i>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">Cuenta temporalmente bloqueada</h3>
+                                    <p class="mt-1 text-sm text-red-700">
+                                        Demasiados intentos fallidos. Intente nuevamente en ${Math.ceil(remainingTime / 60)} minutos.
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ` : ''}
-                
-                <!-- Formulario de login -->
-                <form id="login-form" class="space-y-6" novalidate>
-                    <div class="space-y-4">
-                        <!-- Email -->
+                    ` : ''}
+                    
+                    <form id="login-form" class="space-y-6" ${isLocked ? 'style="opacity: 0.5; pointer-events: none;"' : ''}>
                         <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
-                                Correo electrónico corporativo
+                            <label for="email" class="block text-sm font-medium text-gray-700">
+                                Correo electrónico
                             </label>
-                            <div class="relative">
+                            <div class="mt-1">
                                 <input 
                                     id="email" 
                                     name="email" 
                                     type="email" 
                                     autocomplete="email" 
                                     required 
-                                    placeholder="usuario@aifa.aero"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue transition-colors pl-11"
+                                    class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-aifa-blue focus:border-aifa-blue sm:text-sm"
+                                    placeholder="usuario@aifa.gob.mx"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                <i data-lucide="mail" class="absolute left-3 top-3.5 w-5 h-5 text-gray-400"></i>
                             </div>
                         </div>
-                        
-                        <!-- Password -->
+
                         <div>
-                            <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                            <label for="password" class="block text-sm font-medium text-gray-700">
                                 Contraseña
                             </label>
-                            <div class="relative">
+                            <div class="mt-1 relative">
                                 <input 
                                     id="password" 
                                     name="password" 
                                     type="password" 
                                     autocomplete="current-password" 
                                     required 
-                                    placeholder="Ingrese su contraseña"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue transition-colors pl-11 pr-11"
+                                    class="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-aifa-blue focus:border-aifa-blue sm:text-sm"
+                                    placeholder="••••••••"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                <i data-lucide="lock" class="absolute left-3 top-3.5 w-5 h-5 text-gray-400"></i>
                                 <button 
                                     type="button" 
-                                    id="toggle-password"
-                                    class="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    id="toggle-password" 
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                    <i data-lucide="eye" class="w-5 h-5"></i>
+                                    <i data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Opciones adicionales -->
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center">
-                            <input 
-                                id="remember-me" 
-                                name="remember-me" 
-                                type="checkbox" 
-                                class="h-4 w-4 text-aifa-blue focus:ring-aifa-blue border-gray-300 rounded"
-                                ${isLocked ? 'disabled' : ''}
-                            >
-                            <label for="remember-me" class="ml-2 block text-sm text-gray-700">
-                                Recordar sesión
-                            </label>
+
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <input 
+                                    id="remember-me" 
+                                    name="remember-me" 
+                                    type="checkbox" 
+                                    class="h-4 w-4 text-aifa-blue focus:ring-aifa-blue border-gray-300 rounded"
+                                    ${isLocked ? 'disabled' : ''}
+                                >
+                                <label for="remember-me" class="ml-2 block text-sm text-gray-900">
+                                    Recordarme
+                                </label>
+                            </div>
+
+                            <div class="text-sm">
+                                <button 
+                                    type="button" 
+                                    id="forgot-password-btn" 
+                                    class="font-medium text-aifa-blue hover:text-aifa-dark"
+                                    ${isLocked ? 'disabled' : ''}
+                                >
+                                    ¿Olvidó su contraseña?
+                                </button>
+                            </div>
                         </div>
-                        
-                        <div class="text-sm">
+
+                        <div>
                             <button 
-                                type="button" 
-                                id="forgot-password-btn"
-                                class="font-medium text-aifa-blue hover:text-aifa-dark transition-colors ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}"
+                                type="submit" 
+                                id="login-button"
+                                class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-aifa-blue hover:bg-aifa-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-aifa-blue disabled:opacity-50 disabled:cursor-not-allowed"
                                 ${isLocked ? 'disabled' : ''}
                             >
-                                ¿Olvidó su contraseña?
+                                <span id="login-button-spinner" class="hidden absolute left-0 inset-y-0 flex items-center pl-3">
+                                    <i data-lucide="loader-2" class="h-5 w-5 animate-spin"></i>
+                                </span>
+                                <span id="login-button-text">Iniciar sesión</span>
                             </button>
                         </div>
-                    </div>
+                        
+                        ${loginState.loginAttempts > 0 ? `
+                            <div class="text-center">
+                                <p class="text-sm text-yellow-600">
+                                    <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-1"></i>
+                                    Intentos fallidos: ${loginState.loginAttempts}/${loginState.maxAttempts}
+                                </p>
+                            </div>
+                        ` : ''}
+                    </form>
                     
-                    <!-- Botón de login -->
-                    <div>
-                        <button 
-                            type="submit" 
-                            id="login-button"
-                            class="w-full flex justify-center items-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-aifa-blue hover:bg-aifa-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-aifa-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            ${isLocked ? 'disabled' : ''}
-                        >
-                            <span id="login-button-text">Iniciar sesión</span>
-                            <i id="login-button-spinner" class="w-5 h-5 ml-2 hidden" data-lucide="loader-2"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Información de intentos -->
-                    ${loginState.loginAttempts > 0 && !isLocked ? `
-                        <div class="text-center">
-                            <p class="text-sm text-yellow-600">
-                                <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-1"></i>
-                                Intentos fallidos: ${loginState.loginAttempts}/${loginState.maxAttempts}
-                            </p>
+                    ${DEBUG.enabled ? `
+                        <div class="mt-6 p-3 bg-gray-100 rounded text-xs text-gray-600">
+                            <strong>Debug:</strong> Use cualquier email válido registrado en Supabase
                         </div>
                     ` : ''}
-                </form>
-                
-                <!-- Footer informativo -->
-                <div class="text-center">
-                    <div class="text-xs text-gray-500 space-y-1">
-                        <p>Sistema interno del Aeropuerto Internacional Felipe Ángeles</p>
-                        <p>Solo personal autorizado con credenciales corporativas @aifa.aero</p>
-                    </div>
                 </div>
-                
-                <!-- Debug info (solo en desarrollo) -->
-                ${DEBUG.enabled ? `
-                    <div class="bg-gray-100 p-3 rounded text-xs text-gray-600">
-                        <strong>Debug:</strong> Use cualquier email @aifa.aero válido registrado en Supabase
-                    </div>
-                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Crear HTML de error
+ */
+function createErrorHTML(title, message) {
+    return `
+        <div class="min-h-screen flex items-center justify-center bg-gray-50">
+            <div class="text-center">
+                <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                <h2 class="text-xl font-semibold text-gray-900 mb-2">${title}</h2>
+                <p class="text-gray-600 mb-4">${message}</p>
+                <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
+                    Recargar página
+                </button>
             </div>
         </div>
     `;
@@ -330,7 +320,7 @@ async function handleLogin(e) {
     
     try {
         // Validar formulario
-        const validation = validateForm(form, {
+        const { isValid, errors } = validateForm(form, {
             email: {
                 required: true,
                 pattern: VALIDATION.email.pattern,
@@ -338,11 +328,13 @@ async function handleLogin(e) {
             },
             password: {
                 required: true,
-                minLength: 1
+                minLength: 1,
+                message: 'La contraseña es obligatoria'
             }
         });
         
-        if (!validation.isValid) {
+        if (!isValid) {
+            showToast('Por favor, corrija los errores en el formulario', 'error');
             return;
         }
         
@@ -350,35 +342,22 @@ async function handleLogin(e) {
         const formData = getFormData(form);
         const { email, password } = formData;
         
-        // Mostrar loading
+        // Deshabilitar botón y mostrar loading
         loginButton.disabled = true;
         buttonText.textContent = 'Iniciando sesión...';
         buttonSpinner.classList.remove('hidden');
         
-        // Realizar login
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password: password
-        });
+        // Intentar login
+        const result = await signInWithPassword(email, password);
         
-        if (error) {
-            throw error;
-        }
+        if (DEBUG.enabled) console.log('✅ Login exitoso:', email);
         
-        // Login exitoso
-        if (DEBUG.enabled) console.log('✅ Login exitoso:', data.user.email);
-        
-        // Resetear intentos fallidos
+        // Limpiar intentos fallidos
         loginState.loginAttempts = 0;
         localStorage.removeItem('login_attempts');
-        localStorage.removeItem('lockout_end');
         
-        // Configurar persistencia de sesión
-        if (loginState.rememberMe) {
-            localStorage.setItem('remember_session', 'true');
-        }
-        
-        showToast(MESSAGES.auth.loginSuccess, 'success');
+        // Mostrar mensaje de éxito
+        showToast(MESSAGES.success.login, 'success');
         
         // Redirigir después de un breve delay
         setTimeout(() => {
@@ -395,7 +374,7 @@ async function handleLogin(e) {
         // Verificar si se debe bloquear
         if (loginState.loginAttempts >= loginState.maxAttempts) {
             lockAccount();
-            showToast(`Cuenta bloqueada por ${loginState.lockoutTime / 60000} minutos`, 'error');
+            showToast(`Cuenta bloqueada por ${Math.ceil(loginState.lockoutTime / 60000)} minutos`, 'error');
             
             // Re-renderizar para mostrar el lockout
             setTimeout(() => {
@@ -406,7 +385,7 @@ async function handleLogin(e) {
             }, 1000);
         } else {
             // Mostrar error específico
-            let errorMessage = MESSAGES.auth.loginError;
+            let errorMessage = 'Error al iniciar sesión';
             
             if (error.message?.includes('Invalid login credentials')) {
                 errorMessage = 'Email o contraseña incorrectos';
@@ -414,6 +393,8 @@ async function handleLogin(e) {
                 errorMessage = 'Debe confirmar su email antes de iniciar sesión';
             } else if (error.message?.includes('Too many requests')) {
                 errorMessage = 'Demasiados intentos. Espere unos minutos e intente nuevamente';
+            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                errorMessage = 'Error de conexión. Verifique su internet';
             }
             
             showToast(errorMessage, 'error');
@@ -470,18 +451,16 @@ async function handleForgotPassword() {
     }
     
     if (!VALIDATION.email.pattern.test(email)) {
-        showToast('Ingrese un email válido del dominio @aifa.aero', 'error');
+        showToast('Ingrese un email válido', 'error');
         return;
     }
     
     try {
-        await withLoading(async () => {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/#/reset-password`
-            });
-            
-            if (error) throw error;
-        }, 'Enviando email de recuperación...');
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/#/reset-password`
+        });
+        
+        if (error) throw error;
         
         showToast('Email de recuperación enviado. Revise su bandeja de entrada.', 'success');
         
