@@ -371,11 +371,30 @@ async function loadAreas() {
         
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas
-            const { data } = await selectData('areas', {
+            /*const { data } = await selectData('areas', {
                 select: '*',
                 filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'orden_visualizacion', ascending: true }
-            });
+            });*/
+
+                const data = [
+                {
+                    id: 1,
+                    clave: 'OPERACIONES',
+                    nombre: 'Operaciones Aeroportuarias',
+                    descripcion: 'Indicadores de operaciones del aeropuerto',
+                    color_hex: '#3B82F6',
+                    estado: 'ACTIVA'
+                },
+                {
+                    id: 2,
+                    clave: 'SEGURIDAD',
+                    nombre: 'Seguridad y Protección',
+                    descripcion: 'Indicadores de seguridad aeroportuaria',
+                    color_hex: '#EF4444',
+                    estado: 'ACTIVA'
+                }
+            ];
             homeState.areas = data || [];
         } else {
             // Capturistas y jefes de área ven solo sus áreas asignadas
