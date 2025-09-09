@@ -77,8 +77,8 @@ function createLoginHTML() {
         <div class="min-h-screen flex items-center justify-center bg-gray-50">
             <div class="max-w-md w-full space-y-8">
                 <div>
-                    <div class="mx-auto h-16 w-16 bg-aifa-blue rounded-full flex items-center justify-center">
-                        <i data-lucide="activity" class="h-8 w-8 text-white"></i>
+                    <div class="mx-auto h-20 w-20 flex items-center justify-center">
+                        <img src="assets/AIFA_Logo.png" alt="AIFA Logo" class="h-20 w-auto">
                     </div>
                     <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
                         Sistema de Indicadores
