@@ -3,8 +3,8 @@
 // =====================================================
 
 // Configuración de Supabase - URLs reales del proyecto
-export const SUPABASE_URL = 'https://nbdmvmnzupaqzlrhddlh.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iZG12bW56dXBhcXpscmhkZGxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQwNDAyNjIsImV4cCI6MjA0OTYxNjI2Mn0.1K7W5qO3uK5Gn2V8C7LBEw5Ui_rT3y8R0D4L9I2J1Mp';
+export const SUPABASE_URL = 'https://kxjldzcaeayguiqkqqyh.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw';
 
 // Configuración de la organización
 export const ORG_DOMAIN = '@aifa.gob.mx';
