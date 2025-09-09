@@ -2,9 +2,9 @@
 // CONFIGURACIÓN PRINCIPAL DE LA APLICACIÓN
 // =====================================================
 
-// Configuración de Supabase (REEMPLAZA CON TUS VALORES REALES)
-export const SUPABASE_URL = 'https://tu-proyecto.supabase.co';
-export const SUPABASE_ANON_KEY = 'tu-clave-anonima-aqui';
+// Configuración de Supabase - URLs reales del proyecto
+export const SUPABASE_URL = 'https://nbdmvmnzupaqzlrhddlh.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iZG12bW56dXBhcXpscmhkZGxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQwNDAyNjIsImV4cCI6MjA0OTYxNjI2Mn0.1K7W5qO3uK5Gn2V8C7LBEw5Ui_rT3y8R0D4L9I2J1Mp';
 
 // Configuración de la organización
 export const ORG_DOMAIN = '@aifa.gob.mx';
@@ -33,6 +33,22 @@ export const ROLES = {
     ADMIN: 'ADMIN',
     CAPTURADOR: 'CAPTURADOR', 
     CONSULTOR: 'CONSULTOR'
+};
+
+// Rutas de la aplicación
+export const ROUTES = {
+    public: {
+        login: '/login'
+    },
+    protected: {
+        home: '/',
+        areas: '/areas',
+        area: '/area/:id',
+        indicador: '/indicador/:clave',
+        visualizacion: '/visualizacion',
+        captura: '/captura',
+        admin: '/admin'
+    }
 };
 
 // Configuración de validaciones
@@ -156,6 +172,9 @@ if (typeof window !== 'undefined' && window.Chart) {
     // Configuración de colores
     window.Chart.defaults.borderColor = 'rgba(0, 0, 0, 0.1)';
     window.Chart.defaults.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+    
+    // Colores personalizados para AIFA
+    window.Chart.defaults.color = '#374151'; // text-gray-700
 }
 
 // =====================================================
@@ -192,22 +211,55 @@ export function getEnvConfig() {
 function validateConfig() {
     const errors = [];
     
-    if (!SUPABASE_URL || SUPABASE_URL === 'https://tu-proyecto.supabase.co') {
-        errors.push('SUPABASE_URL no está configurada');
+    if (!SUPABASE_URL || !SUPABASE_URL.includes('supabase.co')) {
+        errors.push('SUPABASE_URL no está configurada correctamente');
     }
     
-    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === 'tu-clave-anonima-aqui') {
-        errors.push('SUPABASE_ANON_KEY no está configurada');
+    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.length < 100) {
+        errors.push('SUPABASE_ANON_KEY no está configurada correctamente');
     }
     
     if (errors.length > 0) {
         console.error('❌ Errores de configuración:', errors);
         if (DEBUG.enabled) {
-            alert('Errores de configuración detectados. Revisa la consola.');
+            console.warn('⚠️ Algunos parámetros de configuración pueden no estar correctos');
         }
     }
     
     return errors.length === 0;
+}
+
+// =====================================================
+// HELPERS DE CONFIGURACIÓN
+// =====================================================
+
+/**
+ * Verificar si estamos en modo desarrollo
+ */
+export function isDevelopment() {
+    return getEnvConfig().environment === 'development';
+}
+
+/**
+ * Verificar si estamos en producción
+ */
+export function isProduction() {
+    return getEnvConfig().environment === 'production';
+}
+
+/**
+ * Obtener URL base de la aplicación
+ */
+export function getBaseUrl() {
+    return window.location.origin;
+}
+
+/**
+ * Configurar modo debug dinámicamente
+ */
+export function setDebugMode(enabled) {
+    DEBUG.enabled = enabled;
+    console.log(`🔧 Modo debug ${enabled ? 'activado' : 'desactivado'}`);
 }
 
 // Validar configuración al cargar
