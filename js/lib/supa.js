@@ -1,5 +1,5 @@
 // =====================================================
-// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 1/4
+// CLIENTE SUPABASE Y HELPERS GENÉRICOS
 // =====================================================
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
@@ -200,10 +200,6 @@ export async function insertData(table, data, options = {}) {
         throw error;
     }
 }
-// =====================================================
-// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 2/4
-// Helpers UPDATE, DELETE y RPC
-// =====================================================
 
 /**
  * Helper genérico para UPDATE con manejo de errores
@@ -310,79 +306,8 @@ export async function callRPC(functionName, params = {}) {
     }
 }
 
-/**
- * Helper para UPSERT (INSERT o UPDATE)
- */
-export async function upsertData(table, data, options = {}) {
-    try {
-        if (DEBUG.enabled) console.log(`🔄 UPSERT ${table}:`, data);
-        
-        // Configurar usuario actual para auditoría
-        await setCurrentUser();
-        
-        let query = supabase.from(table).upsert(data, {
-            onConflict: options.onConflict,
-            ignoreDuplicates: options.ignoreDuplicates || false
-        });
-        
-        if (options.select) {
-            query = query.select(options.select);
-        }
-        
-        const { data: result, error } = await query;
-        
-        if (error) {
-            console.error(`❌ Error en UPSERT ${table}:`, error);
-            throw new SupabaseError(error.message, error.code, error.details);
-        }
-        
-        if (DEBUG.enabled) console.log(`✅ UPSERT ${table} exitoso:`, result);
-        
-        return { data: result };
-    } catch (error) {
-        handleError(error, `Error al hacer upsert en ${table}`);
-        throw error;
-    }
-}
-
-/**
- * Helper para contar registros
- */
-export async function countData(table, filters = {}) {
-    try {
-        if (DEBUG.enabled) console.log(`🔢 COUNT ${table}:`, filters);
-        
-        let query = supabase.from(table).select('*', { count: 'exact', head: true });
-        
-        // Aplicar filtros
-        Object.entries(filters).forEach(([column, value]) => {
-            if (value !== null && value !== undefined) {
-                if (Array.isArray(value)) {
-                    query = query.in(column, value);
-                } else {
-                    query = query.eq(column, value);
-                }
-            }
-        });
-        
-        const { count, error } = await query;
-        
-        if (error) {
-            console.error(`❌ Error en COUNT ${table}:`, error);
-            throw new SupabaseError(error.message, error.code, error.details);
-        }
-        
-        if (DEBUG.enabled) console.log(`✅ COUNT ${table} exitoso:`, count);
-        
-        return count;
-    } catch (error) {
-        handleError(error, `Error al contar registros de ${table}`);
-        throw error;
-    }
-}
 // =====================================================
-// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 3/4
-// Gestión de autenticación y usuarios
+// GESTIÓN DE AUTENTICACIÓN
 // =====================================================
 
 /**
@@ -545,6 +470,10 @@ export async function setCurrentUser() {
     }
 }
 
+// =====================================================
+// VALIDACIONES Y PERMISOS
+// =====================================================
+
 /**
  * Verificar si el usuario tiene permiso para una acción en un área
  */
@@ -613,81 +542,35 @@ export async function getUserAreas() {
         return [];
     }
 }
-// =====================================================
-// CLIENTE SUPABASE Y HELPERS GENÉRICOS - PARTE 4/4
-// Utilidades adicionales e inicialización
-// =====================================================
 
 /**
- * Verificar si un usuario puede gestionar indicadores
+ * Verificar si el usuario está autenticado
  */
-export async function canManageIndicators(areaId = null) {
-    try {
-        const profile = await getCurrentProfile();
-        if (!profile) return false;
-        
-        // Los administradores pueden gestionar todos los indicadores
-        if (profile.rol_principal === 'ADMIN') {
-            return true;
-        }
-        
-        // Si se especifica un área, verificar permisos específicos
-        if (areaId) {
-            return await checkAreaPermission(areaId, 'EDIT');
-        }
-        
-        // Verificar si tiene permisos de edición en al menos un área
-        return profile.usuario_areas?.some(ua => ua.puede_editar) || false;
-    } catch (error) {
-        console.error('❌ Error al verificar permisos de gestión:', error);
-        return false;
-    }
+export function isAuthenticated() {
+    return !!(appState.session && appState.user);
 }
 
 /**
- * Obtener mensaje de error amigable
+ * Verificar si el usuario tiene un rol específico
  */
-export function getUserFriendlyErrorMessage(error) {
-    if (!error) return MESSAGES.error.generic;
+export function hasRole(role) {
+    return appState.profile?.rol_principal === role;
+}
+
+/**
+ * Verificar si el usuario tiene un nivel de rol específico o superior
+ */
+export function hasRoleLevel(userRole, minRole) {
+    const roleLevels = {
+        'CONSULTOR': 1,
+        'CAPTURADOR': 2,
+        'ADMIN': 3
+    };
     
-    // Errores específicos de autenticación
-    if (error.message?.includes('Invalid login credentials')) {
-        return 'Email o contraseña incorrectos';
-    }
+    const userLevel = roleLevels[userRole] || 0;
+    const minLevel = roleLevels[minRole] || 999;
     
-    if (error.message?.includes('Email not confirmed')) {
-        return 'Debe confirmar su email antes de iniciar sesión';
-    }
-    
-    if (error.message?.includes('Too many requests')) {
-        return 'Demasiados intentos. Intente nuevamente en unos minutos';
-    }
-    
-    // Errores de base de datos
-    if (error.code) {
-        switch (error.code) {
-            case 'PGRST301':
-            case '42501':
-                return 'No tiene permisos para realizar esta acción';
-            case 'PGRST116':
-                return 'El elemento solicitado no existe';
-            case '23505':
-                return 'Ya existe un registro con estos datos';
-            case '23503':
-                return 'No se puede eliminar porque está siendo utilizado por otros elementos';
-            case '23514':
-                return 'Los datos no cumplen con las restricciones requeridas';
-            default:
-                return error.message || MESSAGES.error.generic;
-        }
-    }
-    
-    // Errores de red
-    if (error.message?.includes('fetch')) {
-        return 'Error de conexión. Verifique su internet';
-    }
-    
-    return error.message || MESSAGES.error.generic;
+    return userLevel >= minLevel;
 }
 
 // =====================================================
@@ -731,85 +614,6 @@ export function createPagination(page = 1, pageSize = 20) {
 export function escapeSearchText(text) {
     if (!text) return '';
     return text.replace(/[%_]/g, '\\$&');
-}
-
-/**
- * Construir filtros de búsqueda por texto
- */
-export function createTextSearchFilters(searchTerm, columns = ['nombre']) {
-    if (!searchTerm) return {};
-    
-    const escapedTerm = escapeSearchText(searchTerm);
-    const filters = {};
-    
-    // Para múltiples columnas, usar OR
-    if (columns.length === 1) {
-        filters[columns[0]] = { operator: 'ilike', value: `%${escapedTerm}%` };
-    } else {
-        // Para Supabase, necesitamos usar .or() en la query directamente
-        // Esto se manejará en el selectData cuando detecte un filtro especial
-        filters._textSearch = {
-            term: escapedTerm,
-            columns: columns
-        };
-    }
-    
-    return filters;
-}
-
-/**
- * Validar email con dominio organizacional
- */
-export function validateOrgEmail(email, orgDomain) {
-    if (!email || !orgDomain) return false;
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return false;
-    
-    return email.toLowerCase().endsWith(orgDomain.toLowerCase());
-}
-
-/**
- * Formatear fecha para base de datos
- */
-export function formatDateForDB(date) {
-    if (!date) return null;
-    
-    if (typeof date === 'string') {
-        date = new Date(date);
-    }
-    
-    return date.toISOString();
-}
-
-/**
- * Verificar si el usuario está autenticado
- */
-export function isAuthenticated() {
-    return !!(appState.session && appState.user);
-}
-
-/**
- * Verificar si el usuario tiene un rol específico
- */
-export function hasRole(role) {
-    return appState.profile?.rol_principal === role;
-}
-
-/**
- * Verificar si el usuario tiene un nivel de rol específico o superior
- */
-export function hasRoleLevel(userRole, minRole) {
-    const roleLevels = {
-        'CONSULTOR': 1,
-        'CAPTURADOR': 2,
-        'ADMIN': 3
-    };
-    
-    const userLevel = roleLevels[userRole] || 0;
-    const minLevel = roleLevels[minRole] || 999;
-    
-    return userLevel >= minLevel;
 }
 
 // =====================================================
@@ -857,48 +661,6 @@ export async function initSupabase() {
         console.error('❌ Error al inicializar Supabase:', error);
         throw error;
     }
-}
-
-// =====================================================
-// GUARDS DE AUTENTICACIÓN
-// =====================================================
-
-/**
- * Guard para rutas que requieren autenticación
- */
-export function requireAuth() {
-    if (!isAuthenticated()) {
-        if (DEBUG.enabled) console.log('🚫 Acceso denegado: usuario no autenticado');
-        return false;
-    }
-    return true;
-}
-
-/**
- * Guard para rutas que requieren rol de administrador
- */
-export function requireAdmin() {
-    if (!requireAuth()) return false;
-    
-    if (!hasRole('ADMIN')) {
-        if (DEBUG.enabled) console.log('🚫 Acceso denegado: se requiere rol de administrador');
-        return false;
-    }
-    return true;
-}
-
-/**
- * Guard para rutas que requieren acceso a un área específica
- */
-export async function requireAreaAccess(areaId, action = 'READ') {
-    if (!requireAuth()) return false;
-    
-    const hasPermission = await checkAreaPermission(areaId, action);
-    if (!hasPermission) {
-        if (DEBUG.enabled) console.log(`🚫 Acceso denegado: sin permisos de ${action} en área ${areaId}`);
-        return false;
-    }
-    return true;
 }
 
 // Auto-inicializar cuando se carga el módulo
