@@ -1576,8 +1576,10 @@ async function handleRefreshUsers() {
     try {
         const refreshBtn = document.getElementById('refresh-users-btn');
         if (refreshBtn) {
-            const icon = refreshBtn.querySelector('i');
+        const icon = refreshBtn.querySelector('i');
+        if (icon) {
             icon.classList.add('animate-spin');
+        }
         }
         
         await loadUsuarios();
