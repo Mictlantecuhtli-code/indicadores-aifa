@@ -494,11 +494,12 @@ async function handleRefreshData() {
         ]);
         
         // Re-renderizar solo el contenido dinámico
-        const container = document.getElementById('app-container');
+        /*const container = document.getElementById('app-container');
         if (container) {
             await render(container);
-        }
-        
+        }*/
+        updateAreasDisplay();
+        updateDashboardSummary();
         showToast('Datos actualizados correctamente', 'success');
         
     } catch (error) {
