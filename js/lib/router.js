@@ -185,7 +185,7 @@ async function renderRoute(route) {
                 // Redirigir a home para mostrar áreas
                 // navigateTo('/', {}, true);
                 viewModule = await import('../views/home.js');
-                return;
+                break;
                 
             default:
                 // Rutas con parámetros
