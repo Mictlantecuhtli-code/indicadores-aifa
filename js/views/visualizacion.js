@@ -1559,7 +1559,7 @@ async function handleRefreshVisualization() {
         ]);
         
         // Re-renderizar vista completa
-        const container = document.getElementById('app-container');
+        /*const container = document.getElementById('app-container');
         if (container) {
             await render(container, {}, { 
                 mode: visualizacionState.viewMode,
@@ -1567,6 +1567,10 @@ async function handleRefreshVisualization() {
                 indicadores: visualizacionState.selectedIndicadores.join(','),
                 years: visualizacionState.selectedYears.join(',')
             });
+        }*/
+        updateFiltersDisplay();
+        if (visualizacionState.selectedIndicadores.length > 0) {
+            await createCharts();
         }
            showToast('Visualización actualizada correctamente', 'success');
         } 
