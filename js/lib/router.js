@@ -183,7 +183,8 @@ async function renderRoute(route) {
                 
             case '/captura':
                 // Redirigir a home para mostrar áreas
-                navigateTo('/', {}, true);
+                // navigateTo('/', {}, true);
+                viewModule = await import('../views/home.js');
                 return;
                 
             default:
