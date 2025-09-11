@@ -66,27 +66,30 @@ export class AdminView {
     }
 
 async render() {
-    try {
+    console.log('=== ADMIN RENDER INICIADO ===');
+        try {
         // Verificar autenticación
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user) {
-            console.log('Usuario no autenticado, redirigiendo al login...');
-            // Usar el router en lugar de window.location
-            if (window.router) {
-                window.router.navigateTo('/login');
-            } else {
-                window.location.hash = '#/login';
-            }
+            console.error('Usuario no autenticado:', authError);
+            setTimeout(() => {
+                window.router.navigateTo('/login', {}, true);
+            }, 100);
             return '<div class="p-4">Redirigiendo al login...</div>';
         }
 
-        // Verificar si es admin
+        console.log('Usuario autenticado:', user.email);
+
+        // Verificar si es admin - buscar por email
         const { data: profile, error: profileError } = await supabase
             .from('usuarios')
             .select('*')
-            .eq('id', user.id)
+            .eq('email', user.email.toLowerCase())
             .single();
+
+        console.log('Perfil encontrado:', profile);
+        console.log('Rol del usuario:', profile?.rol);
 
         if (profileError) {
             console.error('Error al obtener perfil:', profileError);
@@ -94,16 +97,19 @@ async render() {
         }
 
         if (!profile || profile.rol !== 'admin') {
-            console.log('Usuario no es admin:', profile);
-            return UI.alert('No tienes permisos para acceder a esta sección. Rol actual: ' + (profile?.rol || 'sin rol'), 'danger');
+            console.warn('Usuario no es admin. Rol actual:', profile?.rol);
+            return UI.alert(`No tienes permisos de administrador. Tu rol actual es: ${profile?.rol || 'sin rol'}`, 'danger');
         }
 
-        // Si todo está bien, continuar con el render normal
-        console.log('Admin verificado, renderizando panel...');
-
+        console.log('✅ Usuario verificado como admin, renderizando panel...');
+        
+        // Guardar el perfil
         adminState.userProfile = profile;
+        
+        // Cargar datos iniciales
         await this.loadInitialData();
 
+        // AQUÍ CONTINÚA EL RETURN DEL HTML
         return `
             <div class="container-fluid px-4">
                 <h1 class="mt-4">Panel de Administración</h1>
@@ -152,7 +158,12 @@ async render() {
             <!-- Modales -->
             ${this.renderModals()}
         `;
+        
+    } catch (error) {
+        console.error('❌ Error en render de admin:', error);
+        return UI.alert('Error al cargar el panel de administración: ' + error.message, 'danger');
     }
+// }
 
     renderStatsCards() {
         const activeAreas = this.areas.filter(a => a.estado === 'ACTIVO').length;
