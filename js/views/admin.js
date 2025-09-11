@@ -163,7 +163,7 @@ async render() {
         console.error('❌ Error en render de admin:', error);
         return UI.alert('Error al cargar el panel de administración: ' + error.message, 'danger');
     }
-// }
+ }
 
     renderStatsCards() {
         const activeAreas = this.areas.filter(a => a.estado === 'ACTIVO').length;
