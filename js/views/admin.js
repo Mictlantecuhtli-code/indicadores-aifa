@@ -2084,4 +2084,1050 @@ export class AdminView {
             </div>
         `;
     }
-    // Falta parte 6 ->
+    // ========== HANDLERS DE MODALES Y CRUD ==========
+    
+    // --- Handlers del Modal de Área ---
+    showModalArea() {
+        const modal = new bootstrap.Modal(document.getElementById('modalArea'));
+        const modalTitle = document.getElementById('modalAreaLabel');
+        
+        if (this.currentArea) {
+            // Modo edición
+            modalTitle.textContent = 'Editar Área';
+            document.getElementById('areaId').value = this.currentArea.id;
+            document.getElementById('areaClave').value = this.currentArea.clave;
+            document.getElementById('areaNombre').value = this.currentArea.nombre;
+            document.getElementById('areaDescripcion').value = this.currentArea.descripcion || '';
+            document.getElementById('areaColor').value = this.currentArea.color_hex;
+            document.getElementById('areaColorHex').value = this.currentArea.color_hex;
+            document.getElementById('areaEstado').value = this.currentArea.estado;
+            
+            // Actualizar vista previa
+            this.updateAreaPreview();
+            
+            // Deshabilitar campo clave en edición
+            document.getElementById('areaClave').readOnly = true;
+        } else {
+            // Modo creación
+            modalTitle.textContent = 'Nueva Área';
+            document.getElementById('formArea').reset();
+            document.getElementById('areaId').value = '';
+            document.getElementById('areaClave').readOnly = false;
+            
+            // Color aleatorio inicial
+            this.randomizeColor();
+        }
+        
+        // Configurar eventos del modal
+        this.setupAreaModalEvents();
+        modal.show();
+    }
+
+    setupAreaModalEvents() {
+        // Sincronizar color picker con input de texto
+        const colorPicker = document.getElementById('areaColor');
+        const colorHex = document.getElementById('areaColorHex');
+        const nombreInput = document.getElementById('areaNombre');
+        const descripcionInput = document.getElementById('areaDescripcion');
+        
+        colorPicker.addEventListener('input', (e) => {
+            colorHex.value = e.target.value;
+            this.updateAreaPreview();
+        });
+        
+        colorHex.addEventListener('input', (e) => {
+            if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+                colorPicker.value = e.target.value;
+                this.updateAreaPreview();
+            }
+        });
+        
+        nombreInput.addEventListener('input', () => {
+            this.updateAreaPreview();
+        });
+        
+        // Contador de caracteres
+        descripcionInput.addEventListener('input', (e) => {
+            document.getElementById('areaDescripcionCount').textContent = e.target.value.length;
+        });
+        
+        // Transformar clave a mayúsculas
+        document.getElementById('areaClave').addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+    }
+
+    updateAreaPreview() {
+        const preview = document.getElementById('areaPreview');
+        const nombre = document.getElementById('areaNombre').value || 'Área de Ejemplo';
+        const color = document.getElementById('areaColorHex').value || '#1e40af';
+        
+        preview.textContent = nombre;
+        preview.style.backgroundColor = color;
+    }
+
+    randomizeColor() {
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+            '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
+            '#F8B739', '#52B788', '#E76F51', '#8E44AD', '#3498DB'
+        ];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        document.getElementById('areaColor').value = randomColor;
+        document.getElementById('areaColorHex').value = randomColor;
+        this.updateAreaPreview();
+    }
+
+    async saveArea(e) {
+        e.preventDefault();
+        
+        const areaId = document.getElementById('areaId').value;
+        const areaData = {
+            clave: document.getElementById('areaClave').value.toUpperCase(),
+            nombre: document.getElementById('areaNombre').value,
+            descripcion: document.getElementById('areaDescripcion').value || null,
+            color_hex: document.getElementById('areaColorHex').value,
+            estado: document.getElementById('areaEstado').value
+        };
+        
+        try {
+            let result;
+            if (areaId) {
+                // Actualizar área existente
+                result = await supabase
+                    .from('areas')
+                    .update(areaData)
+                    .eq('id', areaId);
+            } else {
+                // Verificar si la clave ya existe
+                const { data: existing } = await supabase
+                    .from('areas')
+                    .select('id')
+                    .eq('clave', areaData.clave)
+                    .single();
+                
+                if (existing) {
+                    UI.showToast('Ya existe un área con esa clave', 'error');
+                    return;
+                }
+                
+                // Crear nueva área
+                result = await supabase
+                    .from('areas')
+                    .insert([areaData]);
+            }
+            
+            if (result.error) throw result.error;
+            
+            UI.showToast(areaId ? 'Área actualizada correctamente' : 'Área creada correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalArea')).hide();
+            await this.loadAreas();
+            document.getElementById('areas-table-container').innerHTML = this.createAreasTableHTML();
+            this.updateSystemCounts();
+            
+        } catch (error) {
+            console.error('Error al guardar área:', error);
+            UI.showToast('Error al guardar el área: ' + error.message, 'error');
+        }
+    }
+
+    // --- Handlers del Modal de Usuario ---
+    showModalUsuario() {
+        const modal = new bootstrap.Modal(document.getElementById('modalUsuario'));
+        const modalTitle = document.getElementById('modalUsuarioLabel');
+        
+        if (this.currentUsuario) {
+            // Modo edición
+            modalTitle.textContent = 'Editar Usuario';
+            document.getElementById('usuarioId').value = this.currentUsuario.id;
+            document.getElementById('usuarioEmail').value = this.currentUsuario.email;
+            document.getElementById('usuarioEmail').disabled = true; // No se puede cambiar el email
+            document.getElementById('usuarioNombre').value = this.currentUsuario.nombre || '';
+            document.getElementById('usuarioArea').value = this.currentUsuario.area_id || '';
+            document.getElementById('usuarioRol').value = this.currentUsuario.rol;
+            document.getElementById('usuarioPuedeCapturar').checked = this.currentUsuario.puede_capturar;
+            document.getElementById('usuarioPuedeEditar').checked = this.currentUsuario.puede_editar;
+            document.getElementById('usuarioPuedeEliminar').checked = this.currentUsuario.puede_eliminar;
+            document.getElementById('usuarioEstado').value = this.currentUsuario.activo.toString();
+        } else {
+            // Modo creación
+            modalTitle.textContent = 'Nuevo Usuario';
+            document.getElementById('formUsuario').reset();
+            document.getElementById('usuarioId').value = '';
+            document.getElementById('usuarioEmail').disabled = false;
+            document.getElementById('usuarioPuedeCapturar').checked = true;
+        }
+        
+        // Configurar eventos del modal
+        this.setupUsuarioModalEvents();
+        modal.show();
+    }
+
+    setupUsuarioModalEvents() {
+        // Auto-configurar permisos según el rol
+        document.getElementById('usuarioRol').addEventListener('change', (e) => {
+            const rol = e.target.value;
+            const puedeCapturar = document.getElementById('usuarioPuedeCapturar');
+            const puedeEditar = document.getElementById('usuarioPuedeEditar');
+            const puedeEliminar = document.getElementById('usuarioPuedeEliminar');
+            
+            switch(rol) {
+                case 'admin':
+                case 'director':
+                    puedeCapturar.checked = true;
+                    puedeEditar.checked = true;
+                    puedeEliminar.checked = true;
+                    break;
+                case 'subdirector':
+                    puedeCapturar.checked = true;
+                    puedeEditar.checked = true;
+                    puedeEliminar.checked = false;
+                    break;
+                case 'jefe':
+                    puedeCapturar.checked = true;
+                    puedeEditar.checked = true;
+                    puedeEliminar.checked = false;
+                    break;
+                case 'capturista':
+                    puedeCapturar.checked = true;
+                    puedeEditar.checked = false;
+                    puedeEliminar.checked = false;
+                    break;
+            }
+        });
+    }
+
+    async saveUsuario(e) {
+        e.preventDefault();
+        
+        const usuarioId = document.getElementById('usuarioId').value;
+        const usuarioData = {
+            email: document.getElementById('usuarioEmail').value.toLowerCase(),
+            nombre: document.getElementById('usuarioNombre').value || null,
+            area_id: document.getElementById('usuarioArea').value || null,
+            rol: document.getElementById('usuarioRol').value,
+            puede_capturar: document.getElementById('usuarioPuedeCapturar').checked,
+            puede_editar: document.getElementById('usuarioPuedeEditar').checked,
+            puede_eliminar: document.getElementById('usuarioPuedeEliminar').checked,
+            activo: document.getElementById('usuarioEstado').value === 'true'
+        };
+        
+        const notificar = document.getElementById('usuarioNotificar').checked;
+        
+        try {
+            let result;
+            if (usuarioId) {
+                // Actualizar usuario existente (sin el email)
+                delete usuarioData.email;
+                result = await supabase
+                    .from('usuarios')
+                    .update(usuarioData)
+                    .eq('id', usuarioId);
+            } else {
+                // Verificar si el email ya existe
+                const { data: existing } = await supabase
+                    .from('usuarios')
+                    .select('id')
+                    .eq('email', usuarioData.email)
+                    .single();
+                
+                if (existing) {
+                    UI.showToast('Ya existe un usuario con ese email', 'error');
+                    return;
+                }
+                
+                // Crear nuevo usuario
+                result = await supabase
+                    .from('usuarios')
+                    .insert([usuarioData]);
+            }
+            
+            if (result.error) throw result.error;
+            
+            // Si hay área asignada, crear registro en usuario_areas
+            if (usuarioData.area_id) {
+                await supabase
+                    .from('usuario_areas')
+                    .insert({
+                        usuario_id: usuarioId || result.data[0].id,
+                        area_id: usuarioData.area_id,
+                        rol: usuarioData.rol,
+                        puede_capturar: usuarioData.puede_capturar,
+                        puede_editar: usuarioData.puede_editar,
+                        puede_eliminar: usuarioData.puede_eliminar,
+                        asignado_por: adminState.userProfile.id
+                    });
+            }
+            
+            UI.showToast(usuarioId ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalUsuario')).hide();
+            await this.loadUsuarios();
+            await this.loadPermisos();
+            document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            this.updateSystemCounts();
+            
+        } catch (error) {
+            console.error('Error al guardar usuario:', error);
+            UI.showToast('Error al guardar el usuario: ' + error.message, 'error');
+        }
+    }
+
+    // --- Handlers del Modal de Asignación ---
+    showModalAsignacion() {
+        const modal = new bootstrap.Modal(document.getElementById('modalAsignacion'));
+        document.getElementById('formAsignacion').reset();
+        
+        // Configurar eventos
+        this.setupAsignacionModalEvents();
+        modal.show();
+    }
+
+    setupAsignacionModalEvents() {
+        // Auto-configurar permisos según el rol seleccionado
+        document.getElementById('asignacionRol').addEventListener('change', (e) => {
+            const rol = e.target.value;
+            const puedeEditar = document.getElementById('asignacionEditar');
+            const puedeEliminar = document.getElementById('asignacionEliminar');
+            
+            if (rol === 'jefe' || rol === 'supervisor') {
+                puedeEditar.checked = true;
+            } else {
+                puedeEditar.checked = false;
+            }
+            
+            puedeEliminar.checked = false; // Por defecto nadie puede eliminar
+        });
+        
+        // Cambiar color de fondo según área seleccionada
+        document.getElementById('asignacionArea').addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const color = selectedOption.getAttribute('data-color');
+            if (color) {
+                e.target.style.borderLeft = `4px solid ${color}`;
+            }
+        });
+    }
+
+    async saveAsignacion(e) {
+        e.preventDefault();
+        
+        const asignacionData = {
+            area_id: document.getElementById('asignacionArea').value,
+            rol: document.getElementById('asignacionRol').value,
+            puede_capturar: document.getElementById('asignacionCapturar').checked,
+            puede_editar: document.getElementById('asignacionEditar').checked,
+            puede_eliminar: document.getElementById('asignacionEliminar').checked
+        };
+        
+        const usuarioId = document.getElementById('asignacionUsuario').value;
+        const notas = document.getElementById('asignacionNotas').value;
+        
+        if (!usuarioId || !asignacionData.area_id || !asignacionData.rol) {
+            UI.showToast('Por favor complete todos los campos requeridos', 'warning');
+            return;
+        }
+        
+        try {
+            // Actualizar el usuario con la nueva asignación
+            const { error: updateError } = await supabase
+                .from('usuarios')
+                .update(asignacionData)
+                .eq('id', usuarioId);
+            
+            if (updateError) throw updateError;
+            
+            // Crear registro en usuario_areas
+            const { error: insertError } = await supabase
+                .from('usuario_areas')
+                .insert({
+                    usuario_id: usuarioId,
+                    area_id: asignacionData.area_id,
+                    rol: asignacionData.rol,
+                    puede_capturar: asignacionData.puede_capturar,
+                    puede_editar: asignacionData.puede_editar,
+                    puede_eliminar: asignacionData.puede_eliminar,
+                    notas: notas || null,
+                    asignado_por: adminState.userProfile.id
+                });
+            
+            if (insertError && insertError.code !== '23505') { // Ignorar si ya existe
+                console.warn('Error al crear registro en usuario_areas:', insertError);
+            }
+            
+            UI.showToast('Usuario asignado al área correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalAsignacion')).hide();
+            await this.loadUsuarios();
+            await this.loadPermisos();
+            
+            // Actualizar la vista actual
+            const sectionContent = document.getElementById('section-content');
+            if (adminState.currentSection === 'permissions') {
+                sectionContent.innerHTML = this.createPermissionsContentHTML();
+            } else if (adminState.currentSection === 'users') {
+                sectionContent.innerHTML = this.createUsersContentHTML();
+            }
+            
+            this.updateSystemCounts();
+            
+        } catch (error) {
+            console.error('Error al asignar usuario:', error);
+            UI.showToast('Error al asignar el usuario al área: ' + error.message, 'error');
+        }
+    }
+
+    // --- Handlers de Acciones Masivas ---
+    showBulkActionsModal() {
+        const selectedCheckboxes = document.querySelectorAll('.user-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            UI.showToast('Por favor seleccione al menos un elemento', 'warning');
+            return;
+        }
+        
+        document.getElementById('bulkSelectedCount').textContent = selectedCheckboxes.length;
+        const modal = new bootstrap.Modal(document.getElementById('modalBulkActions'));
+        modal.show();
+    }
+
+    async bulkActivate() {
+        const selectedIds = this.getSelectedUserIds();
+        if (selectedIds.length === 0) return;
+        
+        try {
+            const { error } = await supabase
+                .from('usuarios')
+                .update({ activo: true })
+                .in('id', selectedIds);
+            
+            if (error) throw error;
+            
+            UI.showToast(`${selectedIds.length} usuarios activados correctamente`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalBulkActions')).hide();
+            await this.loadUsuarios();
+            document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            
+        } catch (error) {
+            console.error('Error en activación masiva:', error);
+            UI.showToast('Error al activar usuarios', 'error');
+        }
+    }
+
+    async bulkDeactivate() {
+        const selectedIds = this.getSelectedUserIds();
+        if (selectedIds.length === 0) return;
+        
+        try {
+            const { error } = await supabase
+                .from('usuarios')
+                .update({ activo: false })
+                .in('id', selectedIds);
+            
+            if (error) throw error;
+            
+            UI.showToast(`${selectedIds.length} usuarios desactivados correctamente`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalBulkActions')).hide();
+            await this.loadUsuarios();
+            document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            
+        } catch (error) {
+            console.error('Error en desactivación masiva:', error);
+            UI.showToast('Error al desactivar usuarios', 'error');
+        }
+    }
+
+    getSelectedUserIds() {
+        const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    // --- Handler de Exportación ---
+    async executeExport() {
+        const exportAreas = document.getElementById('exportAreas').checked;
+        const exportUsuarios = document.getElementById('exportUsuarios').checked;
+        const exportPermisos = document.getElementById('exportPermisos').checked;
+        const exportIndicadores = document.getElementById('exportIndicadores').checked;
+        const format = document.getElementById('exportFormat').value;
+        
+        const dataToExport = {};
+        
+        if (exportAreas) dataToExport.areas = this.areas;
+        if (exportUsuarios) dataToExport.usuarios = this.usuarios;
+        if (exportPermisos) dataToExport.permisos = this.permisos;
+        if (exportIndicadores) dataToExport.indicadores = this.indicadores;
+        
+        if (Object.keys(dataToExport).length === 0) {
+            UI.showToast('Por favor seleccione al menos un tipo de datos para exportar', 'warning');
+            return;
+        }
+        
+        try {
+            let content, filename, mimeType;
+            
+            switch (format) {
+                case 'json':
+                    content = JSON.stringify(dataToExport, null, 2);
+                    filename = `admin_export_${new Date().toISOString().split('T')[0]}.json`;
+                    mimeType = 'application/json';
+                    break;
+                    
+                case 'csv':
+                    // Para CSV, exportar cada tipo en archivos separados sería mejor
+                    content = this.convertToCSV(dataToExport);
+                    filename = `admin_export_${new Date().toISOString().split('T')[0]}.csv`;
+                    mimeType = 'text/csv';
+                    break;
+                    
+                case 'xlsx':
+                    UI.showToast('Exportación a Excel en desarrollo', 'info');
+                    return;
+            }
+            
+            // Crear y descargar el archivo
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            UI.showToast('Datos exportados correctamente', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalExport')).hide();
+            
+        } catch (error) {
+            console.error('Error al exportar:', error);
+            UI.showToast('Error al exportar los datos', 'error');
+        }
+    }
+
+    convertToCSV(data) {
+        let csv = '';
+        
+        // Exportar áreas
+        if (data.areas) {
+            csv += 'ÁREAS\n';
+            csv += 'Clave,Nombre,Descripción,Color,Estado\n';
+            data.areas.forEach(area => {
+                csv += `"${area.clave}","${area.nombre}","${area.descripcion || ''}","${area.color_hex}","${area.estado}"\n`;
+            });
+            csv += '\n';
+        }
+        
+        // Exportar usuarios
+        if (data.usuarios) {
+            csv += 'USUARIOS\n';
+            csv += 'Email,Nombre,Área,Rol,Estado,Puede Capturar,Puede Editar,Puede Eliminar\n';
+            data.usuarios.forEach(usuario => {
+                const areaNombre = usuario.areas ? usuario.areas.nombre : '';
+                csv += `"${usuario.email}","${usuario.nombre || ''}","${areaNombre}","${usuario.rol}","${usuario.activo ? 'Activo' : 'Inactivo'}","${usuario.puede_capturar}","${usuario.puede_editar}","${usuario.puede_eliminar}"\n`;
+            });
+            csv += '\n';
+        }
+        
+        return csv;
+    }
+    // ========== MÉTODOS AUXILIARES Y UTILIDADES ==========
+    
+    getRoleBadgeColor(rol) {
+        const colors = {
+            'admin': 'danger',
+            'director': 'primary',
+            'subdirector': 'info',
+            'jefe': 'success',
+            'capturista': 'secondary',
+            'supervisor': 'warning',
+            'analista': 'light'
+        };
+        return colors[rol] || 'secondary';
+    }
+
+    getRoleName(rol) {
+        const names = {
+            'admin': 'Administrador',
+            'director': 'Director',
+            'subdirector': 'Subdirector',
+            'jefe': 'Jefe de Área',
+            'capturista': 'Capturista',
+            'supervisor': 'Supervisor',
+            'analista': 'Analista'
+        };
+        return names[rol] || rol;
+    }
+
+    updateSystemCounts() {
+        // Actualizar contadores en las tarjetas de estadísticas
+        const activeAreas = this.areas.filter(a => a.estado === 'ACTIVO').length;
+        const activeUsers = this.usuarios.filter(u => u.activo).length;
+        const totalPermisos = this.permisos.length;
+        
+        const totalAreasElement = document.getElementById('total-areas-count');
+        const totalUsersElement = document.getElementById('total-users-count');
+        const totalPermissionsElement = document.getElementById('total-permissions-count');
+        
+        if (totalAreasElement) totalAreasElement.textContent = activeAreas;
+        if (totalUsersElement) totalUsersElement.textContent = activeUsers;
+        if (totalPermissionsElement) totalPermissionsElement.textContent = totalPermisos;
+        
+        // Actualizar tarjetas de estadísticas si existen
+        const statsCards = document.getElementById('stats-cards');
+        if (statsCards) {
+            statsCards.innerHTML = this.renderStatsCards();
+        }
+    }
+
+    // ========== NAVEGACIÓN ENTRE SECCIONES ==========
+    
+    switchSection(sectionName) {
+        adminState.currentSection = sectionName;
+        this.filters = adminState.filters;
+        
+        // Actualizar clases de pestañas
+        document.querySelectorAll('.section-tab').forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.dataset.section === sectionName) {
+                tab.classList.add('active');
+            }
+        });
+        
+        // Renderizar contenido de la sección
+        const sectionContent = document.getElementById('section-content');
+        if (sectionContent) {
+            sectionContent.innerHTML = this.renderSectionContent();
+            this.attachSectionEventListeners();
+        }
+    }
+
+    // ========== EVENT LISTENERS ==========
+    
+    attachEventListeners() {
+        // Event listeners generales que se adjuntan después del render principal
+        
+        // Formularios de modales
+        const formArea = document.getElementById('formArea');
+        if (formArea) {
+            formArea.addEventListener('submit', (e) => this.saveArea(e));
+        }
+        
+        const formUsuario = document.getElementById('formUsuario');
+        if (formUsuario) {
+            formUsuario.addEventListener('submit', (e) => this.saveUsuario(e));
+        }
+        
+        const formAsignacion = document.getElementById('formAsignacion');
+        if (formAsignacion) {
+            formAsignacion.addEventListener('submit', (e) => this.saveAsignacion(e));
+        }
+        
+        // Attach listeners específicos de la sección actual
+        this.attachSectionEventListeners();
+    }
+
+    attachSectionEventListeners() {
+        // Event listeners específicos según la sección activa
+        switch (adminState.currentSection) {
+            case 'areas':
+                this.attachAreasEventListeners();
+                break;
+            case 'users':
+                this.attachUsersEventListeners();
+                break;
+            case 'permissions':
+                this.attachPermissionsEventListeners();
+                break;
+        }
+    }
+
+    attachAreasEventListeners() {
+        // Búsqueda de áreas
+        const areasSearch = document.getElementById('areas-search');
+        if (areasSearch) {
+            areasSearch.addEventListener('input', () => {
+                this.filters.areas.search = areasSearch.value;
+                document.getElementById('areas-table-container').innerHTML = this.createAreasTableHTML();
+            });
+        }
+        
+        // Filtro de estado
+        const areasStatusFilter = document.getElementById('areas-status-filter');
+        if (areasStatusFilter) {
+            areasStatusFilter.addEventListener('change', () => {
+                document.getElementById('areas-table-container').innerHTML = this.createAreasTableHTML();
+            });
+        }
+    }
+
+    attachUsersEventListeners() {
+        // Búsqueda de usuarios
+        const usersSearch = document.getElementById('users-search');
+        if (usersSearch) {
+            usersSearch.addEventListener('input', () => {
+                this.filters.users.search = usersSearch.value;
+                document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            });
+        }
+        
+        // Filtros
+        const usersRoleFilter = document.getElementById('users-role-filter');
+        if (usersRoleFilter) {
+            usersRoleFilter.addEventListener('change', () => {
+                document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            });
+        }
+        
+        const usersStatusFilter = document.getElementById('users-status-filter');
+        if (usersStatusFilter) {
+            usersStatusFilter.addEventListener('change', () => {
+                document.getElementById('users-table-container').innerHTML = this.createUsersTableHTML();
+            });
+        }
+        
+        // Seleccionar todos
+        const selectAll = document.getElementById('select-all-users');
+        if (selectAll) {
+            selectAll.addEventListener('change', (e) => {
+                const checkboxes = document.querySelectorAll('.user-checkbox');
+                checkboxes.forEach(cb => cb.checked = e.target.checked);
+            });
+        }
+        
+        const selectAllHeader = document.getElementById('select-all-header');
+        if (selectAllHeader) {
+            selectAllHeader.addEventListener('change', (e) => {
+                const checkboxes = document.querySelectorAll('.user-checkbox');
+                checkboxes.forEach(cb => cb.checked = e.target.checked);
+                if (selectAll) selectAll.checked = e.target.checked;
+            });
+        }
+    }
+
+    attachPermissionsEventListeners() {
+        // Búsqueda de permisos
+        const permissionsSearch = document.getElementById('permissions-search');
+        if (permissionsSearch) {
+            permissionsSearch.addEventListener('input', () => {
+                this.filters.permissions.search = permissionsSearch.value;
+                document.getElementById('permissions-table-container').innerHTML = this.createPermissionsTableHTML();
+            });
+        }
+        
+        // Filtros
+        const permissionsAreaFilter = document.getElementById('permissions-area-filter');
+        if (permissionsAreaFilter) {
+            permissionsAreaFilter.addEventListener('change', () => {
+                document.getElementById('permissions-table-container').innerHTML = this.createPermissionsTableHTML();
+            });
+        }
+        
+        const permissionsRoleFilter = document.getElementById('permissions-role-filter');
+        if (permissionsRoleFilter) {
+            permissionsRoleFilter.addEventListener('change', () => {
+                document.getElementById('permissions-table-container').innerHTML = this.createPermissionsTableHTML();
+            });
+        }
+    }
+
+    // ========== MÉTODOS DE INICIALIZACIÓN Y LIMPIEZA ==========
+    
+    async init() {
+        try {
+            console.log('Inicializando AdminView...');
+            
+            // Verificar autenticación
+            const user = (await supabase.auth.getUser()).data.user;
+            if (!user) {
+                window.location.href = '/';
+                return;
+            }
+            
+            // Cargar datos iniciales
+            await this.loadInitialData();
+            
+            // Adjuntar event listeners
+            this.attachEventListeners();
+            
+            // Inicializar tooltips de Bootstrap si están disponibles
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            if (window.bootstrap && window.bootstrap.Tooltip) {
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new window.bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
+            
+            console.log('AdminView inicializado correctamente');
+            
+        } catch (error) {
+            console.error('Error al inicializar AdminView:', error);
+            UI.showToast('Error al inicializar el panel de administración', 'error');
+        }
+    }
+
+    destroy() {
+        console.log('Limpiando AdminView...');
+        
+        // Limpiar modales
+        const modals = ['modalArea', 'modalUsuario', 'modalAsignacion', 'modalBulkActions', 'modalExport'];
+        modals.forEach(modalId => {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement && window.bootstrap) {
+                const modalInstance = window.bootstrap.Modal.getInstance(modalElement);
+                if (modalInstance) {
+                    modalInstance.dispose();
+                }
+            }
+        });
+        
+        // Limpiar tooltips
+        const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+            tooltips.forEach(tooltip => {
+                const tooltipInstance = window.bootstrap.Tooltip.getInstance(tooltip);
+                if (tooltipInstance) {
+                    tooltipInstance.dispose();
+                }
+            });
+        }
+        
+        // Limpiar event listeners (si es necesario)
+        // Nota: Los event listeners inline se limpian automáticamente cuando se remueve el HTML
+        
+        console.log('AdminView limpiado correctamente');
+    }
+
+    // ========== MÉTODOS DE VALIDACIÓN ==========
+    
+    validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
+    validateClave(clave) {
+        const re = /^[A-Z0-9]+$/;
+        return re.test(clave);
+    }
+
+    validateHexColor(color) {
+        const re = /^#[0-9A-Fa-f]{6}$/;
+        return re.test(color);
+    }
+
+    // ========== MÉTODOS DE FORMATO ==========
+    
+    formatDate(date, format = 'short') {
+        if (!date) return 'N/A';
+        
+        const d = new Date(date);
+        const options = format === 'long' ? 
+            { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' } :
+            { year: 'numeric', month: '2-digit', day: '2-digit' };
+            
+        return d.toLocaleDateString('es-MX', options);
+    }
+
+    formatNumber(number) {
+        return new Intl.NumberFormat('es-MX').format(number);
+    }
+
+    // ========== MÉTODOS DE AYUDA Y DOCUMENTACIÓN ==========
+    
+    showHelp() {
+        const helpContent = `
+            <div class="accordion" id="helpAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#helpAreas">
+                            Gestión de Áreas
+                        </button>
+                    </h2>
+                    <div id="helpAreas" class="accordion-collapse collapse show" data-bs-parent="#helpAccordion">
+                        <div class="accordion-body">
+                            <p>Las áreas representan las divisiones organizacionales del sistema.</p>
+                            <ul>
+                                <li><strong>Crear:</strong> Click en "Nueva Área" y complete el formulario</li>
+                                <li><strong>Editar:</strong> Use el botón de editar en la tabla</li>
+                                <li><strong>Activar/Desactivar:</strong> Cambie el estado con el botón toggle</li>
+                                <li><strong>Eliminar:</strong> Solo áreas sin usuarios ni indicadores</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpUsers">
+                            Gestión de Usuarios
+                        </button>
+                    </h2>
+                    <div id="helpUsers" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                        <div class="accordion-body">
+                            <p>Administre los usuarios del sistema y sus permisos.</p>
+                            <ul>
+                                <li><strong>Invitar:</strong> Envíe invitaciones por email</li>
+                                <li><strong>Crear:</strong> Registre usuarios manualmente</li>
+                                <li><strong>Permisos:</strong> Configure qué puede hacer cada usuario</li>
+                                <li><strong>Roles:</strong> Asigne roles según la jerarquía organizacional</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpPermissions">
+                            Permisos y Asignaciones
+                        </button>
+                    </h2>
+                    <div id="helpPermissions" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                        <div class="accordion-body">
+                            <p>Vincule usuarios con áreas y defina sus permisos específicos.</p>
+                            <ul>
+                                <li><strong>Asignación Rápida:</strong> Use el formulario inline para asignaciones simples</li>
+                                <li><strong>Nueva Asignación:</strong> Para configuraciones más detalladas</li>
+                                <li><strong>Permisos:</strong> Capturar, Editar y Eliminar indicadores</li>
+                                <li><strong>Filtros:</strong> Encuentre asignaciones específicas rápidamente</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <h6>Atajos de Teclado</h6>
+                <ul class="list-unstyled">
+                    <li><kbd>Alt + A</kbd> - Ir a Áreas</li>
+                    <li><kbd>Alt + U</kbd> - Ir a Usuarios</li>
+                    <li><kbd>Alt + P</kbd> - Ir a Permisos</li>
+                    <li><kbd>Alt + N</kbd> - Nuevo (según sección)</li>
+                    <li><kbd>Alt + R</kbd> - Refrescar datos</li>
+                    <li><kbd>Alt + E</kbd> - Exportar datos</li>
+                </ul>
+            </div>
+        `;
+        
+        UI.showModal({
+            title: 'Ayuda - Panel de Administración',
+            content: helpContent,
+            size: 'lg'
+        });
+    }
+
+    // ========== ATAJOS DE TECLADO ==========
+    
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Alt + tecla
+            if (e.altKey) {
+                switch(e.key.toLowerCase()) {
+                    case 'a':
+                        e.preventDefault();
+                        this.switchSection('areas');
+                        break;
+                    case 'u':
+                        e.preventDefault();
+                        this.switchSection('users');
+                        break;
+                    case 'p':
+                        e.preventDefault();
+                        this.switchSection('permissions');
+                        break;
+                    case 'n':
+                        e.preventDefault();
+                        this.handleNewShortcut();
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        this.handleRefreshShortcut();
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        const exportModal = new bootstrap.Modal(document.getElementById('modalExport'));
+                        exportModal.show();
+                        break;
+                    case 'h':
+                        e.preventDefault();
+                        this.showHelp();
+                        break;
+                }
+            }
+        });
+    }
+
+    handleNewShortcut() {
+        switch(adminState.currentSection) {
+            case 'areas':
+                this.showAddAreaModal();
+                break;
+            case 'users':
+                this.showAddUserModal();
+                break;
+            case 'permissions':
+                this.showAddPermissionModal();
+                break;
+        }
+    }
+
+    handleRefreshShortcut() {
+        switch(adminState.currentSection) {
+            case 'areas':
+                this.handleRefreshAreas();
+                break;
+            case 'users':
+                this.handleRefreshUsers();
+                break;
+            case 'permissions':
+                this.handleRefreshPermissions();
+                break;
+        }
+    }
+}
+
+// ========== EXPORTACIÓN DEL MÓDULO ==========
+
+// Crear instancia singleton
+const adminView = new AdminView();
+
+// Hacer la instancia disponible globalmente para los event handlers inline
+window.adminView = adminView;
+
+// Exportar la instancia
+export default adminView;
+
+// También exportar la clase por si se necesita crear múltiples instancias
+export { AdminView };
+
+// ========== INICIALIZACIÓN AUTOMÁTICA ==========
+
+// Si el módulo se carga en la página de administración, inicializar automáticamente
+document.addEventListener('DOMContentLoaded', () => {
+    // Verificar si estamos en la página de administración
+    if (window.location.hash === '#/admin' || 
+        window.location.pathname.includes('admin') ||
+        document.getElementById('admin-container')) {
+        
+        adminView.init().catch(console.error);
+        adminView.setupKeyboardShortcuts();
+    }
+});
+
+// Limpiar al cambiar de página (si se usa un router)
+window.addEventListener('hashchange', () => {
+    if (!window.location.hash.includes('admin')) {
+        adminView.destroy();
+    } else if (window.location.hash === '#/admin') {
+        adminView.init().catch(console.error);
+    }
+});
+
+// Limpiar al descargar la página
+window.addEventListener('beforeunload', () => {
+    adminView.destroy();
+});
+
+console.log('Módulo admin.js cargado correctamente');
+
+// ========== FIN DEL ARCHIVO admin.js ==========
