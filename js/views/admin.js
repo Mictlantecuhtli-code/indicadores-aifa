@@ -3094,11 +3094,8 @@ const adminView = new AdminView();
 // Hacer la instancia disponible globalmente para los event handlers inline
 window.adminView = adminView;
 
-// Exportar la instancia
+// Exportar solo la instancia como default
 export default adminView;
-
-// También exportar la clase por si se necesita crear múltiples instancias
-export { AdminView };
 
 // ========== INICIALIZACIÓN AUTOMÁTICA ==========
 
