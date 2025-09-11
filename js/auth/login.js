@@ -356,13 +356,39 @@ async function handleLogin(e) {
         loginState.loginAttempts = 0;
         localStorage.removeItem('login_attempts');
         
-        // Mostrar mensaje de éxito
-        showToast(MESSAGES.success.login, 'success');
-        
-        // Redirigir después de un breve delay
-        setTimeout(() => {
-            window.router.navigateTo('/', {}, true);
-        }, 1000);
+        // NUEVO: Verificar el rol del usuario para redirigir correctamente
+        try {
+            const { data: profile } = await supabase
+                .from('usuarios')
+                .select('*')
+                .eq('email', email.toLowerCase())
+                .single();
+            
+            console.log('Perfil del usuario después del login:', profile);
+            console.log('Rol detectado:', profile?.rol);
+            
+            // Mostrar mensaje de éxito
+            showToast(MESSAGES.success.login, 'success');
+            
+            // Redirigir según el rol
+            setTimeout(() => {
+                if (profile?.rol === 'admin') {
+                    console.log('Usuario es admin, redirigiendo a /admin');
+                    window.router.navigateTo('/admin', {}, true);
+                } else {
+                    console.log('Usuario NO es admin, redirigiendo a home');
+                    window.router.navigateTo('/', {}, true);
+                }
+            }, 1000);
+            
+        } catch (profileError) {
+            console.error('Error al obtener perfil, redirigiendo a home:', profileError);
+            // Si hay error, redirigir a home por defecto
+            showToast(MESSAGES.success.login, 'success');
+            setTimeout(() => {
+                window.router.navigateTo('/', {}, true);
+            }, 1000);
+        }
         
     } catch (error) {
         console.error('❌ Error en login:', error);
