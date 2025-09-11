@@ -9,23 +9,30 @@ import {
     showModal, 
     showLoading, 
     hideLoading, 
-    showConfirmModal,
-    validateForm,
-    getFormData
+    showConfirmModal 
 } from '../lib/ui.js';
 
 // Crear objeto UI para mantener compatibilidad con el código
 const UI = {
     showToast,
     showModal,
-    alert: (message, type = 'info') => {
-        // Crear una función alert usando showToast para compatibilidad
-        showToast(message, type);
-        return `<div class="alert alert-${type}">${message}</div>`;
-    },
     showLoading,
     hideLoading,
-    showConfirmModal
+    showConfirmModal,
+    // Crear función alert que retorna HTML de alerta
+    alert: (message, type = 'danger') => {
+        const alertTypes = {
+            'danger': 'alert-danger bg-red-100 text-red-700 border-red-400',
+            'warning': 'alert-warning bg-yellow-100 text-yellow-700 border-yellow-400',
+            'info': 'alert-info bg-blue-100 text-blue-700 border-blue-400',
+            'success': 'alert-success bg-green-100 text-green-700 border-green-400'
+        };
+        return `
+            <div class="alert ${alertTypes[type]} p-4 rounded-lg border">
+                <p>${message}</p>
+            </div>
+        `;
+    }
 };
 
 // Estado del panel de administración
@@ -3117,43 +3124,36 @@ const adminView = new AdminView();
 window.adminView = adminView;
 
 // Exportar objeto con método render que el router espera
-export default {
+const adminModule = {
     render: async (container, params, query) => {
-        // Renderizar la vista y adjuntar event listeners
-        container.innerHTML = await adminView.render();
-        adminView.attachEventListeners();
-        return container.innerHTML;
+        try {
+            // Obtener el HTML de la vista
+            const html = await adminView.render();
+            
+            // Insertar el HTML en el contenedor
+            container.innerHTML = html;
+            
+            // Adjuntar event listeners después de renderizar
+            setTimeout(() => {
+                adminView.attachEventListeners();
+                adminView.init();
+            }, 100);
+            
+            return true;
+        } catch (error) {
+            console.error('Error en render de admin:', error);
+            container.innerHTML = UI.alert('Error al cargar el panel de administración', 'danger');
+            return false;
+        }
     }
 };
 
+// Exportar el módulo
+export default adminModule;
+
 // ========== INICIALIZACIÓN AUTOMÁTICA ==========
 
-// Si el módulo se carga en la página de administración, inicializar automáticamente
-document.addEventListener('DOMContentLoaded', () => {
-    // Verificar si estamos en la página de administración
-    if (window.location.hash === '#/admin' || 
-        window.location.pathname.includes('admin') ||
-        document.getElementById('admin-container')) {
-        
-        adminView.init().catch(console.error);
-        adminView.setupKeyboardShortcuts();
-    }
-});
-
-// Limpiar al cambiar de página (si se usa un router)
-window.addEventListener('hashchange', () => {
-    if (!window.location.hash.includes('admin')) {
-        adminView.destroy();
-    } else if (window.location.hash === '#/admin') {
-        adminView.init().catch(console.error);
-    }
-});
-
-// Limpiar al descargar la página
-window.addEventListener('beforeunload', () => {
-    adminView.destroy();
-});
-
-console.log('Módulo admin.js cargado correctamente');
+// Los event listeners del DOM ya no son necesarios aquí porque 
+// el método render se encarga de la inicialización
 
 // ========== FIN DEL ARCHIVO admin.js ==========
