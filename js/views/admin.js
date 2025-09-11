@@ -1,2026 +1,1234 @@
-// =====================================================
-// PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Estado, renderizado y CRUD de áreas
-// =====================================================
+// js/views/admin.js
+import { supabase } from '../lib/supa.js';
+import { UI } from '../lib/ui.js';
 
-import { DEBUG, ROLES, VALIDATION } from '../config.js';
-import { selectData, insertData, updateData, deleteData, appState, getCurrentProfile } from '../lib/supa.js';
-import { showToast, showLoading, hideLoading, showModal, showConfirmModal, validateForm, getFormData, createTable } from '../lib/ui.js';
+export class AdminView {
+    constructor() {
+        this.areas = [];
+        this.usuarios = [];
+        this.indicadores = [];
+        this.currentArea = null;
+        this.currentUsuario = null;
+    }
 
-// Estado del panel de administración
-const adminState = {
-    userProfile: null,
-    currentSection: 'areas', // 'areas', 'users', 'permissions'
-    areas: [],
-    usuarios: [],
-    permisos: [],
-    searchTerm: '',
-    editingItem: null,
-    loading: false
-};
+    async render() {
+        const user = (await supabase.auth.getUser()).data.user;
+        if (!user) {
+            window.location.href = '/';
+            return '';
+        }
 
-// =====================================================
-// RENDERIZADO DE LA VISTA PRINCIPAL
-// =====================================================
+        // Verificar si es admin
+        const { data: profile } = await supabase
+            .from('usuarios')
+            .select('rol')
+            .eq('id', user.id)
+            .single();
 
-/**
- * Renderizar panel de administración
- */
-export async function render(container, params = {}, query = {}) {
-    try {
-        if (DEBUG.enabled) console.log('⚙️ Renderizando panel de administración');
-        
-        showLoading('Cargando panel de administración...');
-        
-        // Obtener perfil del usuario
-        adminState.userProfile = await getCurrentProfile();
-        if (!adminState.userProfile) {
-            throw new Error('No se pudo obtener el perfil del usuario');
+        if (profile?.rol !== 'admin') {
+            return UI.alert('No tienes permisos para acceder a esta sección', 'danger');
         }
-        
-        // Verificar permisos de administrador
-        if (adminState.userProfile.rol_principal !== 'ADMIN') {
-            throw new Error('No tiene permisos para acceder al panel de administración');
-        }
-        
-        // Procesar sección desde query
-        if (query.section && ['areas', 'users', 'permissions'].includes(query.section)) {
-            adminState.currentSection = query.section;
-        }
-        
-        // Cargar datos iniciales
-        await loadInitialData();
-        
-        // Renderizar HTML
-        container.innerHTML = createAdminHTML();
-        
-        // Configurar event listeners
-        setupEventListeners();
-        
-        // Cargar contenido de la sección actual
-        await loadSectionContent();
-        
-        hideLoading();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-        
-        if (DEBUG.enabled) console.log('✅ Panel de administración renderizado correctamente');
-        
-    } catch (error) {
-        console.error('❌ Error al renderizar panel de administración:', error);
-        hideLoading();
-        
-        let errorMessage = 'Error al cargar el panel de administración';
-        
-        if (error.message.includes('permisos')) {
-            errorMessage = 'No tiene permisos para acceder al panel de administración';
-        }
-        
-        container.innerHTML = `
-            <div class="text-center py-12">
-                <i data-lucide="shield-x" class="w-16 h-16 text-red-400 mx-auto mb-4"></i>
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">${errorMessage}</h2>
-                <p class="text-gray-600 mb-6">
-                    ${error.message.includes('permisos') ? 
-                        'Solo los administradores pueden acceder a esta sección.' :
-                        'Ha ocurrido un error al cargar el panel de administración.'
-                    }
-                </p>
-                <div class="space-x-3">
-                    <button onclick="window.router.goBack()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                        Volver
+
+        await this.loadData();
+
+        return `
+            <div class="container-fluid px-4">
+                <h1 class="mt-4">Panel de Administración</h1>
+                <ol class="breadcrumb mb-4">
+                    <li class="breadcrumb-item"><a href="#/">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Administración</li>
+                </ol>
+
+                <!-- Tarjetas de estadísticas -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card bg-primary text-white mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col">
+                                        <div class="text-white-50 small">Total Áreas</div>
+                                        <div class="h4">${this.areas.length}</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-building fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card bg-success text-white mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col">
+                                        <div class="text-white-50 small">Total Usuarios</div>
+                                        <div class="h4">${this.usuarios.length}</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-users fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card bg-info text-white mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col">
+                                        <div class="text-white-50 small">Total Indicadores</div>
+                                        <div class="h4">${this.indicadores.length}</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-chart-line fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card bg-warning text-white mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col">
+                                        <div class="text-white-50 small">Asignaciones</div>
+                                        <div class="h4">${this.getAsignacionesCount()}</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-tasks fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs de gestión -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#areas">
+                                    <i class="fas fa-building"></i> Gestión de Áreas
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#usuarios">
+                                    <i class="fas fa-users"></i> Gestión de Usuarios
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#permisos">
+                                    <i class="fas fa-lock"></i> Permisos y Asignaciones
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            ${this.renderAreasTab()}
+                            ${this.renderUsuariosTab()}
+                            ${this.renderPermisosTab()}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modales -->
+            ${this.renderModalArea()}
+            ${this.renderModalUsuario()}
+            ${this.renderModalAsignacion()}
+        `;
+    }
+
+    async loadData() {
+        // Cargar áreas
+        const { data: areas } = await supabase
+            .from('areas')
+            .select('*')
+            .order('nombre');
+        this.areas = areas || [];
+
+        // Cargar usuarios con sus áreas
+        const { data: usuarios } = await supabase
+            .from('usuarios')
+            .select(`
+                *,
+                areas (
+                    id,
+                    nombre
+                )
+            `)
+            .order('nombre');
+        this.usuarios = usuarios || [];
+
+        // Cargar indicadores
+        const { data: indicadores } = await supabase
+            .from('indicadores')
+            .select('*')
+            .order('nombre');
+        this.indicadores = indicadores || [];
+    }
+
+    getAsignacionesCount() {
+        return this.usuarios.filter(u => u.area_id).length;
+    }
+
+    attachEventListeners() {
+        // Event listeners para áreas
+        document.querySelectorAll('.btn-edit-area').forEach(btn => {
+            btn.addEventListener('click', (e) => this.editArea(e.target.dataset.id));
+        });
+
+        document.querySelectorAll('.btn-delete-area').forEach(btn => {
+            btn.addEventListener('click', (e) => this.deleteArea(e.target.dataset.id));
+        });
+
+        document.getElementById('btnNuevaArea')?.addEventListener('click', () => {
+            this.currentArea = null;
+            this.showModalArea();
+        });
+
+        // Event listeners para usuarios
+        document.querySelectorAll('.btn-edit-usuario').forEach(btn => {
+            btn.addEventListener('click', (e) => this.editUsuario(e.target.dataset.id));
+        });
+
+        document.querySelectorAll('.btn-toggle-usuario').forEach(btn => {
+            btn.addEventListener('click', (e) => this.toggleUsuario(e.target.dataset.id));
+        });
+
+        document.getElementById('btnNuevoUsuario')?.addEventListener('click', () => {
+            this.currentUsuario = null;
+            this.showModalUsuario();
+        });
+
+        // Event listeners para asignaciones
+        document.getElementById('btnNuevaAsignacion')?.addEventListener('click', () => {
+            this.showModalAsignacion();
+        });
+
+        // Formularios
+        document.getElementById('formArea')?.addEventListener('submit', (e) => this.saveArea(e));
+        document.getElementById('formUsuario')?.addEventListener('submit', (e) => this.saveUsuario(e));
+        document.getElementById('formAsignacion')?.addEventListener('submit', (e) => this.saveAsignacion(e));
+    }
+}
+renderAreasTab() {
+        return `
+            <div class="tab-pane fade show active" id="areas" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="mb-0">Gestión de Áreas</h5>
+                    <button class="btn btn-primary" id="btnNuevaArea">
+                        <i class="fas fa-plus"></i> Nueva Área
                     </button>
-                    <button onclick="window.router.navigateTo('/')" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
-                        Ir al inicio
-                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Clave</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Color</th>
+                                <th>Estado</th>
+                                <th>Indicadores</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${this.areas.map(area => `
+                                <tr>
+                                    <td>${area.clave}</td>
+                                    <td>${area.nombre}</td>
+                                    <td>${area.descripcion || 'Sin descripción'}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="color-badge" style="background-color: ${area.color_hex}; width: 20px; height: 20px; border-radius: 4px; margin-right: 8px;"></div>
+                                            ${area.color_hex}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-${area.estado === 'ACTIVO' ? 'success' : 'secondary'}">
+                                            ${area.estado}
+                                        </span>
+                                    </td>
+                                    <td>${area.indicadores_count || 0}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary btn-edit-area" data-id="${area.id}" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-delete-area" data-id="${area.id}" title="Eliminar">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${this.areas.length === 0 ? `
+                        <div class="text-center py-4">
+                            <p class="text-muted">No hay áreas registradas</p>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         `;
-        
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
     }
-}
 
-/**
- * Crear HTML principal del panel de administración
- */
-function createAdminHTML() {
-    return `
-        <div class="space-y-6">
-            <!-- Header -->
-            <div class="bg-gradient-to-r from-purple-600 to-purple-800 rounded-lg p-6 text-white">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-2xl font-bold mb-2">Panel de Administración</h1>
-                        <p class="text-purple-100">
-                            Gestión del sistema AIFA - ${adminState.userProfile.nombre_completo}
-                        </p>
-                    </div>
-                    <div class="flex items-center space-x-3">
-                        <div class="bg-white bg-opacity-20 rounded-lg px-4 py-2">
-                            <div class="text-sm font-medium">Rol: Administrador</div>
-                            <div class="text-xs text-purple-200">Acceso completo</div>
-                        </div>
-                        <button 
-                            id="admin-help-btn"
-                            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-colors"
-                            title="Ayuda"
-                        >
-                            <i data-lucide="help-circle" class="w-5 h-5"></i>
-                        </button>
-                    </div>
+    renderUsuariosTab() {
+        return `
+            <div class="tab-pane fade" id="usuarios" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="mb-0">Gestión de Usuarios</h5>
+                    <button class="btn btn-primary" id="btnNuevoUsuario">
+                        <i class="fas fa-user-plus"></i> Nuevo Usuario
+                    </button>
                 </div>
-            </div>
-            
-            <!-- Navegación de secciones -->
-            <div class="bg-white rounded-lg shadow-sm border">
-                <div class="border-b border-gray-200">
-                    <nav class="flex space-x-8 px-6" aria-label="Secciones">
-                        <button 
-                            id="section-areas"
-                            class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('areas')"
-                        >
-                            <i data-lucide="folder" class="w-4 h-4 inline mr-2"></i>
-                            Gestión de Áreas
-                        </button>
-                        <button 
-                            id="section-users"
-                            class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('users')"
-                        >
-                            <i data-lucide="users" class="w-4 h-4 inline mr-2"></i>
-                            Gestión de Usuarios
-                        </button>
-                        <button 
-                            id="section-permissions"
-                            class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('permissions')"
-                        >
-                            <i data-lucide="shield" class="w-4 h-4 inline mr-2"></i>
-                            Permisos y Asignaciones
-                        </button>
-                    </nav>
-                </div>
-                
-                <!-- Contenido de la sección -->
-                <div class="p-6">
-                    <div id="section-content">
-                        <!-- El contenido se carga dinámicamente -->
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Información del sistema -->
-            ${createSystemInfoHTML()}
-        </div>
-    `;
-}
 
-/**
- * Crear HTML de información del sistema
- */
-function createSystemInfoHTML() {
-    return `
-        <div class="bg-white rounded-lg shadow-sm border p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <i data-lucide="info" class="w-5 h-5 mr-2 text-purple-600"></i>
-                Información del sistema
-            </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-purple-600 mb-1" id="total-areas-count">
-                        ${adminState.areas.length}
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="searchUsuarios" placeholder="Buscar usuarios...">
                     </div>
-                    <div class="text-sm text-gray-600">Áreas totales</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-blue-600 mb-1" id="total-users-count">
-                        ${adminState.usuarios.length}
-                    </div>
-                    <div class="text-sm text-gray-600">Usuarios registrados</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-green-600 mb-1" id="total-permissions-count">
-                        ${adminState.permisos.length}
-                    </div>
-                    <div class="text-sm text-gray-600">Asignaciones activas</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-orange-600 mb-1">
-                        ${Object.keys(ROLES).length}
-                    </div>
-                    <div class="text-sm text-gray-600">Roles del sistema</div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// =====================================================
-// GESTIÓN DE ÁREAS
-// =====================================================
-
-/**
- * Crear contenido de la sección de áreas
- */
-function createAreasContentHTML() {
-    return `
-        <div class="space-y-6">
-            <!-- Header de áreas -->
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Gestión de Áreas</h3>
-                    <p class="text-sm text-gray-600 mt-1">
-                        Administre las áreas organizacionales del sistema
-                    </p>
-                </div>
-                
-                <button 
-                    id="add-area-btn"
-                    class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                >
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Nueva área</span>
-                </button>
-            </div>
-            
-            <!-- Búsqueda y filtros -->
-            <div class="bg-gray-50 rounded-lg p-4">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-                    <div class="flex items-center space-x-4">
-                        <div class="relative">
-                            <input 
-                                type="text" 
-                                id="areas-search"
-                                placeholder="Buscar áreas por nombre o clave..."
-                                class="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            >
-                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
-                        </div>
-                        
-                        <select 
-                            id="areas-status-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
-                            <option value="all">Todos los estados</option>
-                            <option value="ACTIVO">Solo activas</option>
-                            <option value="INACTIVO">Solo inactivas</option>
+                    <div class="col-md-3">
+                        <select class="form-select" id="filterRol">
+                            <option value="">Todos los roles</option>
+                            <option value="admin">Administrador</option>
+                            <option value="director">Director</option>
+                            <option value="subdirector">Subdirector</option>
+                            <option value="jefe">Jefe de Área</option>
+                            <option value="capturista">Capturista</option>
                         </select>
                     </div>
-                    
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm text-gray-600">
-                            ${adminState.areas.length} área${adminState.areas.length !== 1 ? 's' : ''} total${adminState.areas.length !== 1 ? 'es' : ''}
-                        </span>
-                        <button 
-                            id="refresh-areas-btn"
-                            class="bg-white border border-gray-300 rounded px-3 py-2 text-sm hover:bg-gray-50"
-                            title="Actualizar lista"
-                        >
-                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        </button>
+                    <div class="col-md-3">
+                        <select class="form-select" id="filterEstado">
+                            <option value="">Todos los estados</option>
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Tabla de áreas -->
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div id="areas-table-container">
-                    ${createAreasTableHTML()}
-                </div>
-            </div>
-        </div>
-    `;
-}
 
-/**
- * Crear tabla de áreas
- */
-function createAreasTableHTML() {
-    if (adminState.areas.length === 0) {
-        return `
-            <div class="text-center py-12">
-                <i data-lucide="folder-plus" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">No hay áreas configuradas</h3>
-                <p class="text-gray-600 mb-4">Comience creando la primera área del sistema.</p>
-                <button 
-                    onclick="showAddAreaModal()"
-                    class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
-                >
-                    Crear primera área
-                </button>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Nombre</th>
+                                <th>Área</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Último Acceso</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usuariosTableBody">
+                            ${this.usuarios.map(usuario => `
+                                <tr>
+                                    <td>${usuario.email}</td>
+                                    <td>${usuario.nombre || 'Sin nombre'}</td>
+                                    <td>
+                                        ${usuario.areas ? `
+                                            <span class="badge" style="background-color: ${usuario.areas.color_hex || '#6c757d'}">
+                                                ${usuario.areas.nombre}
+                                            </span>
+                                        ` : 'Sin asignar'}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-${this.getRoleBadgeColor(usuario.rol)}">
+                                            ${this.getRoleName(usuario.rol)}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-${usuario.activo ? 'success' : 'secondary'}">
+                                            ${usuario.activo ? 'Activo' : 'Inactivo'}
+                                        </span>
+                                    </td>
+                                    <td>${usuario.ultimo_acceso ? new Date(usuario.ultimo_acceso).toLocaleDateString() : 'Nunca'}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary btn-edit-usuario" data-id="${usuario.id}" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-warning btn-toggle-usuario" data-id="${usuario.id}" title="${usuario.activo ? 'Desactivar' : 'Activar'}">
+                                                <i class="fas fa-${usuario.activo ? 'lock' : 'unlock'}"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${this.usuarios.length === 0 ? `
+                        <div class="text-center py-4">
+                            <p class="text-muted">No hay usuarios registrados</p>
+                        </div>
+                    ` : ''}
+                </div>
             </div>
         `;
     }
-    
-    const filteredAreas = getFilteredAreas();
-    
-    return `
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Área
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Clave
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Estado
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Indicadores
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Usuarios asignados
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fecha creación
-                        </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acciones
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    ${filteredAreas.map((area, index) => createAreaRowHTML(area, index)).join('')}
-                </tbody>
-            </table>
-        </div>
+
+    renderPermisosTab() {
+        const usuariosConPermisos = this.usuarios.filter(u => u.area_id);
         
-        ${filteredAreas.length === 0 && adminState.areas.length > 0 ? `
-            <div class="text-center py-8">
-                <i data-lucide="search-x" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
-                <p class="text-gray-500">No se encontraron áreas que coincidan con los filtros</p>
+        return `
+            <div class="tab-pane fade" id="permisos" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="mb-0">Permisos y Asignaciones</h5>
+                    <button class="btn btn-primary" id="btnNuevaAsignacion">
+                        <i class="fas fa-user-tag"></i> Nueva Asignación
+                    </button>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Resumen de Asignaciones</h6>
+                                <div class="row text-center">
+                                    <div class="col">
+                                        <div class="h3">${usuariosConPermisos.length}</div>
+                                        <small class="text-muted">Usuarios Asignados</small>
+                                    </div>
+                                    <div class="col">
+                                        <div class="h3">${this.areas.filter(a => a.estado === 'ACTIVO').length}</div>
+                                        <small class="text-muted">Áreas Activas</small>
+                                    </div>
+                                    <div class="col">
+                                        <div class="h3">${this.usuarios.filter(u => !u.area_id).length}</div>
+                                        <small class="text-muted">Sin Asignar</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Distribución por Rol</h6>
+                                <div class="d-flex justify-content-around">
+                                    ${this.getRoleDistribution().map(item => `
+                                        <div class="text-center">
+                                            <div class="h4">${item.count}</div>
+                                            <small class="text-muted">${item.role}</small>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Área</th>
+                                <th>Rol</th>
+                                <th>Permisos</th>
+                                <th>Fecha Asignación</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${usuariosConPermisos.map(usuario => `
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>${usuario.nombre || usuario.email}</strong><br>
+                                            <small class="text-muted">${usuario.email}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        ${usuario.areas ? `
+                                            <span class="badge" style="background-color: ${usuario.areas.color_hex || '#6c757d'}">
+                                                ${usuario.areas.nombre}
+                                            </span>
+                                        ` : '-'}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-${this.getRoleBadgeColor(usuario.rol)}">
+                                            ${this.getRoleName(usuario.rol)}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        ${this.renderPermisos(usuario)}
+                                    </td>
+                                    <td>${usuario.fecha_asignacion ? new Date(usuario.fecha_asignacion).toLocaleDateString() : '-'}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary btn-edit-permisos" data-id="${usuario.id}" title="Editar permisos">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-remove-asignacion" data-id="${usuario.id}" title="Remover asignación">
+                                                <i class="fas fa-user-times"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${usuariosConPermisos.length === 0 ? `
+                        <div class="text-center py-4">
+                            <p class="text-muted">No hay usuarios asignados a áreas</p>
+                        </div>
+                    ` : ''}
+                </div>
             </div>
-        ` : ''}
-    `;
-}
+        `;
+    }
+// ========== MÉTODOS AUXILIARES ==========
+    getRoleBadgeColor(rol) {
+        const colors = {
+            'admin': 'danger',
+            'director': 'primary',
+            'subdirector': 'info',
+            'jefe': 'success',
+            'capturista': 'secondary'
+        };
+        return colors[rol] || 'secondary';
+    }
 
-/**
- * Crear fila de área en la tabla
- */
-function createAreaRowHTML(area, index) {
-    const indicadoresCount = area.total_indicadores || 0;
-    const usuariosCount = area.usuarios_asignados || 0;
-    
-    return `
-        <tr class="hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}">
-            <td class="px-6 py-4">
-                <div class="flex items-center">
-                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold mr-3"
-                         style="background-color: ${area.color_hex || '#6B7280'}">
-                        ${area.clave.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                        <div class="text-sm font-medium text-gray-900">${area.nombre}</div>
-                        ${area.descripcion ? `
-                            <div class="text-sm text-gray-500 max-w-xs truncate">${area.descripcion}</div>
-                        ` : ''}
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm font-mono text-gray-900">${area.clave}</span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    area.estado === 'ACTIVO' ? 
-                    'bg-green-100 text-green-800' : 
-                    'bg-red-100 text-red-800'
-                }">
-                    ${area.estado === 'ACTIVO' ? 'Activa' : 'Inactiva'}
-                </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${indicadoresCount} indicador${indicadoresCount !== 1 ? 'es' : ''}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${usuariosCount} usuario${usuariosCount !== 1 ? 's' : ''}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${new Date(area.fecha_creacion).toLocaleDateString('es-MX')}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <div class="flex items-center justify-end space-x-2">
-                    <button 
-                        onclick="viewAreaDetails('${area.id}')"
-                        class="text-purple-600 hover:text-purple-900 transition-colors"
-                        title="Ver detalles"
-                    >
-                        <i data-lucide="eye" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="editArea('${area.id}')"
-                        class="text-blue-600 hover:text-blue-900 transition-colors"
-                        title="Editar área"
-                    >
-                        <i data-lucide="edit" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="toggleAreaStatus('${area.id}', '${area.estado}')"
-                        class="text-yellow-600 hover:text-yellow-900 transition-colors"
-                        title="${area.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} área"
-                    >
-                        <i data-lucide="${area.estado === 'ACTIVO' ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="deleteArea('${area.id}', '${area.nombre}')"
-                        class="text-red-600 hover:text-red-900 transition-colors"
-                        title="Eliminar área"
-                    >
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `;
-}
+    getRoleName(rol) {
+        const names = {
+            'admin': 'Administrador',
+            'director': 'Director',
+            'subdirector': 'Subdirector',
+            'jefe': 'Jefe de Área',
+            'capturista': 'Capturista'
+        };
+        return names[rol] || rol;
+    }
 
-// =====================================================
-// CARGA DE DATOS
-// =====================================================
+    getRoleDistribution() {
+        const distribution = {
+            'Administrador': 0,
+            'Director': 0,
+            'Subdirector': 0,
+            'Jefe': 0,
+            'Capturista': 0
+        };
 
-/**
- * Cargar datos iniciales del panel
- */
-async function loadInitialData() {
-    try {
-        await Promise.all([
-            loadAreas(),
-            loadUsuarios(),
-            loadPermisos()
-        ]);
+        this.usuarios.forEach(usuario => {
+            const roleName = this.getRoleName(usuario.rol);
+            if (distribution.hasOwnProperty(roleName)) {
+                distribution[roleName]++;
+            }
+        });
+
+        return Object.entries(distribution).map(([role, count]) => ({ role, count }));
+    }
+
+    renderPermisos(usuario) {
+        const permisos = [];
+        if (usuario.puede_capturar) permisos.push('<span class="badge bg-success">Capturar</span>');
+        if (usuario.puede_editar) permisos.push('<span class="badge bg-warning">Editar</span>');
+        if (usuario.puede_eliminar) permisos.push('<span class="badge bg-danger">Eliminar</span>');
         
-        if (DEBUG.enabled) {
-            console.log('📊 Datos del panel cargados:', {
-                areas: adminState.areas.length,
-                usuarios: adminState.usuarios.length,
-                permisos: adminState.permisos.length
+        return permisos.length > 0 ? permisos.join(' ') : '<span class="text-muted">Sin permisos especiales</span>';
+    }
+
+    // ========== MODALES ==========
+    
+    // Modal de Área
+    renderModalArea() {
+        return `
+            <div class="modal fade" id="modalArea" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalAreaTitle">Nueva Área</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form id="formArea">
+                            <div class="modal-body">
+                                <input type="hidden" id="areaId">
+                                <div class="mb-3">
+                                    <label for="areaClave" class="form-label">Clave *</label>
+                                    <input type="text" class="form-control" id="areaClave" required 
+                                           maxlength="10" pattern="[A-Z0-9]+" 
+                                           placeholder="Ej: DIR01">
+                                    <div class="form-text">Solo mayúsculas y números, máximo 10 caracteres</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="areaNombre" class="form-label">Nombre *</label>
+                                    <input type="text" class="form-control" id="areaNombre" required 
+                                           maxlength="100" placeholder="Ej: Dirección General">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="areaDescripcion" class="form-label">Descripción</label>
+                                    <textarea class="form-control" id="areaDescripcion" rows="3" 
+                                              maxlength="500" placeholder="Descripción del área (opcional)"></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="areaColor" class="form-label">Color *</label>
+                                    <div class="input-group">
+                                        <input type="color" class="form-control form-control-color" 
+                                               id="areaColor" value="#1e40af" required>
+                                        <input type="text" class="form-control" id="areaColorHex" 
+                                               value="#1e40af" pattern="^#[0-9A-Fa-f]{6}$" required>
+                                    </div>
+                                    <div class="form-text">Seleccione un color para identificar el área</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="areaEstado" class="form-label">Estado</label>
+                                    <select class="form-select" id="areaEstado">
+                                        <option value="ACTIVO">Activo</option>
+                                        <option value="INACTIVO">Inactivo</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Guardar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Modal de Usuario
+    renderModalUsuario() {
+        return `
+            <div class="modal fade" id="modalUsuario" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalUsuarioTitle">Nuevo Usuario</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form id="formUsuario">
+                            <div class="modal-body">
+                                <input type="hidden" id="usuarioId">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="usuarioEmail" class="form-label">Email *</label>
+                                            <input type="email" class="form-control" id="usuarioEmail" required 
+                                                   placeholder="usuario@ejemplo.com">
+                                            <div class="form-text">El email será el identificador único</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="usuarioNombre" class="form-label">Nombre Completo</label>
+                                            <input type="text" class="form-control" id="usuarioNombre" 
+                                                   maxlength="200" placeholder="Nombre y apellidos">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="usuarioArea" class="form-label">Área</label>
+                                            <select class="form-select" id="usuarioArea">
+                                                <option value="">Sin asignar</option>
+                                                ${this.areas.filter(a => a.estado === 'ACTIVO').map(area => 
+                                                    `<option value="${area.id}">${area.nombre}</option>`
+                                                ).join('')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="usuarioRol" class="form-label">Rol *</label>
+                                            <select class="form-select" id="usuarioRol" required>
+                                                <option value="">Seleccione un rol</option>
+                                                <option value="admin">Administrador</option>
+                                                <option value="director">Director</option>
+                                                <option value="subdirector">Subdirector</option>
+                                                <option value="jefe">Jefe de Área</option>
+                                                <option value="capturista">Capturista</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Permisos Especiales</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="usuarioPuedeCapturar" checked>
+                                        <label class="form-check-label" for="usuarioPuedeCapturar">
+                                            Puede capturar indicadores
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="usuarioPuedeEditar">
+                                        <label class="form-check-label" for="usuarioPuedeEditar">
+                                            Puede editar indicadores
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="usuarioPuedeEliminar">
+                                        <label class="form-check-label" for="usuarioPuedeEliminar">
+                                            Puede eliminar indicadores
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="usuarioEstado" class="form-label">Estado</label>
+                                    <select class="form-select" id="usuarioEstado">
+                                        <option value="true">Activo</option>
+                                        <option value="false">Inactivo</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Guardar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Modal de Asignación
+    renderModalAsignacion() {
+        return `
+            <div class="modal fade" id="modalAsignacion" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Nueva Asignación</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form id="formAsignacion">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="asignacionUsuario" class="form-label">Usuario *</label>
+                                    <select class="form-select" id="asignacionUsuario" required>
+                                        <option value="">Seleccione un usuario</option>
+                                        ${this.usuarios.filter(u => !u.area_id).map(usuario => 
+                                            `<option value="${usuario.id}">${usuario.nombre || usuario.email}</option>`
+                                        ).join('')}
+                                    </select>
+                                    <div class="form-text">Solo se muestran usuarios sin área asignada</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="asignacionArea" class="form-label">Área *</label>
+                                    <select class="form-select" id="asignacionArea" required>
+                                        <option value="">Seleccione un área</option>
+                                        ${this.areas.filter(a => a.estado === 'ACTIVO').map(area => 
+                                            `<option value="${area.id}">${area.nombre}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="asignacionRol" class="form-label">Rol en el Área *</label>
+                                    <select class="form-select" id="asignacionRol" required>
+                                        <option value="">Seleccione un rol</option>
+                                        <option value="jefe">Jefe de Área</option>
+                                        <option value="capturista">Capturista</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Permisos en el Área</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="asignacionCapturar" checked>
+                                        <label class="form-check-label" for="asignacionCapturar">
+                                            Puede capturar indicadores del área
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="asignacionEditar">
+                                        <label class="form-check-label" for="asignacionEditar">
+                                            Puede editar indicadores del área
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="asignacionEliminar">
+                                        <label class="form-check-label" for="asignacionEliminar">
+                                            Puede eliminar indicadores del área
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-user-tag"></i> Asignar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+// ========== EVENT HANDLERS - ÁREAS ==========
+    
+    showModalArea() {
+        const modal = new bootstrap.Modal(document.getElementById('modalArea'));
+        const modalTitle = document.getElementById('modalAreaTitle');
+        
+        if (this.currentArea) {
+            // Modo edición
+            modalTitle.textContent = 'Editar Área';
+            document.getElementById('areaId').value = this.currentArea.id;
+            document.getElementById('areaClave').value = this.currentArea.clave;
+            document.getElementById('areaNombre').value = this.currentArea.nombre;
+            document.getElementById('areaDescripcion').value = this.currentArea.descripcion || '';
+            document.getElementById('areaColor').value = this.currentArea.color_hex;
+            document.getElementById('areaColorHex').value = this.currentArea.color_hex;
+            document.getElementById('areaEstado').value = this.currentArea.estado;
+        } else {
+            // Modo creación
+            modalTitle.textContent = 'Nueva Área';
+            document.getElementById('formArea').reset();
+            document.getElementById('areaId').value = '';
+        }
+        
+        // Sincronizar color picker con input de texto
+        document.getElementById('areaColor').addEventListener('input', (e) => {
+            document.getElementById('areaColorHex').value = e.target.value;
+        });
+        
+        document.getElementById('areaColorHex').addEventListener('input', (e) => {
+            if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+                document.getElementById('areaColor').value = e.target.value;
+            }
+        });
+        
+        modal.show();
+    }
+
+    async editArea(areaId) {
+        this.currentArea = this.areas.find(a => a.id === areaId);
+        if (this.currentArea) {
+            this.showModalArea();
+        }
+    }
+
+    async deleteArea(areaId) {
+        const area = this.areas.find(a => a.id === areaId);
+        if (!area) return;
+        
+        if (!confirm(`¿Está seguro de eliminar el área "${area.nombre}"?\nEsta acción no se puede deshacer.`)) {
+            return;
+        }
+        
+        try {
+            const { error } = await supabase
+                .from('areas')
+                .delete()
+                .eq('id', areaId);
+            
+            if (error) throw error;
+            
+            UI.showToast('Área eliminada correctamente', 'success');
+            await this.loadData();
+            this.render();
+        } catch (error) {
+            console.error('Error al eliminar área:', error);
+            UI.showToast('Error al eliminar el área', 'error');
+        }
+    }
+
+    async saveArea(e) {
+        e.preventDefault();
+        
+        const areaId = document.getElementById('areaId').value;
+        const areaData = {
+            clave: document.getElementById('areaClave').value.toUpperCase(),
+            nombre: document.getElementById('areaNombre').value,
+            descripcion: document.getElementById('areaDescripcion').value || null,
+            color_hex: document.getElementById('areaColorHex').value,
+            estado: document.getElementById('areaEstado').value
+        };
+        
+        try {
+            let result;
+            if (areaId) {
+                // Actualizar área existente
+                result = await supabase
+                    .from('areas')
+                    .update(areaData)
+                    .eq('id', areaId);
+            } else {
+                // Crear nueva área
+                result = await supabase
+                    .from('areas')
+                    .insert([areaData]);
+            }
+            
+            if (result.error) throw result.error;
+            
+            UI.showToast(areaId ? 'Área actualizada correctamente' : 'Área creada correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalArea')).hide();
+            await this.loadData();
+            location.reload(); // Recargar para actualizar la vista
+            
+        } catch (error) {
+            console.error('Error al guardar área:', error);
+            UI.showToast('Error al guardar el área: ' + error.message, 'error');
+        }
+    }
+
+    // ========== EVENT HANDLERS - USUARIOS ==========
+    
+    showModalUsuario() {
+        const modal = new bootstrap.Modal(document.getElementById('modalUsuario'));
+        const modalTitle = document.getElementById('modalUsuarioTitle');
+        
+        if (this.currentUsuario) {
+            // Modo edición
+            modalTitle.textContent = 'Editar Usuario';
+            document.getElementById('usuarioId').value = this.currentUsuario.id;
+            document.getElementById('usuarioEmail').value = this.currentUsuario.email;
+            document.getElementById('usuarioEmail').disabled = true; // No se puede cambiar el email
+            document.getElementById('usuarioNombre').value = this.currentUsuario.nombre || '';
+            document.getElementById('usuarioArea').value = this.currentUsuario.area_id || '';
+            document.getElementById('usuarioRol').value = this.currentUsuario.rol;
+            document.getElementById('usuarioPuedeCapturar').checked = this.currentUsuario.puede_capturar;
+            document.getElementById('usuarioPuedeEditar').checked = this.currentUsuario.puede_editar;
+            document.getElementById('usuarioPuedeEliminar').checked = this.currentUsuario.puede_eliminar;
+            document.getElementById('usuarioEstado').value = this.currentUsuario.activo.toString();
+        } else {
+            // Modo creación
+            modalTitle.textContent = 'Nuevo Usuario';
+            document.getElementById('formUsuario').reset();
+            document.getElementById('usuarioId').value = '';
+            document.getElementById('usuarioEmail').disabled = false;
+        }
+        
+        modal.show();
+    }
+
+    async editUsuario(usuarioId) {
+        this.currentUsuario = this.usuarios.find(u => u.id === usuarioId);
+        if (this.currentUsuario) {
+            this.showModalUsuario();
+        }
+    }
+
+    async toggleUsuario(usuarioId) {
+        const usuario = this.usuarios.find(u => u.id === usuarioId);
+        if (!usuario) return;
+        
+        const nuevoEstado = !usuario.activo;
+        const accion = nuevoEstado ? 'activar' : 'desactivar';
+        
+        if (!confirm(`¿Está seguro de ${accion} al usuario "${usuario.nombre || usuario.email}"?`)) {
+            return;
+        }
+        
+        try {
+            const { error } = await supabase
+                .from('usuarios')
+                .update({ activo: nuevoEstado })
+                .eq('id', usuarioId);
+            
+            if (error) throw error;
+            
+            UI.showToast(`Usuario ${nuevoEstado ? 'activado' : 'desactivado'} correctamente`, 'success');
+            await this.loadData();
+            location.reload();
+        } catch (error) {
+            console.error('Error al cambiar estado del usuario:', error);
+            UI.showToast('Error al cambiar el estado del usuario', 'error');
+        }
+    }
+
+    async saveUsuario(e) {
+        e.preventDefault();
+        
+        const usuarioId = document.getElementById('usuarioId').value;
+        const usuarioData = {
+            email: document.getElementById('usuarioEmail').value.toLowerCase(),
+            nombre: document.getElementById('usuarioNombre').value || null,
+            area_id: document.getElementById('usuarioArea').value || null,
+            rol: document.getElementById('usuarioRol').value,
+            puede_capturar: document.getElementById('usuarioPuedeCapturar').checked,
+            puede_editar: document.getElementById('usuarioPuedeEditar').checked,
+            puede_eliminar: document.getElementById('usuarioPuedeEliminar').checked,
+            activo: document.getElementById('usuarioEstado').value === 'true'
+        };
+        
+        try {
+            let result;
+            if (usuarioId) {
+                // Actualizar usuario existente (sin el email)
+                delete usuarioData.email;
+                result = await supabase
+                    .from('usuarios')
+                    .update(usuarioData)
+                    .eq('id', usuarioId);
+            } else {
+                // Crear nuevo usuario
+                result = await supabase
+                    .from('usuarios')
+                    .insert([usuarioData]);
+            }
+            
+            if (result.error) throw result.error;
+            
+            UI.showToast(usuarioId ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalUsuario')).hide();
+            await this.loadData();
+            location.reload();
+            
+        } catch (error) {
+            console.error('Error al guardar usuario:', error);
+            UI.showToast('Error al guardar el usuario: ' + error.message, 'error');
+        }
+    }
+
+    // ========== EVENT HANDLERS - ASIGNACIONES ==========
+    
+    showModalAsignacion() {
+        const modal = new bootstrap.Modal(document.getElementById('modalAsignacion'));
+        document.getElementById('formAsignacion').reset();
+        modal.show();
+    }
+
+    async saveAsignacion(e) {
+        e.preventDefault();
+        
+        const asignacionData = {
+            area_id: document.getElementById('asignacionArea').value,
+            rol: document.getElementById('asignacionRol').value,
+            puede_capturar: document.getElementById('asignacionCapturar').checked,
+            puede_editar: document.getElementById('asignacionEditar').checked,
+            puede_eliminar: document.getElementById('asignacionEliminar').checked
+        };
+        
+        const usuarioId = document.getElementById('asignacionUsuario').value;
+        
+        try {
+            // Actualizar el usuario con la nueva asignación
+            const { error } = await supabase
+                .from('usuarios')
+                .update(asignacionData)
+                .eq('id', usuarioId);
+            
+            if (error) throw error;
+            
+            UI.showToast('Usuario asignado al área correctamente', 'success');
+            
+            // Cerrar modal y recargar datos
+            bootstrap.Modal.getInstance(document.getElementById('modalAsignacion')).hide();
+            await this.loadData();
+            location.reload();
+            
+        } catch (error) {
+            console.error('Error al asignar usuario:', error);
+            UI.showToast('Error al asignar el usuario al área: ' + error.message, 'error');
+        }
+    }
+}
+// ========== MÉTODOS DE FILTRADO Y BÚSQUEDA ==========
+    
+    setupFilters() {
+        // Filtro de búsqueda de usuarios
+        const searchUsuarios = document.getElementById('searchUsuarios');
+        if (searchUsuarios) {
+            searchUsuarios.addEventListener('input', (e) => {
+                this.filterUsuarios(e.target.value);
             });
         }
         
-    } catch (error) {
-        console.error('❌ Error al cargar datos iniciales:', error);
-        showToast('Error al cargar los datos del panel', 'error');
-    }
-}
-
-/**
- * Cargar todas las áreas
- */
-async function loadAreas() {
-    try {
-        // Cargar áreas con estadísticas adicionales
-        const { data } = await selectData('areas', {
-             select: '*',
-            orderBy: { column: 'fecha_creacion', ascending: false }
-        });
-        
-        adminState.areas = data || [];
-        
-    } catch (error) {
-        console.error('❌ Error al cargar áreas:', error);
-        adminState.areas = [];
-    }
-}
-
-/**
- * Cargar todos los usuarios
- */
-async function loadUsuarios() {
-    try {
-        const { data } = await selectData('perfiles', {
-           select: '*',
-            orderBy: { column: 'fecha_creacion', ascending: false }
-        });
-        
-        adminState.usuarios = data || [];
-        
-    } catch (error) {
-        console.error('❌ Error al cargar usuarios:', error);
-        adminState.usuarios = [];
-    }
-}
-
-/**
- * Cargar todos los permisos/asignaciones
- */
-async function loadPermisos() {
-    try {
-        const { data } = await selectData('usuario_areas', {
-            select: `
-                *,
-                perfiles!usuario_id (
-                    nombre_completo,
-                    email,
-                    rol_principal
-                ),
-                areas!area_id (
-                    nombre,
-                    clave,
-                    color_hex
-                )
-            `,
-            filters: { estado: 'ACTIVO' },
-            orderBy: { column: 'fecha_asignacion', ascending: false }
-        });
-        
-        adminState.permisos = data || [];
-        
-    } catch (error) {
-        console.error('❌ Error al cargar permisos:', error);
-        adminState.permisos = [];
-    }
-}
-
-/**
- * Obtener áreas filtradas
- */
-function getFilteredAreas() {
-    let filtered = adminState.areas;
-    
-    // Filtrar por término de búsqueda
-    if (adminState.searchTerm) {
-        const term = adminState.searchTerm.toLowerCase();
-        filtered = filtered.filter(area => 
-            area.nombre.toLowerCase().includes(term) ||
-            area.clave.toLowerCase().includes(term) ||
-            (area.descripcion && area.descripcion.toLowerCase().includes(term))
-        );
-    }
-    
-    // Filtrar por estado
-    const statusFilter = document.getElementById('areas-status-filter')?.value;
-    if (statusFilter && statusFilter !== 'all') {
-        filtered = filtered.filter(area => area.estado === statusFilter);
-    }
-    
-    return filtered;
-}
-// =====================================================
-// PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Gestión de usuarios
-// =====================================================
-
-// =====================================================
-// GESTIÓN DE USUARIOS
-// =====================================================
-
-/**
- * Crear contenido de la sección de usuarios
- */
-function createUsersContentHTML() {
-    return `
-        <div class="space-y-6">
-            <!-- Header de usuarios -->
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Gestión de Usuarios</h3>
-                    <p class="text-sm text-gray-600 mt-1">
-                        Administre los usuarios del sistema y sus roles principales
-                    </p>
-                </div>
-                
-                <div class="flex items-center space-x-3">
-                    <button 
-                        id="invite-user-btn"
-                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                    >
-                        <i data-lucide="user-plus" class="w-4 h-4"></i>
-                        <span>Invitar usuario</span>
-                    </button>
-                    
-                    <button 
-                        id="bulk-actions-btn"
-                        class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
-                    >
-                        <i data-lucide="settings" class="w-4 h-4"></i>
-                        <span>Acciones masivas</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Búsqueda y filtros de usuarios -->
-            <div class="bg-gray-50 rounded-lg p-4">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-                        <div class="relative">
-                            <input 
-                                type="text" 
-                                id="users-search"
-                                placeholder="Buscar por nombre o email..."
-                                class="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            >
-                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
-                        </div>
-                        
-                        <select 
-                            id="users-role-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
-                            <option value="all">Todos los roles</option>
-                            ${Object.entries(ROLES).map(([key, role]) => `
-                                <option value="${key}">${role.name}</option>
-                            `).join('')}
-                        </select>
-                        
-                        <select 
-                            id="users-status-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
-                            <option value="all">Todos los estados</option>
-                            <option value="ACTIVO">Solo activos</option>
-                            <option value="INACTIVO">Solo inactivos</option>
-                        </select>
-                    </div>
-                    
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm text-gray-600">
-                            ${adminState.usuarios.length} usuario${adminState.usuarios.length !== 1 ? 's' : ''}
-                        </span>
-                        <button 
-                            id="refresh-users-btn"
-                            class="bg-white border border-gray-300 rounded px-3 py-2 text-sm hover:bg-gray-50"
-                            title="Actualizar lista"
-                        >
-                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tabla de usuarios -->
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div id="users-table-container">
-                    ${createUsersTableHTML()}
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Crear tabla de usuarios
- */
-function createUsersTableHTML() {
-    if (adminState.usuarios.length === 0) {
-        return `
-            <div class="text-center py-12">
-                <i data-lucide="users" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">No hay usuarios registrados</h3>
-                <p class="text-gray-600 mb-4">Los usuarios se registran automáticamente al usar el sistema.</p>
-            </div>
-        `;
-    }
-    
-    const filteredUsers = getFilteredUsers();
-    
-    return `
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <input type="checkbox" id="select-all-users" class="rounded border-gray-300">
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Usuario
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Email
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Rol Principal
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Áreas Asignadas
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Estado
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Último Acceso
-                        </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acciones
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    ${filteredUsers.map((usuario, index) => createUserRowHTML(usuario, index)).join('')}
-                </tbody>
-            </table>
-        </div>
-        
-        ${filteredUsers.length === 0 && adminState.usuarios.length > 0 ? `
-            <div class="text-center py-8">
-                <i data-lucide="search-x" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
-                <p class="text-gray-500">No se encontraron usuarios que coincidan con los filtros</p>
-            </div>
-        ` : ''}
-    `;
-}
-
-/**
- * Crear fila de usuario en la tabla
- */
-function createUserRowHTML(usuario, index) {
-    const roleInfo = ROLES[usuario.rol_principal] || { name: usuario.rol_principal, level: 0 };
-    const lastAccess = usuario.ultimo_acceso ? 
-        new Date(usuario.ultimo_acceso).toLocaleDateString('es-MX') : 
-        'Nunca';
-    
-    return `
-        <tr class="hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}">
-            <td class="px-6 py-4 whitespace-nowrap">
-                <input type="checkbox" class="user-checkbox rounded border-gray-300" value="${usuario.id}">
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                        <span class="text-sm font-medium text-purple-600">
-                            ${(usuario.nombre_completo || usuario.email).substring(0, 2).toUpperCase()}
-                        </span>
-                    </div>
-                    <div>
-                        <div class="text-sm font-medium text-gray-900">
-                            ${usuario.nombre_completo || 'Sin nombre'}
-                        </div>
-                        ${usuario.puesto ? `
-                            <div class="text-sm text-gray-500">${usuario.puesto}</div>
-                        ` : ''}
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm text-gray-900">${usuario.email}</div>
-                ${usuario.telefono ? `
-                    <div class="text-sm text-gray-500">${usuario.telefono}</div>
-                ` : ''}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(usuario.rol_principal)}">
-                    ${roleInfo.name}
-                </span>
-                <div class="text-xs text-gray-500 mt-1">Nivel ${roleInfo.level}</div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${usuario.areas_asignadas || 0} área${(usuario.areas_asignadas || 0) !== 1 ? 's' : ''}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    usuario.estado === 'ACTIVO' ? 
-                    'bg-green-100 text-green-800' : 
-                    'bg-red-100 text-red-800'
-                }">
-                    ${usuario.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}
-                </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${lastAccess}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <div class="flex items-center justify-end space-x-2">
-                    <button 
-                        onclick="viewUserDetails('${usuario.id}')"
-                        class="text-purple-600 hover:text-purple-900 transition-colors"
-                        title="Ver detalles"
-                    >
-                        <i data-lucide="eye" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="editUser('${usuario.id}')"
-                        class="text-blue-600 hover:text-blue-900 transition-colors"
-                        title="Editar usuario"
-                    >
-                        <i data-lucide="edit" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="manageUserPermissions('${usuario.id}')"
-                        class="text-green-600 hover:text-green-900 transition-colors"
-                        title="Gestionar permisos"
-                    >
-                        <i data-lucide="shield" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="toggleUserStatus('${usuario.id}', '${usuario.estado}')"
-                        class="text-yellow-600 hover:text-yellow-900 transition-colors"
-                        title="${usuario.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} usuario"
-                    >
-                        <i data-lucide="${usuario.estado === 'ACTIVO' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `;
-}
-
-/**
- * Obtener usuarios filtrados
- */
-function getFilteredUsers() {
-    let filtered = adminState.usuarios;
-    
-    // Filtrar por término de búsqueda
-    const searchTerm = document.getElementById('users-search')?.value?.toLowerCase();
-    if (searchTerm) {
-        filtered = filtered.filter(user => 
-            (user.nombre_completo && user.nombre_completo.toLowerCase().includes(searchTerm)) ||
-            user.email.toLowerCase().includes(searchTerm) ||
-            (user.puesto && user.puesto.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Filtrar por rol
-    const roleFilter = document.getElementById('users-role-filter')?.value;
-    if (roleFilter && roleFilter !== 'all') {
-        filtered = filtered.filter(user => user.rol_principal === roleFilter);
-    }
-    
-    // Filtrar por estado
-    const statusFilter = document.getElementById('users-status-filter')?.value;
-    if (statusFilter && statusFilter !== 'all') {
-        filtered = filtered.filter(user => user.estado === statusFilter);
-    }
-    
-    return filtered;
-}
-
-/**
- * Obtener clase de color para rol
- */
-function getRoleColorClass(role) {
-    const colorMap = {
-        'ADMIN': 'bg-red-100 text-red-800',
-        'DIRECTOR': 'bg-purple-100 text-purple-800',
-        'SUBDIRECTOR': 'bg-blue-100 text-blue-800',
-        'JEFE_AREA': 'bg-green-100 text-green-800',
-        'CAPTURISTA': 'bg-gray-100 text-gray-800'
-    };
-    
-    return colorMap[role] || 'bg-gray-100 text-gray-800';
-}
-// =====================================================
-// PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Gestión de permisos y asignaciones
-// =====================================================
-
-// =====================================================
-// GESTIÓN DE PERMISOS Y ASIGNACIONES
-// =====================================================
-
-/**
- * Crear contenido de la sección de permisos
- */
-function createPermissionsContentHTML() {
-    return `
-        <div class="space-y-6">
-            <!-- Header de permisos -->
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Permisos y Asignaciones</h3>
-                    <p class="text-sm text-gray-600 mt-1">
-                        Gestione las asignaciones de usuarios a áreas y sus permisos específicos
-                    </p>
-                </div>
-                
-                <button 
-                    id="add-permission-btn"
-                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                >
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Nueva asignación</span>
-                </button>
-            </div>
-            
-            <!-- Búsqueda de usuario para asignación rápida -->
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 class="text-md font-semibold text-blue-900 mb-3">Asignación rápida de permisos</h4>
-                <div class="flex flex-col sm:flex-row items-start sm:items-end space-y-3 sm:space-y-0 sm:space-x-4">
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-blue-800 mb-1">
-                            Buscar usuario por email
-                        </label>
-                        <div class="relative">
-                            <input 
-                                type="email" 
-                                id="quick-assign-email"
-                                placeholder="usuario@aifa.aero"
-                                class="w-full pl-10 pr-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                            <i data-lucide="mail" class="absolute left-3 top-2.5 w-4 h-4 text-blue-400"></i>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-blue-800 mb-1">
-                            Área
-                        </label>
-                        <select 
-                            id="quick-assign-area"
-                            class="border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                            <option value="">Seleccionar área</option>
-                            ${adminState.areas.filter(a => a.estado === 'ACTIVO').map(area => `
-                                <option value="${area.id}">${area.nombre}</option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-blue-800 mb-1">
-                            Rol
-                        </label>
-                        <select 
-                            id="quick-assign-role"
-                            class="border border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                            <option value="">Seleccionar rol</option>
-                            ${Object.entries(ROLES).map(([key, role]) => `
-                                <option value="${key}">${role.name}</option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    
-                    <button 
-                        id="quick-assign-btn"
-                        class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                    >
-                        <i data-lucide="user-plus" class="w-4 h-4"></i>
-                        <span>Asignar</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Filtros de permisos -->
-            <div class="bg-gray-50 rounded-lg p-4">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-                        <div class="relative">
-                            <input 
-                                type="text" 
-                                id="permissions-search"
-                                placeholder="Buscar por usuario o área..."
-                                class="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            >
-                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
-                        </div>
-                        
-                        <select 
-                            id="permissions-area-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
-                            <option value="all">Todas las áreas</option>
-                            ${adminState.areas.map(area => `
-                                <option value="${area.id}">${area.nombre}</option>
-                            `).join('')}
-                        </select>
-                        
-                        <select 
-                            id="permissions-role-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
-                            <option value="all">Todos los roles</option>
-                            ${Object.entries(ROLES).map(([key, role]) => `
-                                <option value="${key}">${role.name}</option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm text-gray-600">
-                            ${adminState.permisos.length} asignación${adminState.permisos.length !== 1 ? 'es' : ''} activa${adminState.permisos.length !== 1 ? 's' : ''}
-                        </span>
-                        <button 
-                            id="refresh-permissions-btn"
-                            class="bg-white border border-gray-300 rounded px-3 py-2 text-sm hover:bg-gray-50"
-                            title="Actualizar lista"
-                        >
-                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tabla de permisos -->
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div id="permissions-table-container">
-                    ${createPermissionsTableHTML()}
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Crear tabla de permisos
- */
-function createPermissionsTableHTML() {
-    if (adminState.permisos.length === 0) {
-        return `
-            <div class="text-center py-12">
-                <i data-lucide="shield-off" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">No hay asignaciones configuradas</h3>
-                <p class="text-gray-600 mb-4">Comience asignando usuarios a áreas específicas.</p>
-                <button 
-                    onclick="showAddPermissionModal()"
-                    class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
-                >
-                    Crear primera asignación
-                </button>
-            </div>
-        `;
-    }
-    
-    const filteredPermissions = getFilteredPermissions();
-    
-    return `
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Usuario
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Área asignada
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Rol en área
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Permisos específicos
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Asignado por
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fecha asignación
-                        </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acciones
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    ${filteredPermissions.map((permiso, index) => createPermissionRowHTML(permiso, index)).join('')}
-                </tbody>
-            </table>
-        </div>
-        
-        ${filteredPermissions.length === 0 && adminState.permisos.length > 0 ? `
-            <div class="text-center py-8">
-                <i data-lucide="search-x" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
-                <p class="text-gray-500">No se encontraron asignaciones que coincidan con los filtros</p>
-            </div>
-        ` : ''}
-    `;
-}
-
-/**
- * Crear fila de permiso en la tabla
- */
-function createPermissionRowHTML(permiso, index) {
-    const usuario = permiso.perfiles;
-    const area = permiso.areas;
-    const roleInfo = ROLES[permiso.rol] || { name: permiso.rol };
-    
-    const permisosBadges = [];
-    if (permiso.puede_capturar) permisosBadges.push('<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Capturar</span>');
-    if (permiso.puede_editar) permisosBadges.push('<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Editar</span>');
-    if (permiso.puede_eliminar) permisosBadges.push('<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Eliminar</span>');
-    
-    return `
-        <tr class="hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}">
-            <td class="px-6 py-4">
-                <div class="flex items-center">
-                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                        <span class="text-xs font-medium text-purple-600">
-                            ${(usuario?.nombre_completo || usuario?.email || 'U').substring(0, 2).toUpperCase()}
-                        </span>
-                    </div>
-                    <div>
-                        <div class="text-sm font-medium text-gray-900">
-                            ${usuario?.nombre_completo || 'Usuario eliminado'}
-                        </div>
-                        <div class="text-sm text-gray-500">${usuario?.email || 'N/A'}</div>
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex items-center">
-                    <div class="w-6 h-6 rounded flex items-center justify-center mr-2"
-                         style="background-color: ${area?.color_hex || '#6B7280'}">
-                        <span class="text-xs font-bold text-white">
-                            ${(area?.clave || 'A').substring(0, 1)}
-                        </span>
-                    </div>
-                    <div>
-                        <div class="text-sm font-medium text-gray-900">${area?.nombre || 'Área eliminada'}</div>
-                        <div class="text-sm text-gray-500">${area?.clave || 'N/A'}</div>
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(permiso.rol)}">
-                    ${roleInfo.name}
-                </span>
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex flex-wrap gap-1">
-                    ${permisosBadges.join(' ')}
-                    ${permisosBadges.length === 0 ? '<span class="text-sm text-gray-400">Sin permisos específicos</span>' : ''}
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${permiso.asignado_por ? 'Admin' : 'Sistema'}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${new Date(permiso.fecha_asignacion).toLocaleDateString('es-MX')}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <div class="flex items-center justify-end space-x-2">
-                    <button 
-                        onclick="editPermission('${permiso.id}')"
-                        class="text-blue-600 hover:text-blue-900 transition-colors"
-                        title="Editar asignación"
-                    >
-                        <i data-lucide="edit" class="w-4 h-4"></i>
-                    </button>
-                    <button 
-                        onclick="deletePermission('${permiso.id}', '${usuario?.nombre_completo}', '${area?.nombre}')"
-                        class="text-red-600 hover:text-red-900 transition-colors"
-                        title="Eliminar asignación"
-                    >
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `;
-}
-
-/**
- * Obtener permisos filtrados
- */
-function getFilteredPermissions() {
-    let filtered = adminState.permisos;
-    
-    // Filtrar por término de búsqueda
-    const searchTerm = document.getElementById('permissions-search')?.value?.toLowerCase();
-    if (searchTerm) {
-        filtered = filtered.filter(permiso => 
-            (permiso.perfiles?.nombre_completo && permiso.perfiles.nombre_completo.toLowerCase().includes(searchTerm)) ||
-            (permiso.perfiles?.email && permiso.perfiles.email.toLowerCase().includes(searchTerm)) ||
-            (permiso.areas?.nombre && permiso.areas.nombre.toLowerCase().includes(searchTerm)) ||
-            (permiso.areas?.clave && permiso.areas.clave.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Filtrar por área
-    const areaFilter = document.getElementById('permissions-area-filter')?.value;
-    if (areaFilter && areaFilter !== 'all') {
-        filtered = filtered.filter(permiso => permiso.area_id === areaFilter);
-    }
-    
-    // Filtrar por rol
-    const roleFilter = document.getElementById('permissions-role-filter')?.value;
-    if (roleFilter && roleFilter !== 'all') {
-        filtered = filtered.filter(permiso => permiso.rol === roleFilter);
-    }
-    
-    return filtered;
-}
-
-// =====================================================
-// NAVEGACIÓN DE SECCIONES
-// =====================================================
-
-/**
- * Cambiar sección activa
- */
-window.switchSection = async function(sectionName) {
-    adminState.currentSection = sectionName;
-    
-    try {
-        showLoading('Cargando sección...');
-        
-        // Actualizar clases de pestañas
-        document.querySelectorAll('.section-tab').forEach(tab => {
-            tab.classList.remove('border-purple-500', 'text-purple-600');
-            tab.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-        });
-        
-        const activeTab = document.getElementById(`section-${sectionName}`);
-        if (activeTab) {
-            activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-            activeTab.classList.add('border-purple-500', 'text-purple-600');
+        // Filtro de rol
+        const filterRol = document.getElementById('filterRol');
+        if (filterRol) {
+            filterRol.addEventListener('change', (e) => {
+                this.filterUsuarios();
+            });
         }
         
-        // Cargar contenido de la sección
-        await loadSectionContent();
-        
-        hideLoading();
-        
-    } catch (error) {
-        console.error(`❌ Error al cambiar a sección ${sectionName}:`, error);
-        hideLoading();
-        showToast('Error al cargar la sección', 'error');
-    }
-};
-
-/**
- * Cargar contenido de la sección actual
- */
-async function loadSectionContent() {
-    const sectionContent = document.getElementById('section-content');
-    if (!sectionContent) return;
-    
-    switch (adminState.currentSection) {
-        case 'areas':
-            sectionContent.innerHTML = createAreasContentHTML();
-            setupAreasEventListeners();
-            break;
-        case 'users':
-            sectionContent.innerHTML = createUsersContentHTML();
-            setupUsersEventListeners();
-            break;
-        case 'permissions':
-            sectionContent.innerHTML = createPermissionsContentHTML();
-            setupPermissionsEventListeners();
-            break;
-    }
-    
-    // Recrear iconos
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
-}
-
-/**
- * Configurar event listeners de áreas
- */
-function setupAreasEventListeners() {
-    // Búsqueda de áreas
-    const areasSearch = document.getElementById('areas-search');
-    if (areasSearch) {
-        areasSearch.addEventListener('input', (e) => {
-            adminState.searchTerm = e.target.value;
-            updateAreasTable();
-        });
-    }
-    
-    // Filtro de estado de áreas
-    const areasStatusFilter = document.getElementById('areas-status-filter');
-    if (areasStatusFilter) {
-        areasStatusFilter.addEventListener('change', updateAreasTable);
-    }
-    
-    // Botón agregar área
-    const addAreaBtn = document.getElementById('add-area-btn');
-    if (addAreaBtn) {
-        addAreaBtn.addEventListener('click', showAddAreaModal);
-    }
-    
-    // Botón refresh áreas
-    const refreshAreasBtn = document.getElementById('refresh-areas-btn');
-    if (refreshAreasBtn) {
-        refreshAreasBtn.addEventListener('click', handleRefreshAreas);
-    }
-}
-
-/**
- * Configurar event listeners de usuarios
- */
-function setupUsersEventListeners() {
-    // Búsqueda de usuarios
-    const usersSearch = document.getElementById('users-search');
-    if (usersSearch) {
-        usersSearch.addEventListener('input', updateUsersTable);
-    }
-    
-    // Filtros de usuarios
-    const usersRoleFilter = document.getElementById('users-role-filter');
-    const usersStatusFilter = document.getElementById('users-status-filter');
-    
-    if (usersRoleFilter) {
-        usersRoleFilter.addEventListener('change', updateUsersTable);
-    }
-    
-    if (usersStatusFilter) {
-        usersStatusFilter.addEventListener('change', updateUsersTable);
-    }
-    
-    // Botón invitar usuario
-    const inviteUserBtn = document.getElementById('invite-user-btn');
-    if (inviteUserBtn) {
-        inviteUserBtn.addEventListener('click', showInviteUserModal);
-    }
-    
-    // Botón refresh usuarios
-    const refreshUsersBtn = document.getElementById('refresh-users-btn');
-    if (refreshUsersBtn) {
-        refreshUsersBtn.addEventListener('click', handleRefreshUsers);
-    }
-    
-    // Select all usuarios
-    const selectAllUsers = document.getElementById('select-all-users');
-    if (selectAllUsers) {
-        selectAllUsers.addEventListener('change', handleSelectAllUsers);
-    }
-}
-
-/**
- * Configurar event listeners de permisos
- */
-function setupPermissionsEventListeners() {
-    // Búsqueda de permisos
-    const permissionsSearch = document.getElementById('permissions-search');
-    if (permissionsSearch) {
-        permissionsSearch.addEventListener('input', updatePermissionsTable);
-    }
-    
-    // Filtros de permisos
-    const permissionsAreaFilter = document.getElementById('permissions-area-filter');
-    const permissionsRoleFilter = document.getElementById('permissions-role-filter');
-    
-    if (permissionsAreaFilter) {
-        permissionsAreaFilter.addEventListener('change', updatePermissionsTable);
-    }
-    
-    if (permissionsRoleFilter) {
-        permissionsRoleFilter.addEventListener('change', updatePermissionsTable);
-    }
-    
-    // Asignación rápida
-    const quickAssignBtn = document.getElementById('quick-assign-btn');
-    if (quickAssignBtn) {
-        quickAssignBtn.addEventListener('click', handleQuickAssign);
-    }
-    
-    // Botón agregar permiso
-    const addPermissionBtn = document.getElementById('add-permission-btn');
-    if (addPermissionBtn) {
-        addPermissionBtn.addEventListener('click', showAddPermissionModal);
-    }
-    
-    // Botón refresh permisos
-    const refreshPermissionsBtn = document.getElementById('refresh-permissions-btn');
-    if (refreshPermissionsBtn) {
-        refreshPermissionsBtn.addEventListener('click', handleRefreshPermissions);
-    }
-}
-// =====================================================
-// PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
-// Handlers, modales y funciones auxiliares
-// =====================================================
-
-// =====================================================
-// EVENT LISTENERS PRINCIPALES
-// =====================================================
-
-/**
- * Configurar event listeners principales
- */
-function setupEventListeners() {
-    // Botón de ayuda
-    const helpBtn = document.getElementById('admin-help-btn');
-    if (helpBtn) {
-        helpBtn.addEventListener('click', showAdminHelp);
-    }
-    
-    // Configurar sección inicial
-    const activeTab = document.getElementById(`section-${adminState.currentSection}`);
-    if (activeTab) {
-        activeTab.classList.add('border-purple-500', 'text-purple-600');
-    }
-}
-
-// =====================================================
-// HANDLERS DE EVENTOS - ÁREAS
-// =====================================================
-
-/**
- * Actualizar tabla de áreas
- */
-function updateAreasTable() {
-    const tableContainer = document.getElementById('areas-table-container');
-    if (tableContainer) {
-        tableContainer.innerHTML = createAreasTableHTML();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
+        // Filtro de estado
+        const filterEstado = document.getElementById('filterEstado');
+        if (filterEstado) {
+            filterEstado.addEventListener('change', (e) => {
+                this.filterUsuarios();
+            });
         }
     }
-}
-
-/**
- * Manejar refresh de áreas
- */
-async function handleRefreshAreas() {
-    try {
-        const refreshBtn = document.getElementById('refresh-areas-btn');
-        if (refreshBtn) {
-            const icon = refreshBtn.querySelector('i');
-            icon.classList.add('animate-spin');
+    
+    filterUsuarios(searchTerm = '') {
+        const filterRol = document.getElementById('filterRol')?.value || '';
+        const filterEstado = document.getElementById('filterEstado')?.value || '';
+        const search = searchTerm || document.getElementById('searchUsuarios')?.value || '';
+        
+        let filteredUsuarios = this.usuarios;
+        
+        // Filtrar por búsqueda
+        if (search) {
+            filteredUsuarios = filteredUsuarios.filter(u => 
+                u.email.toLowerCase().includes(search.toLowerCase()) ||
+                (u.nombre && u.nombre.toLowerCase().includes(search.toLowerCase()))
+            );
         }
         
-        await loadAreas();
-        updateAreasTable();
-        updateSystemCounts();
-        
-        showToast('Lista de áreas actualizada', 'success');
-        
-    } catch (error) {
-        console.error('❌ Error al refrescar áreas:', error);
-        showToast('Error al actualizar las áreas', 'error');
-    }
-}
-
-/**
- * Mostrar modal de agregar área
- */
-window.showAddAreaModal = function() {
-    showToast('Modal de agregar área en desarrollo', 'info');
-};
-
-/**
- * Ver detalles de área
- */
-window.viewAreaDetails = function(areaId) {
-    const area = adminState.areas.find(a => a.id === areaId);
-    if (!area) {
-        showToast('Área no encontrada', 'error');
-        return;
-    }
-    
-    showToast(`Detalles de área: ${area.nombre} en desarrollo`, 'info');
-};
-
-/**
- * Editar área
- */
-window.editArea = function(areaId) {
-    const area = adminState.areas.find(a => a.id === areaId);
-    if (!area) {
-        showToast('Área no encontrada', 'error');
-        return;
-    }
-    
-    showToast(`Editar área: ${area.nombre} en desarrollo`, 'info');
-};
-
-/**
- * Cambiar estado de área
- */
-window.toggleAreaStatus = async function(areaId, currentStatus) {
-    const area = adminState.areas.find(a => a.id === areaId);
-    if (!area) {
-        showToast('Área no encontrada', 'error');
-        return;
-    }
-    
-    const newStatus = currentStatus === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-    const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar';
-    
-    try {
-        const confirmed = await showConfirmModal(
-            `¿Está seguro de ${action} el área "${area.nombre}"?`,
-            {
-                title: `Confirmar ${action}`,
-                confirmText: action.charAt(0).toUpperCase() + action.slice(1),
-                type: newStatus === 'INACTIVO' ? 'warning' : 'info'
-            }
-        );
-        
-        if (!confirmed) return;
-        
-        await updateData('areas', { estado: newStatus }, { id: areaId });
-        
-        showToast(`Área ${newStatus === 'ACTIVO' ? 'activada' : 'desactivada'} correctamente`, 'success');
-        
-        // Actualizar estado local y tabla
-        area.estado = newStatus;
-        updateAreasTable();
-        
-    } catch (error) {
-        console.error('❌ Error al cambiar estado del área:', error);
-        showToast('Error al cambiar el estado del área', 'error');
-    }
-};
-
-/**
- * Eliminar área
- */
-window.deleteArea = async function(areaId, areaNombre) {
-    try {
-        const confirmed = await showConfirmModal(
-            `¿Está seguro de eliminar el área "${areaNombre}"? Esta acción no se puede deshacer y eliminará todos los indicadores asociados.`,
-            {
-                title: 'Confirmar eliminación',
-                confirmText: 'Eliminar',
-                type: 'danger'
-            }
-        );
-        
-        if (!confirmed) return;
-        
-        await deleteData('areas', { id: areaId });
-        
-        showToast('Área eliminada correctamente', 'success');
-        
-        // Actualizar estado local
-        adminState.areas = adminState.areas.filter(a => a.id !== areaId);
-        updateAreasTable();
-        updateSystemCounts();
-        
-    } catch (error) {
-        console.error('❌ Error al eliminar área:', error);
-        showToast('Error al eliminar el área', 'error');
-    }
-};
-
-// =====================================================
-// HANDLERS DE EVENTOS - USUARIOS
-// =====================================================
-
-/**
- * Actualizar tabla de usuarios
- */
-function updateUsersTable() {
-    const tableContainer = document.getElementById('users-table-container');
-    if (tableContainer) {
-        tableContainer.innerHTML = createUsersTableHTML();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }
-}
-
-/**
- * Manejar refresh de usuarios
- */
-async function handleRefreshUsers() {
-    try {
-        const refreshBtn = document.getElementById('refresh-users-btn');
-        if (refreshBtn) {
-        const icon = refreshBtn.querySelector('i');
-        if (icon) {
-            icon.classList.add('animate-spin');
-        }
+        // Filtrar por rol
+        if (filterRol) {
+            filteredUsuarios = filteredUsuarios.filter(u => u.rol === filterRol);
         }
         
-        await loadUsuarios();
-        updateUsersTable();
-        updateSystemCounts();
-        
-        showToast('Lista de usuarios actualizada', 'success');
-        
-    } catch (error) {
-        console.error('❌ Error al refrescar usuarios:', error);
-        showToast('Error al actualizar los usuarios', 'error');
-    }
-}
-
-/**
- * Manejar selección de todos los usuarios
- */
-function handleSelectAllUsers(e) {
-    const checkboxes = document.querySelectorAll('.user-checkbox');
-    checkboxes.forEach(cb => {
-        cb.checked = e.target.checked;
-    });
-}
-
-/**
- * Mostrar modal de invitar usuario
- */
-function showInviteUserModal() {
-    showToast('Modal de invitar usuario en desarrollo', 'info');
-}
-
-/**
- * Ver detalles de usuario
- */
-window.viewUserDetails = function(usuarioId) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    showToast(`Detalles de usuario: ${usuario.nombre_completo || usuario.email} en desarrollo`, 'info');
-};
-
-/**
- * Editar usuario
- */
-window.editUser = function(usuarioId) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    showToast(`Editar usuario: ${usuario.nombre_completo || usuario.email} en desarrollo`, 'info');
-};
-
-/**
- * Gestionar permisos de usuario
- */
-window.manageUserPermissions = function(usuarioId) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    // Cambiar a sección de permisos y filtrar por usuario
-    switchSection('permissions').then(() => {
-        // Aquí podríamos implementar un filtro específico por usuario
-        showToast(`Gestionando permisos de: ${usuario.nombre_completo || usuario.email}`, 'info');
-    });
-};
-
-/**
- * Cambiar estado de usuario
- */
-window.toggleUserStatus = async function(usuarioId, currentStatus) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    const newStatus = currentStatus === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-    const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar';
-    
-    try {
-        const confirmed = await showConfirmModal(
-            `¿Está seguro de ${action} al usuario "${usuario.nombre_completo || usuario.email}"?`,
-            {
-                title: `Confirmar ${action}`,
-                confirmText: action.charAt(0).toUpperCase() + action.slice(1),
-                type: newStatus === 'INACTIVO' ? 'warning' : 'info'
-            }
-        );
-        
-        if (!confirmed) return;
-        
-        await updateData('perfiles', { estado: newStatus }, { id: usuarioId });
-        
-        showToast(`Usuario ${newStatus === 'ACTIVO' ? 'activado' : 'desactivado'} correctamente`, 'success');
-        
-        // Actualizar estado local y tabla
-        usuario.estado = newStatus;
-        updateUsersTable();
-        
-    } catch (error) {
-        console.error('❌ Error al cambiar estado del usuario:', error);
-        showToast('Error al cambiar el estado del usuario', 'error');
-    }
-};
-
-// =====================================================
-// HANDLERS DE EVENTOS - PERMISOS
-// =====================================================
-
-/**
- * Actualizar tabla de permisos
- */
-function updatePermissionsTable() {
-    const tableContainer = document.getElementById('permissions-table-container');
-    if (tableContainer) {
-        tableContainer.innerHTML = createPermissionsTableHTML();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }
-}
-
-/**
- * Manejar refresh de permisos
- */
-async function handleRefreshPermissions() {
-    try {
-        const refreshBtn = document.getElementById('refresh-permissions-btn');
-        if (refreshBtn) {
-            const icon = refreshBtn.querySelector('i');
-            icon.classList.add('animate-spin');
+        // Filtrar por estado
+        if (filterEstado) {
+            const isActive = filterEstado === 'activo';
+            filteredUsuarios = filteredUsuarios.filter(u => u.activo === isActive);
         }
         
-        await loadPermisos();
-        updatePermissionsTable();
-        updateSystemCounts();
-        
-        showToast('Lista de permisos actualizada', 'success');
-        
-    } catch (error) {
-        console.error('❌ Error al refrescar permisos:', error);
-        showToast('Error al actualizar los permisos', 'error');
-    }
-}
-
-/**
- * Manejar asignación rápida
- */
-async function handleQuickAssign() {
-    const email = document.getElementById('quick-assign-email')?.value.trim();
-    const areaId = document.getElementById('quick-assign-area')?.value;
-    const rol = document.getElementById('quick-assign-role')?.value;
-    
-    if (!email || !areaId || !rol) {
-        showToast('Complete todos los campos para la asignación', 'warning');
-        return;
+        // Actualizar tabla
+        this.updateUsuariosTable(filteredUsuarios);
     }
     
-    // Validar email del dominio
-    if (!VALIDATION.email.pattern.test(email)) {
-        showToast('El email debe ser del dominio @aifa.aero', 'error');
-        return;
-    }
-    
-    try {
-        // Buscar usuario por email
-        const { data: usuarios } = await selectData('perfiles', {
-            select: '*',
-            filters: { email: email }
-        });
+    updateUsuariosTable(usuarios) {
+        const tbody = document.getElementById('usuariosTableBody');
+        if (!tbody) return;
         
-        if (!usuarios || usuarios.length === 0) {
-            showToast('Usuario no encontrado. Debe estar registrado en el sistema primero.', 'error');
+        if (usuarios.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <p class="text-muted">No se encontraron usuarios con los filtros aplicados</p>
+                    </td>
+                </tr>
+            `;
             return;
         }
         
-        const usuario = usuarios[0];
+        tbody.innerHTML = usuarios.map(usuario => `
+            <tr>
+                <td>${usuario.email}</td>
+                <td>${usuario.nombre || 'Sin nombre'}</td>
+                <td>
+                    ${usuario.areas ? `
+                        <span class="badge" style="background-color: ${usuario.areas.color_hex || '#6c757d'}">
+                            ${usuario.areas.nombre}
+                        </span>
+                    ` : 'Sin asignar'}
+                </td>
+                <td>
+                    <span class="badge bg-${this.getRoleBadgeColor(usuario.rol)}">
+                        ${this.getRoleName(usuario.rol)}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge bg-${usuario.activo ? 'success' : 'secondary'}">
+                        ${usuario.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                </td>
+                <td>${usuario.ultimo_acceso ? new Date(usuario.ultimo_acceso).toLocaleDateString() : 'Nunca'}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-edit-usuario" data-id="${usuario.id}" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-toggle-usuario" data-id="${usuario.id}" title="${usuario.activo ? 'Desactivar' : 'Activar'}">
+                            <i class="fas fa-${usuario.activo ? 'lock' : 'unlock'}"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
         
-        // Verificar si ya existe la asignación
-        const { data: existingAssignment } = await selectData('usuario_areas', {
-            select: '*',
-            filters: { 
-                usuario_id: usuario.id,
-                area_id: areaId,
-                estado: 'ACTIVO'
+        // Re-adjuntar event listeners a los nuevos botones
+        this.attachEventListeners();
+    }
+    
+    // ========== MÉTODOS DE INICIALIZACIÓN ==========
+    
+    async init() {
+        try {
+            await this.loadData();
+            this.attachEventListeners();
+            this.setupFilters();
+            
+            // Inicializar tooltips de Bootstrap si están disponibles
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            console.log('AdminView inicializado correctamente');
+        } catch (error) {
+            console.error('Error al inicializar AdminView:', error);
+            UI.showToast('Error al inicializar el panel de administración', 'error');
+        }
+    }
+    
+    // ========== MÉTODO DE LIMPIEZA ==========
+    
+    destroy() {
+        // Limpiar event listeners si es necesario
+        const modals = ['modalArea', 'modalUsuario', 'modalAsignacion'];
+        modals.forEach(modalId => {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                if (modalInstance) {
+                    modalInstance.dispose();
+                }
             }
         });
         
-        if (existingAssignment && existingAssignment.length > 0) {
-            showToast('El usuario ya tiene una asignación activa en esta área', 'warning');
-            return;
-        }
+        // Limpiar tooltips
+        const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltips.forEach(tooltip => {
+            const tooltipInstance = bootstrap.Tooltip.getInstance(tooltip);
+            if (tooltipInstance) {
+                tooltipInstance.dispose();
+            }
+        });
         
-        // Crear asignación
-        const assignmentData = {
-            usuario_id: usuario.id,
-            area_id: areaId,
-            rol: rol,
-            puede_capturar: true,
-            puede_editar: ['JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', 'ADMIN'].includes(rol),
-            puede_eliminar: ['SUBDIRECTOR', 'DIRECTOR', 'ADMIN'].includes(rol),
-            asignado_por: adminState.userProfile.id,
-            estado: 'ACTIVO'
-        };
-        
-        await insertData('usuario_areas', assignmentData);
-        
-        showToast('Asignación creada correctamente', 'success');
-        
-        // Limpiar formulario
-        document.getElementById('quick-assign-email').value = '';
-        document.getElementById('quick-assign-area').value = '';
-        document.getElementById('quick-assign-role').value = '';
-        
-        // Actualizar datos
-        await loadPermisos();
-        updatePermissionsTable();
-        updateSystemCounts();
-        
-    } catch (error) {
-        console.error('❌ Error en asignación rápida:', error);
-        showToast('Error al crear la asignación', 'error');
+        console.log('AdminView limpiado correctamente');
     }
 }
 
-/**
- * Mostrar modal de agregar permiso
- */
-window.showAddPermissionModal = function() {
-    showToast('Modal de agregar permiso en desarrollo', 'info');
-};
+// ========== EXPORTACIÓN DEL MÓDULO ==========
 
-/**
- * Editar permiso
- */
-window.editPermission = function(permisoId) {
-    const permiso = adminState.permisos.find(p => p.id === permisoId);
-    if (!permiso) {
-        showToast('Permiso no encontrado', 'error');
-        return;
-    }
-    
-    showToast(`Editar permiso en desarrollo`, 'info');
-};
+// Crear instancia singleton
+const adminView = new AdminView();
 
-/**
- * Eliminar permiso
- */
-window.deletePermission = async function(permisoId, nombreUsuario, nombreArea) {
-    try {
-        const confirmed = await showConfirmModal(
-            `¿Está seguro de eliminar la asignación de "${nombreUsuario}" en el área "${nombreArea}"?`,
-            {
-                title: 'Confirmar eliminación',
-                confirmText: 'Eliminar',
-                type: 'warning'
-            }
-        );
-        
-        if (!confirmed) return;
-        
-        await deleteData('usuario_areas', { id: permisoId });
-        
-        showToast('Asignación eliminada correctamente', 'success');
-        
-        // Actualizar estado local
-        adminState.permisos = adminState.permisos.filter(p => p.id !== permisoId);
-        updatePermissionsTable();
-        updateSystemCounts();
-        
-    } catch (error) {
-        console.error('❌ Error al eliminar permiso:', error);
-        showToast('Error al eliminar la asignación', 'error');
-    }
-};
+// Exportar la instancia
+export default adminView;
 
-// =====================================================
-// FUNCIONES AUXILIARES
-// =====================================================
+// También exportar la clase por si se necesita crear múltiples instancias
+export { AdminView };
 
-/**
- * Actualizar contadores del sistema
- */
-function updateSystemCounts() {
-    const totalAreasElement = document.getElementById('total-areas-count');
-    const totalUsersElement = document.getElementById('total-users-count');
-    const totalPermissionsElement = document.getElementById('total-permissions-count');
-    
-    if (totalAreasElement) {
-        totalAreasElement.textContent = adminState.areas.length;
-    }
-    
-    if (totalUsersElement) {
-        totalUsersElement.textContent = adminState.usuarios.length;
-    }
-    
-    if (totalPermissionsElement) {
-        totalPermissionsElement.textContent = adminState.permisos.length;
-    }
-}
+// ========== INICIALIZACIÓN AUTOMÁTICA ==========
 
-/**
- * Mostrar ayuda del panel de administración
- */
-function showAdminHelp() {
-    showModal({
-        title: 'Ayuda del Panel de Administración',
-        content: `
-            <div class="space-y-4">
-                <div>
-                    <h4 class="font-medium text-gray-900 mb-2">Gestión de Áreas</h4>
-                    <p class="text-sm text-gray-600">Administre las áreas organizacionales del sistema. Puede crear, editar, activar/desactivar y eliminar áreas.</p>
-                </div>
-                
-                <div>
-                    <h4 class="font-medium text-gray-900 mb-2">Gestión de Usuarios</h4>
-                    <p class="text-sm text-gray-600">Administre los usuarios registrados, sus roles principales y estados. Los usuarios se registran automáticamente al acceder al sistema.</p>
-                </div>
-                
-                <div>
-                    <h4 class="font-medium text-gray-900 mb-2">Permisos y Asignaciones</h4>
-                    <p class="text-sm text-gray-600">Asigne usuarios a áreas específicas con roles determinados. Use la asignación rápida para agregar permisos de forma eficiente.</p>
-                </div>
-                
-                <div class="bg-blue-50 p-3 rounded">
-                    <p class="text-sm text-blue-800">
-                        <strong>Nota:</strong> Solo los administradores pueden acceder a este panel. Los cambios realizados afectan inmediatamente los permisos del sistema.
-                    </p>
-                </div>
-            </div>
-        `,
-        actions: [
-            {
-                text: 'Cerrar',
-                handler: () => true
-            }
-        ]
+// Si el módulo se carga en la página de administración, inicializar automáticamente
+if (window.location.hash === '#/admin' || window.location.pathname.includes('admin')) {
+    document.addEventListener('DOMContentLoaded', () => {
+        adminView.init().catch(console.error);
     });
 }
 
-/**
- * Buscar usuario por email para validaciones
- */
-async function findUserByEmail(email) {
-    try {
-        const { data } = await selectData('perfiles', {
-            select: '*',
-            filters: { email: email.trim().toLowerCase() }
-        });
-        
-        return data && data.length > 0 ? data[0] : null;
-        
-    } catch (error) {
-        console.error('❌ Error al buscar usuario por email:', error);
-        return null;
+// Limpiar al cambiar de página
+window.addEventListener('hashchange', () => {
+    if (!window.location.hash.includes('admin')) {
+        adminView.destroy();
     }
-}
+});
 
-/**
- * Validar permisos para operaciones administrativas
- */
-function validateAdminPermission(operation) {
-    if (adminState.userProfile?.rol_principal !== 'ADMIN') {
-        showToast('Solo los administradores pueden realizar esta acción', 'error');
-        return false;
-    }
-    return true;
-}
-
-/**
- * Exportar datos de administración
- */
-async function exportAdminData(type) {
-    if (!validateAdminPermission('export')) return;
-    
-    try {
-        let data, filename;
-        
-        switch (type) {
-            case 'areas':
-                data = adminState.areas.map(area => ({
-                    'Clave': area.clave,
-                    'Nombre': area.nombre,
-                    'Descripción': area.descripcion || '',
-                    'Estado': area.estado,
-                    'Color': area.color_hex,
-                    'Indicadores': area.total_indicadores || 0,
-                    'Usuarios Asignados': area.usuarios_asignados || 0,
-                    'Fecha Creación': formatDate(area.fecha_creacion, 'long')
-                }));
-                filename = `AIFA_areas_${new Date().toISOString().slice(0, 10)}.csv`;
-                break;
-                
-            case 'users':
-                data = adminState.usuarios.map(user => ({
-                    'Email': user.email,
-                    'Nombre Completo': user.nombre_completo || '',
-                    'Puesto': user.puesto || '',
-                    'Rol Principal': user.rol_principal,
-                    'Estado': user.estado,
-                    'Áreas Asignadas': user.areas_asignadas || 0,
-                    'Último Acceso': user.ultimo_acceso ? formatDate(user.ultimo_acceso, 'long') : 'Nunca',
-                    'Fecha Registro': formatDate(user.fecha_creacion, 'long')
-                }));
-                filename = `AIFA_usuarios_${new Date().toISOString().slice(0, 10)}.csv`;
-                break;
-                
-            case 'permissions':
-                data = adminState.permisos.map(permiso => ({
-                    'Usuario Email': permiso.perfiles?.email || '',
-                    'Usuario Nombre': permiso.perfiles?.nombre_completo || '',
-                    'Área': permiso.areas?.nombre || '',
-                    'Área Clave': permiso.areas?.clave || '',
-                    'Rol': permiso.rol,
-                    'Puede Capturar': permiso.puede_capturar ? 'Sí' : 'No',
-                    'Puede Editar': permiso.puede_editar ? 'Sí' : 'No',
-                    'Puede Eliminar': permiso.puede_eliminar ? 'Sí' : 'No',
-                    'Fecha Asignación': formatDate(permiso.fecha_asignacion, 'long')
-                }));
-                filename = `AIFA_permisos_${new Date().toISOString().slice(0, 10)}.csv`;
-                break;
-                
-            default:
-                showToast('Tipo de exportación no válido', 'error');
-                return;
-        }
-        
-        exportToCSV(data, filename);
-        
-    } catch (error) {
-        console.error('❌ Error al exportar datos:', error);
-        showToast('Error al exportar los datos', 'error');
-    }
-}
+// ========== FIN DEL ARCHIVO admin.js ==========
