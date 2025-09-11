@@ -65,23 +65,41 @@ export class AdminView {
         this.filters = adminState.filters;
     }
 
-    async render() {
-        const user = (await supabase.auth.getUser()).data.user;
-        if (!user) {
-            window.location.href = '/';
-            return '';
+async render() {
+    try {
+        // Verificar autenticación
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+            console.log('Usuario no autenticado, redirigiendo al login...');
+            // Usar el router en lugar de window.location
+            if (window.router) {
+                window.router.navigateTo('/login');
+            } else {
+                window.location.hash = '#/login';
+            }
+            return '<div class="p-4">Redirigiendo al login...</div>';
         }
 
         // Verificar si es admin
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
             .from('usuarios')
             .select('*')
             .eq('id', user.id)
             .single();
 
-        if (profile?.rol !== 'admin') {
-            return UI.alert('No tienes permisos para acceder a esta sección', 'danger');
+        if (profileError) {
+            console.error('Error al obtener perfil:', profileError);
+            return UI.alert('Error al verificar permisos de usuario', 'danger');
         }
+
+        if (!profile || profile.rol !== 'admin') {
+            console.log('Usuario no es admin:', profile);
+            return UI.alert('No tienes permisos para acceder a esta sección. Rol actual: ' + (profile?.rol || 'sin rol'), 'danger');
+        }
+
+        // Si todo está bien, continuar con el render normal
+        console.log('Admin verificado, renderizando panel...');
 
         adminState.userProfile = profile;
         await this.loadInitialData();
