@@ -4,7 +4,17 @@
 // =====================================================
 
 import { supabase } from '../lib/supa.js';
-import { UI } from '../lib/ui.js';
+import { showToast, showModal, alert, showLoading, hideLoading, showConfirmModal } from '../lib/ui.js';
+
+// Crear objeto UI para mantener compatibilidad con el código
+const UI = {
+    showToast,
+    showModal,
+    alert,
+    showLoading,
+    hideLoading,
+    showConfirmModal
+};
 
 // Estado del panel de administración
 const adminState = {
