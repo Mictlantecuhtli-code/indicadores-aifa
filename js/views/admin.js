@@ -4,13 +4,25 @@
 // =====================================================
 
 import { supabase } from '../lib/supa.js';
-import { showToast, showModal, alert, showLoading, hideLoading, showConfirmModal } from '../lib/ui.js';
+import { 
+    showToast, 
+    showModal, 
+    showLoading, 
+    hideLoading, 
+    showConfirmModal,
+    validateForm,
+    getFormData
+} from '../lib/ui.js';
 
 // Crear objeto UI para mantener compatibilidad con el código
 const UI = {
     showToast,
     showModal,
-    alert,
+    alert: (message, type = 'info') => {
+        // Crear una función alert usando showToast para compatibilidad
+        showToast(message, type);
+        return `<div class="alert alert-${type}">${message}</div>`;
+    },
     showLoading,
     hideLoading,
     showConfirmModal
