@@ -3116,8 +3116,15 @@ const adminView = new AdminView();
 // Hacer la instancia disponible globalmente para los event handlers inline
 window.adminView = adminView;
 
-// Exportar solo la instancia como default
-export default adminView;
+// Exportar objeto con método render que el router espera
+export default {
+    render: async (container, params, query) => {
+        // Renderizar la vista y adjuntar event listeners
+        container.innerHTML = await adminView.render();
+        adminView.attachEventListeners();
+        return container.innerHTML;
+    }
+};
 
 // ========== INICIALIZACIÓN AUTOMÁTICA ==========
 
