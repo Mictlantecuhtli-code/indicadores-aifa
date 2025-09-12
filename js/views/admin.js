@@ -285,13 +285,7 @@ async render() {
         const { data: usuarios, error } = await supabase
             .from('perfiles')
             .select(`
-                *,
-                areas (
-                    id,
-                    nombre,
-                    clave,
-                    color_hex
-                )
+                *
             `)
             .order('nombre_completo');
         
