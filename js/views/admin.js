@@ -2,7 +2,7 @@
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - SISTEMA COMPLETO
 // =====================================================
-
+ 
 import { supabase } from '../lib/supa.js';
 import { 
     showToast, 
