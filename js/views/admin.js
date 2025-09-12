@@ -3178,7 +3178,10 @@ const adminModule = {
 };
 
 // Exportar el módulo
-export default adminModule;
+//export default adminModule;
+
+export const render = adminModule.render;
+export default { render: adminModule.render };
 
 // ========== INICIALIZACIÓN AUTOMÁTICA ==========
 
