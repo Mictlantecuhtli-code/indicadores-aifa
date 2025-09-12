@@ -3,7 +3,7 @@
 // Renderizado y HTML
 // =====================================================
 
-import { DEBUG } from '../config.js';
+import { DEBUG, ROLES } from '../config.js';
 import { selectData, appState, getCurrentProfile, checkAreaPermission } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, showConfirmModal } from '../lib/ui.js';
 
@@ -137,7 +137,7 @@ export async function render(container, params = {}, query = {}) {
 function createAreaHTML() {
     const area = areaState.areaData;
     const userRole = areaState.userProfile?.rol_principal;
-    const canManage = ['ADMIN'].includes(userRole);
+    const canManage = [ROLES.ADMIN].includes(userRole);
     
     return `
         <div class="space-y-6">
@@ -354,7 +354,7 @@ function createIndicadoresGridHTML() {
                 <p class="text-gray-600 mb-4">
                     Esta área no tiene indicadores configurados.
                 </p>
-                ${['ADMIN'].includes(areaState.userProfile?.rol_principal) ? `
+                ${[ROLES.ADMIN].includes(areaState.userProfile?.rol_principal) ? `
                     <button 
                         id="add-first-indicator-btn"
                         class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark"

@@ -4,6 +4,7 @@
 // =====================================================
  
 import { supabase } from '../lib/supa.js';
+import { ROLES } from '../config.js';
 import { 
     showToast, 
     showModal, 
@@ -89,16 +90,16 @@ async render() {
             .single();
 
         console.log('Perfil encontrado:', profile);
-        console.log('Rol del usuario:', profile?.rol);
+        console.log('Rol del usuario:', profile?.rol_principal);
 
         if (profileError) {
             console.error('Error al obtener perfil:', profileError);
             return UI.alert('Error al verificar permisos de usuario', 'danger');
         }
 
-        if (!profile ||profile.rol_principal !== 'admin') {
-            console.warn('Usuario no es admin. Rol actual:', profile?.rol);
-            return UI.alert(`No tienes permisos de administrador. Tu rol actual es: ${profile?.rol || 'sin rol'}`, 'danger');
+        if (!profile || profile.rol_principal?.toUpperCase() !== ROLES.ADMIN) {
+            console.warn('Usuario no es admin. Rol actual:', profile?.rol_principal);
+            return UI.alert(`No tienes permisos de administrador. Tu rol actual es: ${profile?.rol_principal || 'sin rol'}`, 'danger');
         }
 
         console.log('✅ Usuario verificado como admin, renderizando panel...');
@@ -316,20 +317,13 @@ async render() {
     async loadPermisos() {
         const { data: permisos, error } = await supabase
             .from('usuario_areas')
-            .select(`
-                *,
-                perfiles (
-                    id,
-                    email,
-                    nombre_completo
-                ),
-                areas (
-                    id,
-                    nombre,
-                    clave
-                )
-            `)
-            .order('created_at', { ascending: false });
+            .select(
+                `id, usuario_id, area_id, rol, puede_capturar, puede_editar, puede_eliminar, estado, asignado_por, fecha_asignacion, fecha_actualizacion,
+                usuario:perfiles!usuario_areas_usuario_id_fkey(id, email, nombre_completo),
+                asignador:perfiles!usuario_areas_asignado_por_fkey(id, email, nombre_completo),
+                area:areas!usuario_areas_area_id_fkey(id, nombre, clave)`
+            )
+            .order('fecha_asignacion', { ascending: false });
         
         if (error) {
             console.error('Error cargando permisos:', error);

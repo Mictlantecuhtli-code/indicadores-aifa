@@ -3,7 +3,7 @@
 // Estado, renderizado y HTML base
 // =====================================================
 
-import { DEBUG, VALIDATION, APP_CONFIG } from '../config.js';
+import { DEBUG, VALIDATION, APP_CONFIG, ROLES } from '../config.js';
 import { selectData, insertData, updateData, deleteData, appState, getCurrentProfile, checkAreaPermission } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, showConfirmModal, validateForm, getFormData, exportToCSV } from '../lib/ui.js';
 
@@ -141,7 +141,7 @@ function createIndicadorHTML() {
     const indicador = indicadorState.indicadorData;
     const area = indicadorState.areaData;
     const userRole = indicadorState.userProfile?.rol_principal;
-    const canManage = ['ADMIN'].includes(userRole);
+    const canManage = [ROLES.ADMIN].includes(userRole);
     
     return `
         <div class="space-y-6">
