@@ -7,7 +7,7 @@ export const SUPABASE_URL = 'https://kxjldzcaeayguiqkqqyh.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amxkemNhZWF5Z3VpcWtxcXloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NTQ5ODksImV4cCI6MjA3MjMzMDk4OX0.7c0s4zFimF4TH5_jyJbeTRUuxhGaSvVsCnamwxuKgbw';
 
 // Configuración de la organización
-export const ORG_DOMAIN = '@aifa.gob.mx';
+export const ORG_DOMAIN = '@aifa.aero';
 
 // Configuración de debug
 export const DEBUG = {

@@ -116,7 +116,7 @@ function createLoginHTML() {
                                     autocomplete="email" 
                                     required 
                                     class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-aifa-blue focus:border-aifa-blue sm:text-sm"
-                                    placeholder="usuario@aifa.gob.mx"
+                                    placeholder="usuario${ORG_DOMAIN}"
                                     ${isLocked ? 'disabled' : ''}
                                 >
                             </div>
@@ -341,12 +341,18 @@ async function handleLogin(e) {
         // Obtener datos del formulario
         const formData = getFormData(form);
         const { email, password } = formData;
-        
+
+        // Validar dominio del correo
+        if (!email.endsWith(ORG_DOMAIN)) {
+            showToast(`El correo debe pertenecer al dominio ${ORG_DOMAIN}`, 'error');
+            return;
+        }
+
         // Deshabilitar botón y mostrar loading
         loginButton.disabled = true;
         buttonText.textContent = 'Iniciando sesión...';
         buttonSpinner.classList.remove('hidden');
-        
+
         // Intentar login
         const result = await signInWithPassword(email, password);
         
