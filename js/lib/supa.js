@@ -129,31 +129,63 @@ export async function selectData(table, options = {}) {
                 if (value !== null && value !== undefined) {
                     if (Array.isArray(value)) {
                         query = query.in(column, value);
-                    } else if (typeof value === 'object' && value.operator) {
-                        switch (value.operator) {
-                            case 'gte':
-                                query = query.gte(column, value.value);
-                                break;
-                            case 'lte':
-                                query = query.lte(column, value.value);
-                                break;
-                            case 'like':
-                                query = query.like(column, value.value);
-                                break;
-                            case 'ilike':
-                                query = query.ilike(column, value.value);
-                                break;
-                            case 'neq':
-                                query = query.neq(column, value.value);
-                                break;
-                            case 'gt':
-                                query = query.gt(column, value.value);
-                                break;
-                            case 'lt':
-                                query = query.lt(column, value.value);
-                                break;
-                            default:
-                                query = query.eq(column, value.value);
+                    } else if (typeof value === 'object') {
+                        if (value.operator) {
+                            // Formato sencillo: { operator: 'gte', value: ... }
+                            switch (value.operator) {
+                                case 'gte':
+                                    query = query.gte(column, value.value);
+                                    break;
+                                case 'lte':
+                                    query = query.lte(column, value.value);
+                                    break;
+                                case 'like':
+                                    query = query.like(column, value.value);
+                                    break;
+                                case 'ilike':
+                                    query = query.ilike(column, value.value);
+                                    break;
+                                case 'neq':
+                                    query = query.neq(column, value.value);
+                                    break;
+                                case 'gt':
+                                    query = query.gt(column, value.value);
+                                    break;
+                                case 'lt':
+                                    query = query.lt(column, value.value);
+                                    break;
+                                default:
+                                    query = query.eq(column, value.value);
+                            }
+                        } else {
+                            // Formato múltiple: { gte: ..., lte: ... }
+                            Object.entries(value).forEach(([op, val]) => {
+                                switch (op) {
+                                    case 'gte':
+                                        query = query.gte(column, val);
+                                        break;
+                                    case 'lte':
+                                        query = query.lte(column, val);
+                                        break;
+                                    case 'gt':
+                                        query = query.gt(column, val);
+                                        break;
+                                    case 'lt':
+                                        query = query.lt(column, val);
+                                        break;
+                                    case 'like':
+                                        query = query.like(column, val);
+                                        break;
+                                    case 'ilike':
+                                        query = query.ilike(column, val);
+                                        break;
+                                    case 'neq':
+                                        query = query.neq(column, val);
+                                        break;
+                                    default:
+                                        query = query.eq(column, val);
+                                }
+                            });
                         }
                     } else {
                         query = query.eq(column, value);
@@ -647,19 +679,17 @@ export function hasRoleLevel(userRole, minRole) {
  */
 export function createDateFilters(startDate, endDate) {
     const filters = {};
-    
-    if (startDate) {
-        filters.fecha_creacion = { operator: 'gte', value: startDate };
+
+    if (startDate || endDate) {
+        filters.fecha_creacion = {};
+        if (startDate) {
+            filters.fecha_creacion.gte = startDate;
+        }
+        if (endDate) {
+            filters.fecha_creacion.lte = endDate;
+        }
     }
-    
-    if (endDate) {
-        filters.fecha_creacion = { 
-            ...filters.fecha_creacion,
-            operator: 'lte', 
-            value: endDate 
-        };
-    }
-    
+
     return filters;
 }
 
