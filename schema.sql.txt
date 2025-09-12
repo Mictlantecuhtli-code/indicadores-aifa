@@ -699,37 +699,33 @@ ALTER TABLE mediciones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auditoria_log ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
+-- FUNCIONES DE APOYO PARA RLS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION has_admin_role()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM perfiles
+    WHERE id = auth.uid()
+      AND rol_principal IN ('ADMIN', 'DIRECTOR')
+      AND estado = 'ACTIVO'
+  );
+$$;
+
+-- =====================================================
 -- POLÍTICAS RLS PARA TABLA: perfiles
 -- =====================================================
 
--- Los usuarios pueden ver y actualizar su propio perfil
-CREATE POLICY "Usuarios pueden ver su propio perfil" ON perfiles
-    FOR SELECT USING (auth.uid() = id);
+-- Perfiles visibles solo para el usuario o roles con privilegios de administración
+CREATE POLICY perfiles_select ON perfiles
+    FOR SELECT USING (id = auth.uid() OR has_admin_role());
 
-CREATE POLICY "Usuarios pueden actualizar su propio perfil" ON perfiles
-    FOR UPDATE USING (auth.uid() = id);
-
--- ADMIN puede ver y gestionar todos los perfiles
-CREATE POLICY "Admin puede gestionar todos los perfiles" ON perfiles
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal = 'ADMIN'
-            AND p.estado = 'ACTIVO'
-        )
-    );
-
--- DIRECTOR puede ver todos los perfiles
-CREATE POLICY "Director puede ver todos los perfiles" ON perfiles
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal IN ('DIRECTOR', 'ADMIN')
-            AND p.estado = 'ACTIVO'
-        )
-    );
+CREATE POLICY perfiles_update ON perfiles
+    FOR UPDATE USING (id = auth.uid() OR has_admin_role());
 
 -- =====================================================
 -- POLÍTICAS RLS PARA TABLA: areas
@@ -738,21 +734,14 @@ CREATE POLICY "Director puede ver todos los perfiles" ON perfiles
 -- Todos los usuarios autenticados pueden ver áreas activas
 CREATE POLICY "Usuarios pueden ver áreas activas" ON areas
     FOR SELECT USING (
-        estado = 'ACTIVO' 
+        estado = 'ACTIVO'
         AND auth.uid() IS NOT NULL
         AND EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND estado = 'ACTIVO')
     );
 
 -- Solo ADMIN puede gestionar áreas
 CREATE POLICY "Admin puede gestionar áreas" ON areas
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal = 'ADMIN'
-            AND p.estado = 'ACTIVO'
-        )
-    );
+    FOR ALL USING (has_admin_role());
 
 -- =====================================================
 -- POLÍTICAS RLS PARA TABLA: indicadores
@@ -764,17 +753,18 @@ CREATE POLICY "Usuarios pueden ver indicadores de sus áreas" ON indicadores
         estado = 'ACTIVO'
         AND (
             -- Roles altos ven todo
-            EXISTS (
-                SELECT 1 FROM perfiles p 
-                WHERE p.id = auth.uid() 
-                AND p.rol_principal IN ('ADMIN', 'DIRECTOR', 'SUBDIRECTOR')
+            has_admin_role()
+            OR EXISTS (
+                SELECT 1 FROM perfiles p
+                WHERE p.id = auth.uid()
+                AND p.rol_principal = 'SUBDIRECTOR'
                 AND p.estado = 'ACTIVO'
             )
             OR
             -- O tienen asignación específica al área
             EXISTS (
-                SELECT 1 FROM usuario_areas ua 
-                WHERE ua.usuario_id = auth.uid() 
+                SELECT 1 FROM usuario_areas ua
+                WHERE ua.usuario_id = auth.uid()
                 AND ua.area_id = indicadores.area_id
                 AND ua.estado = 'ACTIVO'
             )
@@ -783,14 +773,7 @@ CREATE POLICY "Usuarios pueden ver indicadores de sus áreas" ON indicadores
 
 -- Solo ADMIN puede gestionar indicadores
 CREATE POLICY "Admin puede gestionar indicadores" ON indicadores
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal = 'ADMIN'
-            AND p.estado = 'ACTIVO'
-        )
-    );
+    FOR ALL USING (has_admin_role());
 
 -- =====================================================
 -- POLÍTICAS RLS PARA TABLA: usuario_areas
@@ -802,25 +785,11 @@ CREATE POLICY "Usuarios pueden ver sus asignaciones" ON usuario_areas
 
 -- ADMIN puede gestionar todas las asignaciones
 CREATE POLICY "Admin puede gestionar asignaciones" ON usuario_areas
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal = 'ADMIN'
-            AND p.estado = 'ACTIVO'
-        )
-    );
+    FOR ALL USING (has_admin_role());
 
 -- DIRECTOR puede ver todas las asignaciones
 CREATE POLICY "Director puede ver asignaciones" ON usuario_areas
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal IN ('DIRECTOR', 'ADMIN')
-            AND p.estado = 'ACTIVO'
-        )
-    );
+    FOR SELECT USING (has_admin_role());
 
 -- =====================================================
 -- POLÍTICAS RLS PARA TABLA: mediciones
@@ -835,10 +804,11 @@ CREATE POLICY "Usuarios pueden ver mediciones de sus áreas" ON mediciones
             AND i.estado = 'ACTIVO'
             AND (
                 -- Roles altos ven todo
-                EXISTS (
-                    SELECT 1 FROM perfiles p 
-                    WHERE p.id = auth.uid() 
-                    AND p.rol_principal IN ('ADMIN', 'DIRECTOR', 'SUBDIRECTOR')
+                has_admin_role()
+                OR EXISTS (
+                    SELECT 1 FROM perfiles p
+                    WHERE p.id = auth.uid()
+                    AND p.rol_principal = 'SUBDIRECTOR'
                     AND p.estado = 'ACTIVO'
                 )
                 OR
@@ -862,10 +832,11 @@ CREATE POLICY "Usuarios pueden crear mediciones en sus áreas" ON mediciones
             AND i.estado = 'ACTIVO'
             AND (
                 -- Roles altos pueden capturar en cualquier área
-                EXISTS (
-                    SELECT 1 FROM perfiles p 
-                    WHERE p.id = auth.uid() 
-                    AND p.rol_principal IN ('ADMIN', 'DIRECTOR', 'SUBDIRECTOR')
+                has_admin_role()
+                OR EXISTS (
+                    SELECT 1 FROM perfiles p
+                    WHERE p.id = auth.uid()
+                    AND p.rol_principal = 'SUBDIRECTOR'
                     AND p.estado = 'ACTIVO'
                 )
                 OR
@@ -891,10 +862,11 @@ CREATE POLICY "Usuarios pueden editar mediciones en sus áreas" ON mediciones
             AND i.estado = 'ACTIVO'
             AND (
                 -- Roles altos pueden editar en cualquier área
-                EXISTS (
-                    SELECT 1 FROM perfiles p 
-                    WHERE p.id = auth.uid() 
-                    AND p.rol_principal IN ('ADMIN', 'DIRECTOR', 'SUBDIRECTOR')
+                has_admin_role()
+                OR EXISTS (
+                    SELECT 1 FROM perfiles p
+                    WHERE p.id = auth.uid()
+                    AND p.rol_principal = 'SUBDIRECTOR'
                     AND p.estado = 'ACTIVO'
                 )
                 OR
@@ -906,7 +878,7 @@ CREATE POLICY "Usuarios pueden editar mediciones en sus áreas" ON mediciones
                     AND ua.area_id = i.area_id
                     AND ua.puede_editar = TRUE
                     AND ua.estado = 'ACTIVO'
-                    AND p.rol_principal IN ('JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', 'ADMIN')
+                    AND (p.rol_principal IN ('JEFE_AREA', 'SUBDIRECTOR') OR has_admin_role())
                 )
             )
         )
@@ -915,17 +887,12 @@ CREATE POLICY "Usuarios pueden editar mediciones en sus áreas" ON mediciones
 -- DELETE: Solo roles altos pueden eliminar mediciones
 CREATE POLICY "Solo roles altos pueden eliminar mediciones" ON mediciones
     FOR DELETE USING (
-        EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal IN ('ADMIN', 'DIRECTOR')
-            AND p.estado = 'ACTIVO'
-        )
+        has_admin_role()
         OR
         EXISTS (
-            SELECT 1 FROM indicadores i 
+            SELECT 1 FROM indicadores i
             JOIN usuario_areas ua ON i.area_id = ua.area_id
-            WHERE i.id = mediciones.indicador_id 
+            WHERE i.id = mediciones.indicador_id
             AND ua.usuario_id = auth.uid()
             AND ua.puede_eliminar = TRUE
             AND ua.estado = 'ACTIVO'
@@ -940,13 +907,16 @@ CREATE POLICY "Solo roles altos pueden eliminar mediciones" ON mediciones
 CREATE POLICY "Jefes pueden ver auditoría de sus áreas" ON auditoria_log
     FOR SELECT USING (
         EXISTS (
-            SELECT 1 FROM perfiles p 
-            WHERE p.id = auth.uid() 
-            AND p.rol_principal IN ('JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', 'ADMIN')
+            SELECT 1 FROM perfiles p
+            WHERE p.id = auth.uid()
             AND p.estado = 'ACTIVO'
             AND (
+                has_admin_role()
+                OR p.rol_principal IN ('JEFE_AREA', 'SUBDIRECTOR')
+            )
+            AND (
                 -- Roles altos ven toda la auditoría
-                p.rol_principal IN ('ADMIN', 'DIRECTOR', 'SUBDIRECTOR')
+                has_admin_role() OR p.rol_principal = 'SUBDIRECTOR'
                 OR
                 -- JEFE_AREA solo ve auditoría de sus áreas
                 (
