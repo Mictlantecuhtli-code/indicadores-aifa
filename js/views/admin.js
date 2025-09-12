@@ -317,20 +317,13 @@ async render() {
     async loadPermisos() {
         const { data: permisos, error } = await supabase
             .from('usuario_areas')
-            .select(`
-                *,
-                perfiles (
-                    id,
-                    email,
-                    nombre_completo
-                ),
-                areas (
-                    id,
-                    nombre,
-                    clave
-                )
-            `)
-            .order('created_at', { ascending: false });
+            .select(
+                `id, usuario_id, area_id, rol, puede_capturar, puede_editar, puede_eliminar, estado, asignado_por, fecha_asignacion, fecha_actualizacion,
+                usuario:perfiles!usuario_areas_usuario_id_fkey(id, email, nombre_completo),
+                asignador:perfiles!usuario_areas_asignado_por_fkey(id, email, nombre_completo),
+                area:areas!usuario_areas_area_id_fkey(id, nombre, clave)`
+            )
+            .order('fecha_asignacion', { ascending: false });
         
         if (error) {
             console.error('Error cargando permisos:', error);
