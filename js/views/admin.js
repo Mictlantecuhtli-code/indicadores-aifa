@@ -270,7 +270,7 @@ async render() {
         const { data: areas, error } = await supabase
             .from('areas')
             .select('*')
-            .order('nombre_completo');
+            .order('nombre');
         
         if (error) {
             console.error('Error cargando áreas:', error);
@@ -308,7 +308,7 @@ async render() {
         const { data: indicadores, error } = await supabase
             .from('indicadores')
             .select('*')
-            .order('nombre_completo');
+            .order('nombre');
         
         if (error) {
             console.error('Error cargando indicadores:', error);
