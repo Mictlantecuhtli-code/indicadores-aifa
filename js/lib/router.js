@@ -182,10 +182,18 @@ async function renderRoute(route) {
                 break;
                 
             case '/captura':
-                // Redirigir a home para mostrar áreas
-                // navigateTo('/', {}, true);
-                viewModule = await import('../views/home.js');
-                break;
+                {
+                    // Verificar permisos de captura
+                    const profile = appState.profile || await getCurrentProfile();
+                    if (!profile || !hasRoleLevel(profile.rol_principal, 'CAPTURADOR')) {
+                        showToast('No tienes permisos para capturar datos', 'error');
+                        hideLoading();
+                        navigateTo('/', {}, true);
+                        return;
+                    }
+                    viewModule = await import('../views/captura.js');
+                    break;
+                }
                 
             default:
                 // Rutas con parámetros
@@ -251,6 +259,13 @@ function showErrorPage(title, message) {
  * Actualizar navegación activa
  */
 function updateActiveNavigation(currentPath) {
+    // Controlar visibilidad del botón de captura según permisos
+    const captureButton = document.getElementById('nav-captura');
+    if (captureButton) {
+        const canCapture = appState.profile && hasRoleLevel(appState.profile.rol_principal, 'CAPTURADOR');
+        captureButton.classList.toggle('hidden', !canCapture);
+    }
+
     // Limpiar navegación activa
     document.querySelectorAll('.nav-button').forEach(btn => {
         btn.classList.remove('text-aifa-blue', 'bg-blue-50');
