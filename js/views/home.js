@@ -2,7 +2,7 @@
 // VISTA PRINCIPAL (HOME) - BOTONES DE ÁREAS
 // =====================================================
 
-import { DEBUG } from '../config.js';
+import { DEBUG, ROLES } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber } from '../lib/ui.js';
 
@@ -95,7 +95,7 @@ export async function render(container, params = {}, query = {}) {
 function createHomeHTML() {
     const userRole = homeState.userProfile?.rol_principal || 'CAPTURISTA';
     const userName = homeState.userProfile?.nombre_completo || 'Usuario';
-    const isHighRole = ['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole);
+    const isHighRole = [ROLES.ADMIN, 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole);
     
     return `
         <div class="space-y-8">
@@ -160,7 +160,7 @@ function createHomeHTML() {
                         </button>
                     ` : ''}
                     
-                    ${['ADMIN'].includes(userRole) ? `
+                    ${[ROLES.ADMIN].includes(userRole) ? `
                         <button 
                             onclick="window.router.navigateTo('/admin')"
                             class="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group"
@@ -265,7 +265,7 @@ function createAreasGridHTML() {
                         'No se encontraron áreas en el sistema.'
                     }
                 </p>
-                ${['ADMIN'].includes(homeState.userProfile?.rol_principal) ? `
+                ${[ROLES.ADMIN].includes(homeState.userProfile?.rol_principal) ? `
                     <button 
                         onclick="window.router.navigateTo('/admin')"
                         class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark"
@@ -369,7 +369,7 @@ async function loadAreas() {
     try {
         const userRole = homeState.userProfile?.rol_principal;
         
-        if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
+        if ([ROLES.ADMIN, 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas
             /*const { data } = await selectData('areas', {
                 select: '*',
@@ -559,7 +559,7 @@ window.handleAreaKeydown = function(event, areaId, areaNombre) {
  */
 function canCapture() {
     const userRole = homeState.userProfile?.rol_principal;
-    return ['CAPTURISTA', 'JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', 'ADMIN'].includes(userRole);
+    return ['CAPTURISTA', 'JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', ROLES.ADMIN].includes(userRole);
 }
 
 /**
@@ -571,7 +571,7 @@ function getRoleDisplayName(role) {
         'JEFE_AREA': 'Jefe de Área',
         'SUBDIRECTOR': 'Subdirector',
         'DIRECTOR': 'Director',
-        'ADMIN': 'Administrador'
+        [ROLES.ADMIN]: 'Administrador'
     };
     return roleNames[role] || role;
 }
@@ -583,7 +583,7 @@ function getPermissionBadges(area) {
     const userRole = homeState.userProfile?.rol_principal;
     const badges = [];
     
-    if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
+    if ([ROLES.ADMIN, 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
         badges.push('<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Acceso completo</span>');
     } else {
         // Para capturistas y jefes de área, verificar permisos específicos
@@ -620,7 +620,7 @@ function updateUserInfo() {
     // Mostrar/ocultar botón de administración según el rol
     const adminNavBtn = document.getElementById('nav-admin');
     if (adminNavBtn) {
-        if (['ADMIN'].includes(homeState.userProfile?.rol_principal)) {
+        if ([ROLES.ADMIN].includes(homeState.userProfile?.rol_principal)) {
             adminNavBtn.classList.remove('hidden');
         } else {
             adminNavBtn.classList.add('hidden');
