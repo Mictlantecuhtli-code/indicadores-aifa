@@ -2,7 +2,7 @@
 // SISTEMA DE AUTENTICACIÓN - LOGIN
 // =====================================================
 
-import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG } from '../config.js';
+import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG, ROLES } from '../config.js';
 import { supabase, appState, signInWithPassword } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
 
@@ -365,20 +365,20 @@ async function handleLogin(e) {
         // NUEVO: Verificar el rol del usuario para redirigir correctamente
         try {
             const { data: profile } = await supabase
-                .from('usuarios')
-                .select('*')
+                .from('perfiles')
+                .select('rol_principal')
                 .eq('email', email.toLowerCase())
                 .single();
-            
+
             console.log('Perfil del usuario después del login:', profile);
-            console.log('Rol detectado:', profile?.rol);
-            
+            console.log('Rol detectado:', profile?.rol_principal);
+
             // Mostrar mensaje de éxito
             showToast(MESSAGES.success.login, 'success');
-            
+
             // Redirigir según el rol
             setTimeout(() => {
-                if (profile?.rol === 'admin') {
+                if (profile?.rol_principal?.toUpperCase() === ROLES.ADMIN) {
                     console.log('Usuario es admin, redirigiendo a /admin');
                     window.router.navigateTo('/admin', {}, true);
                 } else {
@@ -386,7 +386,7 @@ async function handleLogin(e) {
                     window.router.navigateTo('/', {}, true);
                 }
             }, 1000);
-            
+
         } catch (profileError) {
             console.error('Error al obtener perfil, redirigiendo a home:', profileError);
             // Si hay error, redirigir a home por defecto
