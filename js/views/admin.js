@@ -83,7 +83,7 @@ async render() {
 
         // Verificar si es admin - buscar por email
         const { data: profile, error: profileError } = await supabase
-            .from('usuarios')
+            .from('perfiles')
             .select('*')
             .eq('email', user.email.toLowerCase())
             .single();
@@ -96,7 +96,7 @@ async render() {
             return UI.alert('Error al verificar permisos de usuario', 'danger');
         }
 
-        if (!profile || profile.rol !== 'admin') {
+        if (!profile ||profile.rol_principal !== 'admin') {
             console.warn('Usuario no es admin. Rol actual:', profile?.rol);
             return UI.alert(`No tienes permisos de administrador. Tu rol actual es: ${profile?.rol || 'sin rol'}`, 'danger');
         }
@@ -270,7 +270,7 @@ async render() {
         const { data: areas, error } = await supabase
             .from('areas')
             .select('*')
-            .order('nombre');
+            .order('nombre_completo');
         
         if (error) {
             console.error('Error cargando áreas:', error);
@@ -283,7 +283,7 @@ async render() {
 
     async loadUsuarios() {
         const { data: usuarios, error } = await supabase
-            .from('usuarios')
+            .from('perfiles')
             .select(`
                 *,
                 areas (
@@ -293,7 +293,7 @@ async render() {
                     color_hex
                 )
             `)
-            .order('nombre');
+            .order('nombre_completo');
         
         if (error) {
             console.error('Error cargando usuarios:', error);
@@ -308,7 +308,7 @@ async render() {
         const { data: indicadores, error } = await supabase
             .from('indicadores')
             .select('*')
-            .order('nombre');
+            .order('nombre_completo');
         
         if (error) {
             console.error('Error cargando indicadores:', error);
@@ -324,10 +324,10 @@ async render() {
             .from('usuario_areas')
             .select(`
                 *,
-                usuarios (
+                perfiles (
                     id,
                     email,
-                    nombre
+                    nombre_completo
                 ),
                 areas (
                     id,
@@ -1098,7 +1098,7 @@ async render() {
 
         try {
             const { error } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update({ activo: newStatus })
                 .eq('id', usuarioId);
             
@@ -1415,7 +1415,7 @@ async render() {
         try {
             // Buscar el usuario por email
             const { data: usuarios, error: userError } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .select('*')
                 .eq('email', email.toLowerCase())
                 .single();
@@ -1433,7 +1433,7 @@ async render() {
 
             // Crear la asignación
             const { error: assignError } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update({
                     area_id: areaId,
                     rol: rol,
@@ -1564,7 +1564,7 @@ async render() {
         try {
             // Actualizar usuario
             const { error } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update({
                     area_id: areaId,
                     rol: rol,
@@ -1634,7 +1634,7 @@ async render() {
             const permiso = this.permisos.find(p => p.id === permisoId);
             if (permiso && permiso.usuarios) {
                 await supabase
-                    .from('usuarios')
+                    .from('perfiles')
                     .update({
                         area_id: null,
                         rol: 'capturista',
@@ -2381,13 +2381,13 @@ async render() {
                 // Actualizar usuario existente (sin el email)
                 delete usuarioData.email;
                 result = await supabase
-                    .from('usuarios')
+                    .from('perfiles')
                     .update(usuarioData)
                     .eq('id', usuarioId);
             } else {
                 // Verificar si el email ya existe
                 const { data: existing } = await supabase
-                    .from('usuarios')
+                    .from('perfiles')
                     .select('id')
                     .eq('email', usuarioData.email)
                     .single();
@@ -2399,7 +2399,7 @@ async render() {
                 
                 // Crear nuevo usuario
                 result = await supabase
-                    .from('usuarios')
+                    .from('perfiles')
                     .insert([usuarioData]);
             }
             
@@ -2493,7 +2493,7 @@ async render() {
         try {
             // Actualizar el usuario con la nueva asignación
             const { error: updateError } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update(asignacionData)
                 .eq('id', usuarioId);
             
@@ -2559,7 +2559,7 @@ async render() {
         
         try {
             const { error } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update({ activo: true })
                 .in('id', selectedIds);
             
@@ -2582,7 +2582,7 @@ async render() {
         
         try {
             const { error } = await supabase
-                .from('usuarios')
+                .from('perfiles')
                 .update({ activo: false })
                 .in('id', selectedIds);
             
