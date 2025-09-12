@@ -2,7 +2,7 @@
 // CLIENTE SUPABASE Y HELPERS GENÉRICOS
 // =====================================================
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, ROLES } from '../config.js';
 
 // Usar el cliente de Supabase que fue inicializado en config.js
 export const supabase = window.supabaseClient;
@@ -435,8 +435,8 @@ export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-        
-      /*  const { data, error } = await supabase
+
+        const { data, error } = await supabase
             .from('perfiles')
             .select(`
                 *,
@@ -457,22 +457,13 @@ export async function getCurrentProfile() {
             `)
             .eq('id', user.id)
             .eq('estado', 'ACTIVO')
-            .single();*/
+            .single();
 
-        const data = {
-            id: user.id,
-            email: user.email,
-            rol_principal: 'ADMIN', // Por ahora hardcodeado
-            estado: 'ACTIVO',
-            usuario_areas: [] // Array vacío por ahora
-        };
-        const error = null;
-        
         if (error) {
             console.error('❌ Error al obtener perfil:', error);
             return null;
         }
-        
+
         appState.profile = data;
         return data;
     } catch (error) {
@@ -510,7 +501,7 @@ export async function signInWithPassword(email, password) {
             appState.profile = {
                 id: data.user.id,
                 email: data.user.email,
-                rol_principal: 'ADMIN'
+                rol_principal: ROLES.ADMIN
             };
         }
         
@@ -580,7 +571,7 @@ export async function checkAreaPermission(areaId, action = 'SELECT') {
         if (!user) return false;
         
         // Los administradores tienen todos los permisos
-        if (appState.profile?.rol_principal === 'ADMIN') {
+        if (appState.profile?.rol_principal === ROLES.ADMIN) {
             return true;
         }
         
@@ -623,7 +614,7 @@ export async function getUserAreas() {
         if (!profile) return [];
         
         // Los administradores pueden ver todas las áreas
-        if (profile.rol_principal === 'ADMIN') {
+        if (profile.rol_principal === ROLES.ADMIN) {
             const { data } = await selectData('areas', {
                 select: '*',
                 filters: { estado: 'ACTIVA' },
@@ -659,9 +650,9 @@ export function hasRole(role) {
  */
 export function hasRoleLevel(userRole, minRole) {
     const roleLevels = {
-        'CONSULTOR': 1,
-        'CAPTURADOR': 2,
-        'ADMIN': 3
+        [ROLES.CONSULTOR]: 1,
+        [ROLES.CAPTURADOR]: 2,
+        [ROLES.ADMIN]: 3
     };
     
     const userLevel = roleLevels[userRole] || 0;

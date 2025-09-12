@@ -3,7 +3,7 @@
 // Estado, renderizado y filtros
 // =====================================================
 
-import { DEBUG, APP_CONFIG } from '../config.js';
+import { DEBUG, APP_CONFIG, ROLES } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
@@ -601,7 +601,7 @@ async function loadAvailableAreas() {
     try {
         const userRole = visualizacionState.userProfile?.rol_principal;
         
-        if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
+        if ([ROLES.ADMIN, 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas
             const { data } = await selectData('areas', {
                 select: '*',
