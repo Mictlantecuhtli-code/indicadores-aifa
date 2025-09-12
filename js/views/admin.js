@@ -3155,23 +3155,43 @@ window.adminView = adminView;
 // Exportar objeto con método render que el router espera
 const adminModule = {
     render: async (container, params, query) => {
+        console.log('=== ADMIN MODULE RENDER EJECUTÁNDOSE ===');
+        console.log('Container:', container);
+        console.log('Params:', params);
+        console.log('Query:', query);
+        
         try {
+            console.log('Llamando a adminView.render()...');
+            
             // Obtener el HTML de la vista
             const html = await adminView.render();
+            
+            console.log('HTML generado, longitud:', html ? html.length : 0);
             
             // Insertar el HTML en el contenedor
             container.innerHTML = html;
             
+            console.log('HTML insertado en container');
+            
             // Adjuntar event listeners después de renderizar
             setTimeout(() => {
+                console.log('Ejecutando setTimeout para event listeners...');
                 adminView.attachEventListeners();
                 adminView.init();
             }, 100);
             
             return true;
         } catch (error) {
-            console.error('Error en render de admin:', error);
-            container.innerHTML = UI.alert('Error al cargar el panel de administración', 'danger');
+            console.error('❌ Error en render de admin:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <h4>Error al cargar el panel de administración</h4>
+                    <p>${error.message}</p>
+                    <button onclick="location.reload()" class="btn btn-primary mt-2">
+                        Recargar página
+                    </button>
+                </div>
+            `;
             return false;
         }
     }
