@@ -5,6 +5,7 @@
 import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG } from '../config.js';
 import { supabase, appState, signInWithPassword } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
+import { navigateTo } from '../lib/router.js';
 
 // Estado del módulo de login
 const loginState = {
@@ -30,7 +31,7 @@ export async function render(container, params = {}, query = {}) {
         // Verificar si ya está autenticado
         if (appState.session && appState.user) {
             if (DEBUG.enabled) console.log('👤 Usuario ya autenticado, redirigiendo...');
-            window.router.navigateTo('/', {}, true);
+            navigateTo('/', {}, true);
             return;
         }
         
@@ -137,13 +138,13 @@ function createLoginHTML() {
                                     placeholder="••••••••"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                <button 
-                                    type="button" 
-                                    id="toggle-password" 
+                                <button
+                                    type="button"
+                                    id="toggle-password"
                                     class="absolute inset-y-0 right-0 pr-3 flex items-center"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                    <i data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
+                                    <i id="toggle-password-icon" data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
                                 </button>
                             </div>
                         </div>
@@ -358,8 +359,9 @@ async function handleLogin(e) {
         
         // Mostrar mensaje de éxito
         showToast('Inicio de sesión exitoso', 'success');
-        
-        // NO redirigir aquí - dejar que onAuthStateChange lo maneje automáticamente
+
+        // Redirigir al inicio
+        navigateTo('/', {}, true);
         
     } catch (error) {
         console.error('❌ Error en login:', error);
