@@ -5,6 +5,7 @@
 import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG } from '../config.js';
 import { supabase, appState, signInWithPassword } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
+import { navigateTo } from '../lib/router.js';
 
 // Estado del módulo de login
 const loginState = {
@@ -30,7 +31,7 @@ export async function render(container, params = {}, query = {}) {
         // Verificar si ya está autenticado
         if (appState.session && appState.user) {
             if (DEBUG.enabled) console.log('👤 Usuario ya autenticado, redirigiendo...');
-            window.router.navigateTo('/', {}, true);
+            navigateTo('/', {}, true);
             return;
         }
         
@@ -360,9 +361,9 @@ async function handleLogin(e) {
         showToast('Inicio de sesión exitoso', 'success');
 
         // Redirigir al inicio
-        window.router?.navigateTo('/', {}, true);
-        
-    } catch (error) {
+        navigateTo('/', {}, true);
+ 
+        } catch (error) {
         console.error('❌ Error en login:', error);
         
         // Incrementar intentos fallidos
