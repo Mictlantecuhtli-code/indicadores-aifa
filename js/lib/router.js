@@ -118,6 +118,13 @@ async function handleRouteChange(route) {
             return;
         }
         
+        // NUEVO: Permitir acceso aunque el perfil no se haya cargado completamente
+        if (authRequired && isAuthenticated() && !appState.profile) {
+            if (DEBUG.enabled) {
+                console.log('⚠️ Usuario autenticado pero perfil no cargado, permitiendo acceso');
+            }
+        }
+                
         // Si está en login y ya autenticado, redirigir a home
         if (route.path === '/login' && isAuthenticated()) {
             if (DEBUG.enabled) {
