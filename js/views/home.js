@@ -30,10 +30,18 @@ export async function render(container, params = {}, query = {}) {
         
         // Obtener perfil del usuario actual
         homeState.userProfile = await getCurrentProfile();
+
         if (!homeState.userProfile) {
-            throw new Error('No se pudo obtener el perfil del usuario');
+            console.warn('⚠️ No se pudo obtener el perfil, usando datos básicos del usuario');
+            // Crear perfil temporal con datos mínimos
+            homeState.userProfile = {
+                id: appState.user?.id,
+                email: appState.user?.email,
+                rol_principal: 'USER', // rol por defecto
+                usuario_areas: []
+            };
         }
-        
+                
         // Cargar datos necesarios
         await Promise.all([
             loadAreas(),
