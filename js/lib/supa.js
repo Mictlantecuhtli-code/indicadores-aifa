@@ -438,23 +438,7 @@ export async function getCurrentProfile() {
 
         const { data, error } = await supabase
             .from('perfiles')
-            .select(`
-                *,
-                usuario_areas (
-                    id,
-                    area_id,
-                    rol,
-                    puede_capturar,
-                    puede_editar,
-                    puede_eliminar,
-                    areas (
-                        id,
-                        clave,
-                        nombre,
-                        color_hex
-                    )
-                )
-            `)
+            .select('*')
             .eq('id', user.id)
             .eq('estado', 'ACTIVO')
             .single();
