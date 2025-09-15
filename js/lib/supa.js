@@ -88,7 +88,9 @@ function handleError(error, context = 'Operación') {
  * Helper genérico para SELECT con manejo de errores
  */
 export async function selectData(table, options = {}) {
+
     const shouldUseMockData = isDevelopment();
+
     // Datos mock temporales para tablas con problemas de RLS
     const mockData = {
         perfiles: [],
@@ -97,8 +99,13 @@ export async function selectData(table, options = {}) {
     };
 
     const hasMockForTable = Object.prototype.hasOwnProperty.call(mockData, table);
+
+    // Si la tabla tiene problemas conocidos, devolver datos mock
+    if (hasMockForTable) {
+
     // Si la tabla tiene problemas conocidos, devolver datos mock solo en desarrollo
     if (shouldUseMockData && hasMockForTable) {
+
         if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
         return { data: mockData[table], count: mockData[table].length };
     }
