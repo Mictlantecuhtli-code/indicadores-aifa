@@ -137,13 +137,13 @@ function createLoginHTML() {
                                     placeholder="••••••••"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                <button 
-                                    type="button" 
-                                    id="toggle-password" 
+                                <button
+                                    type="button"
+                                    id="toggle-password"
                                     class="absolute inset-y-0 right-0 pr-3 flex items-center"
                                     ${isLocked ? 'disabled' : ''}
                                 >
-                                    <i data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
+                                    <i id="toggle-password-icon" data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
                                 </button>
                             </div>
                         </div>
@@ -358,8 +358,9 @@ async function handleLogin(e) {
         
         // Mostrar mensaje de éxito
         showToast('Inicio de sesión exitoso', 'success');
-        
-        // NO redirigir aquí - dejar que onAuthStateChange lo maneje automáticamente
+
+        // Redirigir al inicio
+        window.router?.navigateTo('/', {}, true);
         
     } catch (error) {
         console.error('❌ Error en login:', error);
