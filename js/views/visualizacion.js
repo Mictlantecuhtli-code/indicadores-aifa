@@ -39,7 +39,13 @@ export async function render(container, params = {}, query = {}) {
         // Obtener perfil del usuario
         visualizacionState.userProfile = await getCurrentProfile();
         if (!visualizacionState.userProfile) {
-            throw new Error('No se pudo obtener el perfil del usuario');
+            console.warn('⚠️ No se pudo obtener el perfil, usando datos básicos del usuario');
+            visualizacionState.userProfile = {
+                id: appState.user?.id,
+                email: appState.user?.email,
+                rol_principal: 'USER',
+                usuario_areas: []
+            };
         }
         
         // Procesar parámetros de query
