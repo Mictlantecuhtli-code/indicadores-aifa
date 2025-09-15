@@ -2,7 +2,7 @@
 // CLIENTE SUPABASE Y HELPERS GENÉRICOS
 // =====================================================
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, isDevelopment } from '../config.js';
 
 // Usar el cliente de Supabase que fue inicializado en config.js
 export const supabase = window.supabaseClient;
@@ -88,36 +88,20 @@ function handleError(error, context = 'Operación') {
  * Helper genérico para SELECT con manejo de errores
  */
 export async function selectData(table, options = {}) {
-        // Datos mock temporales para tablas con problemas de RLS
-        const mockData = {
-            'areas': [
-                {
-                    id: 1,
-                    clave: 'OPERACIONES',
-                    nombre: 'Operaciones Aeroportuarias',
-                    descripcion: 'Indicadores de operaciones del aeropuerto',
-                    color_hex: '#3B82F6',
-                    estado: 'ACTIVO'
-                },
-                {
-                    id: 2,
-                    clave: 'SEGURIDAD', 
-                    nombre: 'Seguridad y Protección',
-                    descripcion: 'Indicadores de seguridad aeroportuaria',
-                    color_hex: '#EF4444',
-                    estado: 'ACTIVO'
-                }
-            ],
-            'perfiles': [],
-            'usuario_areas': [],
-            'indicadores': []
-        };
-        
-        // Si la tabla tiene problemas conocidos, devolver datos mock
-        if (mockData[table]) {
-            if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
-            return { data: mockData[table], count: mockData[table].length };
-        }
+    const shouldUseMockData = isDevelopment();
+    // Datos mock temporales para tablas con problemas de RLS
+    const mockData = {
+        perfiles: [],
+        usuario_areas: [],
+        indicadores: []
+    };
+
+    const hasMockForTable = Object.prototype.hasOwnProperty.call(mockData, table);
+    // Si la tabla tiene problemas conocidos, devolver datos mock solo en desarrollo
+    if (shouldUseMockData && hasMockForTable) {
+        if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
+        return { data: mockData[table], count: mockData[table].length };
+    }
     try {
         if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
         
