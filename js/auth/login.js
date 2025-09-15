@@ -2,7 +2,7 @@
 // SISTEMA DE AUTENTICACIÓN - LOGIN
 // =====================================================
 
-import { ORG_DOMAIN, VALIDATION, MESSAGES, DEBUG } from '../config.js';
+import { VALIDATION, MESSAGES, DEBUG } from '../config.js';
 import { supabase, appState, signInWithPassword } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
 import { navigateTo } from '../lib/router.js';
@@ -27,11 +27,13 @@ const loginState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('🔐 Renderizando vista de login');
-        
+
+        await ensureAuthInitialized();
+
         // Verificar si ya está autenticado
         if (appState.session && appState.user) {
             if (DEBUG.enabled) console.log('👤 Usuario ya autenticado, redirigiendo...');
-            navigateTo('/', {}, true);
+            redirectToHome();
             return;
         }
         
@@ -143,6 +145,8 @@ function createLoginHTML() {
                                     id="toggle-password"
                                     class="absolute inset-y-0 right-0 pr-3 flex items-center"
                                     ${isLocked ? 'disabled' : ''}
+                                    aria-label="Mostrar contraseña"
+                                    aria-pressed="false"
                                 >
                                     <i id="toggle-password-icon" data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
                                 </button>
@@ -356,13 +360,14 @@ async function handleLogin(e) {
         // Limpiar intentos fallidos
         loginState.loginAttempts = 0;
         localStorage.removeItem('login_attempts');
+        updateAttemptsDisplay();
         
         // Mostrar mensaje de éxito
         showToast('Inicio de sesión exitoso', 'success');
 
         // Redirigir al inicio
-        navigateTo('/', {}, true);
- 
+        redirectToHome();
+
         } catch (error) {
         console.error('❌ Error en login:', error);
         
@@ -393,13 +398,13 @@ async function handleLogin(e) {
         }
         
     } finally {
-        // Restaurar botón solo si no hubo éxito
-        if (loginState.loginAttempts > 0 || loginState.isLocked) {
+        // Restaurar estado del botón si el formulario sigue presente
+        if (loginButton && buttonText && buttonSpinner && document.contains(loginButton)) {
             loginButton.disabled = loginState.isLocked;
             buttonText.textContent = 'Iniciar sesión';
             buttonSpinner.classList.add('hidden');
         }
-        
+
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
@@ -412,19 +417,21 @@ async function handleLogin(e) {
  */
 function handleTogglePassword() {
     const passwordInput = document.getElementById('password');
-    const toggleIcon = document.getElementById('toggle-password-icon');
-    
-    if (!passwordInput || !toggleIcon) return; // NUEVO: Verificar que existan
-    
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.setAttribute('data-lucide', 'eye-off');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.setAttribute('data-lucide', 'eye');
-    }
-    
-    // Recrear iconos después del cambio
+    const toggleButton = document.getElementById('toggle-password');
+
+    if (!passwordInput || !toggleButton) return;
+
+    const showingPassword = passwordInput.type === 'text';
+    passwordInput.type = showingPassword ? 'password' : 'text';
+
+    const newLabel = showingPassword ? 'Mostrar contraseña' : 'Ocultar contraseña';
+    toggleButton.setAttribute('aria-pressed', String(!showingPassword));
+    toggleButton.setAttribute('aria-label', newLabel);
+    toggleButton.setAttribute('title', newLabel);
+
+    const iconName = showingPassword ? 'eye' : 'eye-off';
+    toggleButton.innerHTML = `<i data-lucide="${iconName}" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>`;
+
     if (window.lucide) {
         window.lucide.createIcons();
     }
@@ -572,11 +579,38 @@ function handleQueryParams(query) {
         const messageType = query.type || 'info';
         showToast(decodeURIComponent(query.message), messageType);
     }
-    
+
     if (query.email) {
         const emailInput = document.getElementById('email');
         if (emailInput) {
             emailInput.value = decodeURIComponent(query.email);
         }
+    }
+}
+
+/**
+ * Esperar a que Supabase inicialice su estado de autenticación
+ */
+async function ensureAuthInitialized(timeout = 4000) {
+    if (appState.initialized) return;
+
+    const start = Date.now();
+    while (!appState.initialized && Date.now() - start < timeout) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    if (!appState.initialized && DEBUG.enabled) {
+        console.warn('⚠️ Supabase aún no se inicializa después del tiempo de espera.');
+    }
+}
+
+/**
+ * Redirigir a la página inicial usando el router si está disponible
+ */
+function redirectToHome() {
+    if (window.router?.navigateTo) {
+        window.router.navigateTo('/', {}, true);
+    } else {
+        window.location.hash = '#/';
     }
 }
