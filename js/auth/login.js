@@ -5,6 +5,7 @@
 import { VALIDATION, MESSAGES, DEBUG } from '../config.js';
 import { supabase, appState, signInWithPassword } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
+import { navigateTo } from '../lib/router.js';
 
 // Estado del módulo de login
 const loginState = {
@@ -147,7 +148,7 @@ function createLoginHTML() {
                                     aria-label="Mostrar contraseña"
                                     aria-pressed="false"
                                 >
-                                    <i data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
+                                    <i id="toggle-password-icon" data-lucide="eye" class="h-5 w-5 text-gray-400 hover:text-gray-600"></i>
                                 </button>
                             </div>
                         </div>
@@ -367,7 +368,7 @@ async function handleLogin(e) {
         // Redirigir al inicio
         redirectToHome();
 
-    } catch (error) {
+        } catch (error) {
         console.error('❌ Error en login:', error);
         
         // Incrementar intentos fallidos
