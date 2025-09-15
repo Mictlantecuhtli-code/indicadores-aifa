@@ -108,26 +108,18 @@ export async function selectData(table, options = {}) {
     } : null;
 
     const hasMockForTable = devMode && mockData && Object.prototype.hasOwnProperty.call(mockData, table);
-    try {
-           // Datos mock temporales para tablas con problemas de RLS
-        const mockData = {
-            perfiles: [],
-            usuario_areas: [],
-            indicadores: []
-        };
 
-        const hasMockForTable = Object.prototype.hasOwnProperty.call(mockData, table);
-        // Si la tabla tiene problemas conocidos, devolver datos mock
+    try {
         if (hasMockForTable) {
             if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
-            return { data: mockData[table], count: mockData[table].length };
-        } 
-        try {
+            const data = mockData?.[table] ?? [];
+            return { data, count: Array.isArray(data) ? data.length : null };
+        }
 
-          if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
+        if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
 
         let query = supabase.from(table).select(options.select || '*');
-        
+
         // Aplicar filtros
         if (options.filters) {
             Object.entries(options.filters).forEach(([column, value]) => {
@@ -166,46 +158,36 @@ export async function selectData(table, options = {}) {
                 }
             });
         }
-        
+
         // Aplicar ordenamiento
-        /*if (options.orderBy) {
+        if (options.orderBy) {
             if (Array.isArray(options.orderBy)) {
                 options.orderBy.forEach(order => {
-                    query = query.order(order.column, { ascending: order.ascending !== false });
+                    if (typeof order === 'string') {
+                        query = query.order(order, { ascending: true });
+                    } else {
+                        query = query.order(order.column, { ascending: order.ascending !== false });
+                    }
                 });
-            } else {
+            } else if (typeof options.orderBy === 'string') {
                 query = query.order(options.orderBy, { ascending: options.ascending !== false });
+            } else if (options.orderBy.column) {
+                query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending !== false });
             }
-        }*/
+        }
 
-            if (options.orderBy) {
-                if (Array.isArray(options.orderBy)) {
-                    options.orderBy.forEach(order => {
-                        if (typeof order === 'string') {
-                            query = query.order(order, { ascending: true });
-                        } else {
-                            query = query.order(order.column, { ascending: order.ascending !== false });
-                        }
-                    });
-                } else if (typeof options.orderBy === 'string') {
-                    query = query.order(options.orderBy, { ascending: options.ascending !== false });
-                } else if (options.orderBy.column) {
-                    query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending !== false });
-                }
-            }
-        
         // Aplicar límite
         if (options.limit) {
             query = query.limit(options.limit);
         }
-        
+
         // Aplicar rango (paginación)
         if (options.from !== undefined && options.to !== undefined) {
             query = query.range(options.from, options.to);
         }
-        
+
         const { data, error, count } = await query;
-        
+
         if (error) {
             console.error(`❌ Error en SELECT ${table}:`, error);
             throw new SupabaseError(error.message, error.code, error.details);
