@@ -109,7 +109,22 @@ export async function selectData(table, options = {}) {
 
     const hasMockForTable = devMode && mockData && Object.prototype.hasOwnProperty.call(mockData, table);
     try {
-        if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
+           // Datos mock temporales para tablas con problemas de RLS
+        const mockData = {
+            perfiles: [],
+            usuario_areas: [],
+            indicadores: []
+        };
+
+        const hasMockForTable = Object.prototype.hasOwnProperty.call(mockData, table);
+        // Si la tabla tiene problemas conocidos, devolver datos mock
+        if (hasMockForTable) {
+            if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
+            return { data: mockData[table], count: mockData[table].length };
+        } 
+        try {
+
+          if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
 
         let query = supabase.from(table).select(options.select || '*');
         
