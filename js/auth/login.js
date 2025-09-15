@@ -356,39 +356,10 @@ async function handleLogin(e) {
         loginState.loginAttempts = 0;
         localStorage.removeItem('login_attempts');
         
-        // NUEVO: Verificar el rol del usuario para redirigir correctamente
-        try {
-            const { data: profile } = await supabase
-                .from('usuarios')
-                .select('*')
-                .eq('email', email.toLowerCase())
-                .single();
-            
-            console.log('Perfil del usuario después del login:', profile);
-            console.log('Rol detectado:', profile?.rol);
-            
-            // Mostrar mensaje de éxito
-            showToast(MESSAGES.success.login, 'success');
-            
-            // Redirigir según el rol
-            setTimeout(() => {
-                if (profile?.rol === 'admin') {
-                    console.log('Usuario es admin, redirigiendo a /admin');
-                    window.router.navigateTo('/admin', {}, true);
-                } else {
-                    console.log('Usuario NO es admin, redirigiendo a home');
-                    window.router.navigateTo('/', {}, true);
-                }
-            }, 1000);
-            
-        } catch (profileError) {
-            console.error('Error al obtener perfil, redirigiendo a home:', profileError);
-            // Si hay error, redirigir a home por defecto
-            showToast(MESSAGES.success.login, 'success');
-            setTimeout(() => {
-                window.router.navigateTo('/', {}, true);
-            }, 1000);
-        }
+        // Mostrar mensaje de éxito
+        showToast('Inicio de sesión exitoso', 'success');
+        
+        // NO redirigir aquí - dejar que onAuthStateChange lo maneje automáticamente
         
     } catch (error) {
         console.error('❌ Error en login:', error);
@@ -401,14 +372,6 @@ async function handleLogin(e) {
         if (loginState.loginAttempts >= loginState.maxAttempts) {
             lockAccount();
             showToast(`Cuenta bloqueada por ${Math.ceil(loginState.lockoutTime / 60000)} minutos`, 'error');
-            
-            // Re-renderizar para mostrar el lockout
-            setTimeout(() => {
-                const container = document.getElementById('app-container');
-                if (container) {
-                    render(container);
-                }
-            }, 1000);
         } else {
             // Mostrar error específico
             let errorMessage = 'Error al iniciar sesión';
@@ -424,16 +387,16 @@ async function handleLogin(e) {
             }
             
             showToast(errorMessage, 'error');
-            
-            // Actualizar contador de intentos en la UI
             updateAttemptsDisplay();
         }
         
     } finally {
-        // Restaurar botón
-        loginButton.disabled = loginState.isLocked;
-        buttonText.textContent = 'Iniciar sesión';
-        buttonSpinner.classList.add('hidden');
+        // Restaurar botón solo si no hubo éxito
+        if (loginState.loginAttempts > 0 || loginState.isLocked) {
+            loginButton.disabled = loginState.isLocked;
+            buttonText.textContent = 'Iniciar sesión';
+            buttonSpinner.classList.add('hidden');
+        }
         
         // Recrear iconos
         if (window.lucide) {
