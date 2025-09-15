@@ -440,14 +440,14 @@ export async function getCurrentProfile() {
             .from('perfiles')
             .select(`
                 *,
-                usuario_areas:usuario_areas!usuario_areas_usuario_id_fkey (
+                usuario_areas (
                     id,
                     area_id,
                     rol,
                     puede_capturar,
                     puede_editar,
                     puede_eliminar,
-                    areas:areas!usuario_areas_area_id_fkey (
+                    areas (
                         id,
                         clave,
                         nombre,
