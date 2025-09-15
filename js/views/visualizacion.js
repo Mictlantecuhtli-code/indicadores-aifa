@@ -606,15 +606,20 @@ async function loadAvailableAreas() {
             const { data } = await selectData('areas', {
                 select: '*',
                 filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'orden_visualizacion', ascending: true }
+                orderBy: { column: 'nombre', ascending: true }
             });
             visualizacionState.availableAreas = data || [];
         } else {
             // Otros roles ven solo sus áreas asignadas
-            const { data } = await selectData('v_areas_usuario', {
-                select: '*',
-                filters: { usuario_id: visualizacionState.userProfile.id },
-                orderBy: { column: 'orden_visualizacion', ascending: true }
+            const { data } = await selectData('areas', {
+                select: `
+                    areas.*
+                `,
+                filters: { 
+                    estado: 'ACTIVO',
+                    id: { operator: 'in', value: await getUserAreaIds() }
+                },
+                orderBy: { column: 'nombre', ascending: true }
             });
             visualizacionState.availableAreas = data || [];
         }
