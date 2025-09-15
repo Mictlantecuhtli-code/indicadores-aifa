@@ -80,6 +80,15 @@ function handleError(error, context = 'Operación') {
     return userMessage;
 }
 
+function shouldFallbackToMock(error) {
+    if (!error) return false;
+
+    const code = error.code || error?.originalError?.code;
+    const message = (error.message || '').toLowerCase();
+
+    return code === '42P17' || message.includes('infinite recursion detected in policy');
+}
+
 // =====================================================
 // HELPERS GENÉRICOS DE BASE DE DATOS
 // =====================================================
@@ -88,6 +97,18 @@ function handleError(error, context = 'Operación') {
  * Helper genérico para SELECT con manejo de errores
  */
 export async function selectData(table, options = {}) {
+    const devMode = isDevelopment();
+
+    // Datos mock temporales solo disponibles en desarrollo
+    // Nota: intentionally no mock entry for `areas` so it always hits Supabase.
+    const mockData = devMode ? {
+        perfiles: [],
+        usuario_areas: [],
+        indicadores: []
+    } : null;
+
+    const hasMockForTable = devMode && mockData && Object.prototype.hasOwnProperty.call(mockData, table);
+    try {
            // Datos mock temporales para tablas con problemas de RLS
         const mockData = {
             perfiles: [],
@@ -102,8 +123,9 @@ export async function selectData(table, options = {}) {
             return { data: mockData[table], count: mockData[table].length };
         } 
         try {
-        if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
-        
+
+          if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
+
         let query = supabase.from(table).select(options.select || '*');
         
         // Aplicar filtros
@@ -188,11 +210,18 @@ export async function selectData(table, options = {}) {
             console.error(`❌ Error en SELECT ${table}:`, error);
             throw new SupabaseError(error.message, error.code, error.details);
         }
-        
+
         if (DEBUG.enabled) console.log(`✅ SELECT ${table} exitoso:`, data?.length || 0, 'registros');
-        
+
         return { data, count };
     } catch (error) {
+        if (hasMockForTable && shouldFallbackToMock(error)) {
+            if (DEBUG.enabled) {
+                console.warn(`⚠️ Usando datos mock para ${table} en modo desarrollo debido a restricciones de Supabase (${error.code || 'sin código'})`);
+            }
+            const mock = mockData?.[table] ?? [];
+            return { data: mock, count: Array.isArray(mock) ? mock.length : null };
+        }
         handleError(error, `Error al consultar ${table}`);
         throw error;
     }
