@@ -362,8 +362,8 @@ async function handleLogin(e) {
 
         // Redirigir al inicio
         navigateTo('/', {}, true);
-        
-    } catch (error) {
+ 
+        } catch (error) {
         console.error('❌ Error en login:', error);
         
         // Incrementar intentos fallidos
