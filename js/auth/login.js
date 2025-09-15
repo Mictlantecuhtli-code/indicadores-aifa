@@ -410,7 +410,9 @@ async function handleLogin(e) {
  */
 function handleTogglePassword() {
     const passwordInput = document.getElementById('password');
-    const toggleIcon = document.querySelector('#toggle-password i');
+    const toggleIcon = document.getElementById('toggle-password-icon');
+    
+    if (!passwordInput || !toggleIcon) return; // NUEVO: Verificar que existan
     
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
@@ -420,7 +422,7 @@ function handleTogglePassword() {
         toggleIcon.setAttribute('data-lucide', 'eye');
     }
     
-    // Recrear iconos
+    // Recrear iconos después del cambio
     if (window.lucide) {
         window.lucide.createIcons();
     }
