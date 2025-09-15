@@ -88,36 +88,19 @@ function handleError(error, context = 'Operación') {
  * Helper genérico para SELECT con manejo de errores
  */
 export async function selectData(table, options = {}) {
-        // Datos mock temporales para tablas con problemas de RLS
-        const mockData = {
-            'areas': [
-                {
-                    id: 1,
-                    clave: 'OPERACIONES',
-                    nombre: 'Operaciones Aeroportuarias',
-                    descripcion: 'Indicadores de operaciones del aeropuerto',
-                    color_hex: '#3B82F6',
-                    estado: 'ACTIVO'
-                },
-                {
-                    id: 2,
-                    clave: 'SEGURIDAD', 
-                    nombre: 'Seguridad y Protección',
-                    descripcion: 'Indicadores de seguridad aeroportuaria',
-                    color_hex: '#EF4444',
-                    estado: 'ACTIVO'
-                }
-            ],
-            'perfiles': [],
-            'usuario_areas': [],
-            'indicadores': []
-        };
-        
-        // Si la tabla tiene problemas conocidos, devolver datos mock
-        if (mockData[table]) {
-            if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
-            return { data: mockData[table], count: mockData[table].length };
-        }
+    // Datos mock temporales para tablas con problemas de RLS
+    const mockData = {
+        perfiles: [],
+        usuario_areas: [],
+        indicadores: []
+    };
+
+    const hasMockForTable = Object.prototype.hasOwnProperty.call(mockData, table);
+    // Si la tabla tiene problemas conocidos, devolver datos mock
+    if (hasMockForTable) {
+        if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
+        return { data: mockData[table], count: mockData[table].length };
+    }
     try {
         if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
         
@@ -688,30 +671,32 @@ export function escapeSearchText(text) {
 /**
  * Inicializar cliente y configurar listeners
  */
-export async function initSupabase() {
+let initializationPromise = null;
+
+async function setupSupabase() {
     try {
         // Configurar listener de cambios de autenticación
         supabase.auth.onAuthStateChange(async (event, session) => {
             if (DEBUG.enabled) console.log('🔐 Auth state changed:', event, session?.user?.email);
-            
+
             appState.session = session;
             appState.user = session?.user || null;
-            
+
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
             } else if (event === 'SIGNED_OUT') {
                 appState.profile = null;
             }
         });
-        
+
         // Verificar sesión inicial
         await getCurrentSession();
         if (appState.session) {
             appState.profile = await getCurrentProfile();
         }
-        
+
         appState.initialized = true;
-        
+
         if (DEBUG.enabled) {
             console.log('✅ Supabase inicializado correctamente');
             console.log('👤 Estado inicial:', {
@@ -720,12 +705,27 @@ export async function initSupabase() {
                 role: appState.profile?.rol_principal
             });
         }
-        
+
         return true;
     } catch (error) {
         console.error('❌ Error al inicializar Supabase:', error);
         throw error;
     }
+}
+
+export function initSupabase() {
+    if (appState.initialized) {
+        return Promise.resolve(true);
+    }
+
+    if (!initializationPromise) {
+        initializationPromise = setupSupabase().catch(error => {
+            initializationPromise = null;
+            throw error;
+        });
+    }
+
+    return initializationPromise;
 }
 
 // Auto-inicializar cuando se carga el módulo

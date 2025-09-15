@@ -3,7 +3,7 @@
 // =====================================================
 
 import { VALIDATION, MESSAGES, DEBUG } from '../config.js';
-import { supabase, appState, signInWithPassword } from '../lib/supa.js';
+import { supabase, appState, signInWithPassword, initSupabase } from '../lib/supa.js';
 import { showToast, validateForm, getFormData } from '../lib/ui.js';
 import { navigateTo } from '../lib/router.js';
 
@@ -591,12 +591,29 @@ function handleQueryParams(query) {
 /**
  * Esperar a que Supabase inicialice su estado de autenticación
  */
-async function ensureAuthInitialized(timeout = 4000) {
+async function ensureAuthInitialized(timeout = 6000) {
     if (appState.initialized) return;
 
-    const start = Date.now();
-    while (!appState.initialized && Date.now() - start < timeout) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+    let initError = null;
+    const initialization = initSupabase().catch(error => {
+        initError = error;
+        return false;
+    });
+
+    if (timeout > 0) {
+        await Promise.race([
+            initialization,
+            new Promise(resolve => setTimeout(resolve, timeout))
+        ]);
+    } else {
+        await initialization;
+    }
+
+    if (initError) {
+        if (DEBUG.enabled) {
+            console.error('❌ No se pudo inicializar Supabase antes del login:', initError);
+        }
+        throw initError;
     }
 
     if (!appState.initialized && DEBUG.enabled) {
