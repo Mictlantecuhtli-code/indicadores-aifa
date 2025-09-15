@@ -2,7 +2,7 @@
 // CLIENTE SUPABASE Y HELPERS GENÉRICOS
 // =====================================================
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES } from '../config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, isDevelopment } from '../config.js';
 
 // Usar el cliente de Supabase que fue inicializado en config.js
 export const supabase = window.supabaseClient;
@@ -80,6 +80,15 @@ function handleError(error, context = 'Operación') {
     return userMessage;
 }
 
+function shouldFallbackToMock(error) {
+    if (!error) return false;
+
+    const code = error.code || error?.originalError?.code;
+    const message = (error.message || '').toLowerCase();
+
+    return code === '42P17' || message.includes('infinite recursion detected in policy');
+}
+
 // =====================================================
 // HELPERS GENÉRICOS DE BASE DE DATOS
 // =====================================================
@@ -88,39 +97,20 @@ function handleError(error, context = 'Operación') {
  * Helper genérico para SELECT con manejo de errores
  */
 export async function selectData(table, options = {}) {
-        // Datos mock temporales para tablas con problemas de RLS
-        const mockData = {
-            'areas': [
-                {
-                    id: 1,
-                    clave: 'OPERACIONES',
-                    nombre: 'Operaciones Aeroportuarias',
-                    descripcion: 'Indicadores de operaciones del aeropuerto',
-                    color_hex: '#3B82F6',
-                    estado: 'ACTIVO'
-                },
-                {
-                    id: 2,
-                    clave: 'SEGURIDAD', 
-                    nombre: 'Seguridad y Protección',
-                    descripcion: 'Indicadores de seguridad aeroportuaria',
-                    color_hex: '#EF4444',
-                    estado: 'ACTIVO'
-                }
-            ],
-            'perfiles': [],
-            'usuario_areas': [],
-            'indicadores': []
-        };
-        
-        // Si la tabla tiene problemas conocidos, devolver datos mock
-        if (mockData[table]) {
-            if (DEBUG.enabled) console.log(`🔧 Usando datos mock para ${table}`);
-            return { data: mockData[table], count: mockData[table].length };
-        }
+    const devMode = isDevelopment();
+
+    // Datos mock temporales solo disponibles en desarrollo
+    // Nota: intentionally no mock entry for `areas` so it always hits Supabase.
+    const mockData = devMode ? {
+        perfiles: [],
+        usuario_areas: [],
+        indicadores: []
+    } : null;
+
+    const hasMockForTable = devMode && mockData && Object.prototype.hasOwnProperty.call(mockData, table);
     try {
         if (DEBUG.enabled) console.log(`🔍 SELECT ${table}:`, options);
-        
+
         let query = supabase.from(table).select(options.select || '*');
         
         // Aplicar filtros
@@ -205,11 +195,18 @@ export async function selectData(table, options = {}) {
             console.error(`❌ Error en SELECT ${table}:`, error);
             throw new SupabaseError(error.message, error.code, error.details);
         }
-        
+
         if (DEBUG.enabled) console.log(`✅ SELECT ${table} exitoso:`, data?.length || 0, 'registros');
-        
+
         return { data, count };
     } catch (error) {
+        if (hasMockForTable && shouldFallbackToMock(error)) {
+            if (DEBUG.enabled) {
+                console.warn(`⚠️ Usando datos mock para ${table} en modo desarrollo debido a restricciones de Supabase (${error.code || 'sin código'})`);
+            }
+            const mock = mockData?.[table] ?? [];
+            return { data: mock, count: Array.isArray(mock) ? mock.length : null };
+        }
         handleError(error, `Error al consultar ${table}`);
         throw error;
     }
@@ -688,30 +685,32 @@ export function escapeSearchText(text) {
 /**
  * Inicializar cliente y configurar listeners
  */
-export async function initSupabase() {
+let initializationPromise = null;
+
+async function setupSupabase() {
     try {
         // Configurar listener de cambios de autenticación
         supabase.auth.onAuthStateChange(async (event, session) => {
             if (DEBUG.enabled) console.log('🔐 Auth state changed:', event, session?.user?.email);
-            
+
             appState.session = session;
             appState.user = session?.user || null;
-            
+
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
             } else if (event === 'SIGNED_OUT') {
                 appState.profile = null;
             }
         });
-        
+
         // Verificar sesión inicial
         await getCurrentSession();
         if (appState.session) {
             appState.profile = await getCurrentProfile();
         }
-        
+
         appState.initialized = true;
-        
+
         if (DEBUG.enabled) {
             console.log('✅ Supabase inicializado correctamente');
             console.log('👤 Estado inicial:', {
@@ -720,12 +719,27 @@ export async function initSupabase() {
                 role: appState.profile?.rol_principal
             });
         }
-        
+
         return true;
     } catch (error) {
         console.error('❌ Error al inicializar Supabase:', error);
         throw error;
     }
+}
+
+export function initSupabase() {
+    if (appState.initialized) {
+        return Promise.resolve(true);
+    }
+
+    if (!initializationPromise) {
+        initializationPromise = setupSupabase().catch(error => {
+            initializationPromise = null;
+            throw error;
+        });
+    }
+
+    return initializationPromise;
 }
 
 // Auto-inicializar cuando se carga el módulo
