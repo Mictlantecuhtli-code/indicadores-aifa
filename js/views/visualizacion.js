@@ -787,7 +787,7 @@ async function loadAvailableAreas() {
         }
     }
 }
-
+/*
  * Obtener IDs de áreas asignadas al usuario
  */
 async function getUserAreaIds() {
