@@ -204,48 +204,45 @@ function createVisualizacionHTML() {
  * Crear HTML de filtros
  */
 function createFiltersHTML() {
-    return `
+return `
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <!-- Filtro de áreas -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Áreas
+                    Áreas <span class="text-xs text-gray-500">(${visualizacionState.availableAreas.length} disponibles)</span>
                 </label>
                 <div class="relative">
                     <button 
                         id="areas-filter-btn"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue"
                     >
-                        <span id="areas-filter-text">${getAreasFilterText()}</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        <span id="areas-filter-text" class="truncate">${getAreasFilterText()}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 flex-shrink-0 ml-2"></i>
                     </button>
                     
-                    <div id="areas-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                        <div class="p-3">
-                            <div class="space-y-2">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        id="select-all-areas"
-                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                                    >
-                                    <span class="text-sm font-medium text-gray-700">Seleccionar todas</span>
-                                </label>
-                                <hr class="border-gray-200">
-                                ${visualizacionState.availableAreas.map(area => `
-                                    <label class="flex items-center space-x-2 cursor-pointer">
-                                        <input 
-                                            type="checkbox" 
-                                            value="${area.id}" 
-                                            ${visualizacionState.selectedAreas.includes(area.id) ? 'checked' : ''}
-                                            class="area-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                                        >
-                                        <div class="flex items-center space-x-2">
-                                            <div class="w-3 h-3 rounded" style="background-color: ${area.color_hex}"></div>
-                                            <span class="text-sm text-gray-700">${area.nombre}</span>
-                                        </div>
-                                    </label>
-                                `).join('')}
+                    <div id="areas-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-72 overflow-hidden">
+                        <div class="p-3 border-b border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-medium text-gray-700">Seleccionar áreas</span>
+                                <button 
+                                    id="clear-areas-btn"
+                                    class="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                                >
+                                    Limpiar todo
+                                </button>
+                            </div>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    id="select-all-areas"
+                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                >
+                                <span class="text-sm font-medium text-gray-700">Seleccionar todas las áreas</span>
+                            </label>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <div class="p-3 space-y-1">
+                                ${createAreasFilterOptions()}
                             </div>
                         </div>
                     </div>
@@ -255,29 +252,40 @@ function createFiltersHTML() {
             <!-- Filtro de indicadores -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Indicadores
+                    Indicadores <span class="text-xs text-gray-500">(${visualizacionState.availableIndicadores.length} disponibles)</span>
                 </label>
                 <div class="relative">
                     <button 
                         id="indicadores-filter-btn"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue"
+                        ${visualizacionState.selectedAreas.length === 0 ? 'disabled' : ''}
                     >
-                        <span id="indicadores-filter-text">${getIndicadoresFilterText()}</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        <span id="indicadores-filter-text" class="truncate">${getIndicadoresFilterText()}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 flex-shrink-0 ml-2"></i>
                     </button>
                     
-                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                        <div class="p-3">
-                            <div class="space-y-2">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        id="select-all-indicadores"
-                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                                    >
-                                    <span class="text-sm font-medium text-gray-700">Seleccionar todos</span>
-                                </label>
-                                <hr class="border-gray-200">
+                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-80 overflow-hidden">
+                        <div class="p-3 border-b border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-medium text-gray-700">Seleccionar indicadores</span>
+                                <button 
+                                    id="clear-indicadores-btn"
+                                    class="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                                >
+                                    Limpiar todo
+                                </button>
+                            </div>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    id="select-all-indicadores"
+                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                >
+                                <span class="text-sm font-medium text-gray-700">Seleccionar todos los disponibles</span>
+                            </label>
+                        </div>
+                        <div class="max-h-64 overflow-y-auto">
+                            <div class="p-3">
                                 ${createIndicadoresFilterOptions()}
                             </div>
                         </div>
@@ -288,38 +296,48 @@ function createFiltersHTML() {
             <!-- Filtro de años -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Años
+                    Años <span class="text-xs text-gray-500">(${visualizacionState.availableYears.length} disponibles)</span>
                 </label>
                 <div class="relative">
                     <button 
                         id="years-filter-btn"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue"
                     >
-                        <span id="years-filter-text">${getYearsFilterText()}</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        <span id="years-filter-text" class="truncate">${getYearsFilterText()}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 flex-shrink-0 ml-2"></i>
                     </button>
                     
                     <div id="years-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
-                        <div class="p-3">
-                            <div class="space-y-2">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        id="select-all-years"
-                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                                    >
-                                    <span class="text-sm font-medium text-gray-700">Seleccionar todos</span>
-                                </label>
-                                <hr class="border-gray-200">
+                        <div class="p-3 border-b border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-medium text-gray-700">Seleccionar años</span>
+                                <button 
+                                    id="clear-years-btn"
+                                    class="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                                >
+                                    Limpiar todo
+                                </button>
+                            </div>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    id="select-all-years"
+                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                >
+                                <span class="text-sm font-medium text-gray-700">Seleccionar todos los años</span>
+                            </label>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <div class="p-3 space-y-2">
                                 ${visualizacionState.availableYears.map(year => `
-                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                    <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 rounded p-1 transition-colors">
                                         <input 
                                             type="checkbox" 
                                             value="${year}" 
                                             ${visualizacionState.selectedYears.includes(year) ? 'checked' : ''}
                                             class="year-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
                                         >
-                                        <span class="text-sm text-gray-700">${year}</span>
+                                        <span class="text-sm text-gray-700 font-medium">${year}</span>
                                     </label>
                                 `).join('')}
                             </div>
@@ -332,15 +350,57 @@ function createFiltersHTML() {
             <div class="flex items-end">
                 <button 
                     id="apply-filters-btn"
-                    class="w-full bg-aifa-blue text-white px-4 py-2 rounded-lg hover:bg-aifa-dark transition-colors flex items-center justify-center space-x-2"
+                    class="w-full bg-aifa-blue text-white px-4 py-2 rounded-lg hover:bg-aifa-dark transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    ${visualizacionState.selectedIndicadores.length === 0 || visualizacionState.selectedYears.length === 0 ? 'disabled' : ''}
                 >
                     <i data-lucide="search" class="w-4 h-4"></i>
                     <span>Aplicar filtros</span>
+                    ${(visualizacionState.selectedIndicadores.length > 0 && visualizacionState.selectedYears.length > 0) ? 
+                        `<span class="bg-white bg-opacity-20 px-2 py-0.5 rounded-full text-xs">${visualizacionState.selectedIndicadores.length}×${visualizacionState.selectedYears.length}</span>` : 
+                        ''
+                    }
                 </button>
             </div>
         </div>
-    `;
+    `;    
 }
+
+/**
+ * Crear opciones de filtro de áreas con jerarquía
+ */
+function createAreasFilterOptions() {
+    if (!visualizacionState.availableAreas || visualizacionState.availableAreas.length === 0) {
+        return `
+            <div class="text-center py-4">
+                <i data-lucide="folder-x" class="w-6 h-6 text-gray-300 mx-auto mb-2"></i>
+                <p class="text-gray-500 text-sm">No hay áreas disponibles</p>
+            </div>
+        `;
+    }
+    
+    return visualizacionState.availableAreas.map(area => {
+        const indentClass = getAreaIndentClass(area);
+        const areaDisplayName = getAreaDisplayName(area);
+        const isSelected = visualizacionState.selectedAreas.includes(area.id);
+        
+        return `
+            <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 rounded p-2 transition-colors ${indentClass}">
+                <input 
+                    type="checkbox" 
+                    value="${area.id}" 
+                    ${isSelected ? 'checked' : ''}
+                    class="area-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue flex-shrink-0"
+                >
+                <div class="flex items-center space-x-2 flex-1 min-w-0">
+                    <div class="w-3 h-3 rounded flex-shrink-0" style="background-color: ${area.color_hex || '#6B7280'}"></div>
+                    <span class="text-sm text-gray-700 truncate">${areaDisplayName}</span>
+                    <span class="text-xs text-gray-500 flex-shrink-0">${area.clave}</span>
+                </div>
+            </label>
+        `;
+    }).join('');
+}
+
 
 /**
  * Crear opciones de filtro de indicadores agrupadas por área
@@ -1565,42 +1625,7 @@ function setupFilterEventListeners() {
  * Configurar checkboxes de filtros
  */
 function setupFilterCheckboxes() {
-    // Select all para áreas
-    const selectAllAreas = document.getElementById('select-all-areas');
-    if (selectAllAreas) {
-        selectAllAreas.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.area-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = e.target.checked;
-            });
-            updateAreasSelection();
-        });
-    }
-    
-    // Select all para indicadores
-    const selectAllIndicadores = document.getElementById('select-all-indicadores');
-    if (selectAllIndicadores) {
-        selectAllIndicadores.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.indicador-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = e.target.checked;
-            });
-            updateIndicadoresSelection();
-        });
-    }
-    
-    // Select all para años
-    const selectAllYears = document.getElementById('select-all-years');
-    if (selectAllYears) {
-        selectAllYears.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.year-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = e.target.checked;
-            });
-            updateYearsSelection();
-        });
-    }
-    
+   setupSelectAllCheckboxes();
     // Checkboxes individuales
     document.querySelectorAll('.area-checkbox').forEach(cb => {
         cb.addEventListener('change', updateAreasSelection);
@@ -1613,6 +1638,67 @@ function setupFilterCheckboxes() {
     document.querySelectorAll('.year-checkbox').forEach(cb => {
         cb.addEventListener('change', updateYearsSelection);
     });
+
+    // Botones de limpiar filtros
+    const clearAreasBtn = document.getElementById('clear-areas-btn');
+    if (clearAreasBtn) {
+        clearAreasBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.area-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-areas').checked = false;
+            updateAreasSelection();
+        });
+    }
+    
+    const clearIndicadoresBtn = document.getElementById('clear-indicadores-btn');
+    if (clearIndicadoresBtn) {
+        clearIndicadoresBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-indicadores').checked = false;
+            updateIndicadoresSelection();
+        });
+    }
+    
+    const clearYearsBtn = document.getElementById('clear-years-btn');
+    if (clearYearsBtn) {
+        clearYearsBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.year-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-years').checked = false;
+            updateYearsSelection();
+        });
+    }
+        // Botones de limpiar filtros
+    const clearAreasBtn = document.getElementById('clear-areas-btn');
+    if (clearAreasBtn) {
+        clearAreasBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.area-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-areas').checked = false;
+            updateAreasSelection();
+        });
+    }
+    
+    const clearIndicadoresBtn = document.getElementById('clear-indicadores-btn');
+    if (clearIndicadoresBtn) {
+        clearIndicadoresBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-indicadores').checked = false;
+            updateIndicadoresSelection();
+        });
+    }
+    
+    const clearYearsBtn = document.getElementById('clear-years-btn');
+    if (clearYearsBtn) {
+        clearYearsBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.year-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-years').checked = false;
+            updateYearsSelection();
+        });
+    }
 }
 
 /**
@@ -1663,14 +1749,18 @@ function setupModeSpecificEventListeners() {
  * Manejar refresh de visualización
  */
 async function handleRefreshVisualization() {
-    try {
+
+     try {
         const refreshBtn = document.getElementById('refresh-viz-btn');
         if (refreshBtn) {
-        const icon = refreshBtn.querySelector('i');
-        if (icon) {
-            icon.classList.add('animate-spin');
+            const icon = refreshBtn.querySelector('i');
+            if (icon) {
+                icon.classList.add('animate-spin');
+            }
         }
-        }
+        
+        // Mostrar loading específico
+        showLoading('Actualizando datos de visualización...');
         
         await Promise.all([
             loadAvailableAreas(),
@@ -1679,27 +1769,40 @@ async function handleRefreshVisualization() {
             loadChartData()
         ]);
         
-        // Re-renderizar vista completa
-        /*const container = document.getElementById('app-container');
-        if (container) {
-            await render(container, {}, { 
-                mode: visualizacionState.viewMode,
-                areas: visualizacionState.selectedAreas.join(','),
-                indicadores: visualizacionState.selectedIndicadores.join(','),
-                years: visualizacionState.selectedYears.join(',')
-            });
-        }*/
+        // Actualizar displays de filtros con nuevos datos
         updateFiltersDisplay();
+        
+        // Refrescar contenido de dropdowns si están abiertos
+        refreshAllDropdowns();
+        
+        // Actualizar contenido de visualización si hay datos
         if (visualizacionState.selectedIndicadores.length > 0) {
-            await createCharts();
+            const content = document.getElementById('visualization-content');
+            if (content) {
+                content.innerHTML = createVisualizationContentHTML();
+                setTimeout(() => {
+                    createCharts();
+                    setupModeSpecificEventListeners();
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                }, 100);
+            }
         }
-           showToast('Visualización actualizada correctamente', 'success');
-        } 
-        catch (error) {
+        
+        // Actualizar estadísticas
+        updateStatsDisplay();
+        
+        hideLoading();
+        showToast('Visualización actualizada correctamente', 'success');
+        
+        visualizacionState.lastRefresh = new Date();
+        
+    } catch (error) {
         console.error('❌ Error al refrescar visualización:', error);
+        hideLoading();
         showToast('Error al actualizar la visualización', 'error');
-    }
-     finally {
+    } finally {
         // Remover animación del icono
         const refreshBtn = document.getElementById('refresh-viz-btn');
         if (refreshBtn) {
@@ -1920,15 +2023,43 @@ function updateAreasSelection() {
         filterText.textContent = getAreasFilterText();
     }
     
+    // Actualizar estado del checkbox "seleccionar todas"
+    const selectAllCheckbox = document.getElementById('select-all-areas');
+    if (selectAllCheckbox) {
+        const totalAreas = visualizacionState.availableAreas.length;
+        selectAllCheckbox.checked = selectedAreas.length === totalAreas;
+        selectAllCheckbox.indeterminate = selectedAreas.length > 0 && selectedAreas.length < totalAreas;
+    }
+    
     // Filtrar indicadores disponibles según áreas seleccionadas
     updateAvailableIndicadoresFilter();
+    
+    // Actualizar estado del botón de aplicar filtros
+    updateApplyFiltersButton();
+    
+    // Actualizar dropdown de indicadores si está abierto
+    const indicadoresDropdown = document.getElementById('indicadores-filter-dropdown');
+    if (indicadoresDropdown && !indicadoresDropdown.classList.contains('hidden')) {
+        refreshIndicadoresDropdown();
+    }
+    
+    // Habilitar/deshabilitar dropdown de indicadores
+    const indicadoresBtn = document.getElementById('indicadores-filter-btn');
+    if (indicadoresBtn) {
+        indicadoresBtn.disabled = selectedAreas.length === 0;
+        if (selectedAreas.length === 0) {
+            indicadoresBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            indicadoresBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
 }
 
 /**
  * Actualizar selección de indicadores
  */
 function updateIndicadoresSelection() {
-    const checkboxes = document.querySelectorAll('.indicador-checkbox');
+    const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
     const selectedIndicadores = Array.from(checkboxes)
         .filter(cb => cb.checked)
         .map(cb => cb.value);
@@ -1940,6 +2071,22 @@ function updateIndicadoresSelection() {
     if (filterText) {
         filterText.textContent = getIndicadoresFilterText();
     }
+    
+    // Actualizar estado del checkbox "seleccionar todos"
+    const selectAllCheckbox = document.getElementById('select-all-indicadores');
+    if (selectAllCheckbox) {
+        const enabledCheckboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
+        const checkedEnabledCheckboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled):checked');
+        
+        selectAllCheckbox.checked = enabledCheckboxes.length > 0 && checkedEnabledCheckboxes.length === enabledCheckboxes.length;
+        selectAllCheckbox.indeterminate = checkedEnabledCheckboxes.length > 0 && checkedEnabledCheckboxes.length < enabledCheckboxes.length;
+    }
+    
+    // Actualizar contadores de indicadores por área
+    updateAreaIndicatorCounts();
+    
+    // Actualizar estado del botón de aplicar filtros
+    updateApplyFiltersButton();
 }
 
 /**
@@ -1958,6 +2105,18 @@ function updateYearsSelection() {
     if (filterText) {
         filterText.textContent = getYearsFilterText();
     }
+    
+    // Actualizar estado del checkbox "seleccionar todos"
+    const selectAllCheckbox = document.getElementById('select-all-years');
+    if (selectAllCheckbox) {
+        const totalYears = visualizacionState.availableYears.length;
+        selectAllCheckbox.checked = selectedYears.length === totalYears;
+        selectAllCheckbox.indeterminate = selectedYears.length > 0 && selectedYears.length < totalYears;
+    }
+    
+    // Actualizar estado del botón de aplicar filtros
+    updateApplyFiltersButton();
+    
 }
 
 /**
@@ -2001,6 +2160,233 @@ function updateAvailableIndicadoresFilter() {
 }
 
 /**
+ * Actualizar contadores de indicadores por área
+ */
+function updateAreaIndicatorCounts() {
+    // Contar indicadores disponibles por área
+    const indicatorCounts = {};
+    
+    visualizacionState.availableIndicadores.forEach(indicador => {
+        const areaId = indicador.area_id;
+        if (!indicatorCounts[areaId]) {
+            indicatorCounts[areaId] = { total: 0, selected: 0 };
+        }
+        indicatorCounts[areaId].total++;
+        
+        if (visualizacionState.selectedIndicadores.includes(indicador.id)) {
+            indicatorCounts[areaId].selected++;
+        }
+    });
+    
+    // Actualizar display en los labels de área
+    visualizacionState.availableAreas.forEach(area => {
+        const counts = indicatorCounts[area.id] || { total: 0, selected: 0 };
+        const areaLabels = document.querySelectorAll(`[data-area-id="${area.id}"]`);
+        
+        areaLabels.forEach(label => {
+            const countSpan = label.querySelector('.indicator-count');
+            if (countSpan) {
+                if (counts.selected > 0) {
+                    countSpan.textContent = `(${counts.selected}/${counts.total})`;
+                    countSpan.className = 'ml-1 text-blue-600 font-medium indicator-count';
+                } else {
+                    countSpan.textContent = `(${counts.total})`;
+                    countSpan.className = 'ml-1 text-gray-400 indicator-count';
+                }
+            }
+        });
+    });
+}
+
+/**
+ * Actualizar estado del botón aplicar filtros
+ */
+function updateApplyFiltersButton() {
+    const applyBtn = document.getElementById('apply-filters-btn');
+    if (!applyBtn) return;
+    
+    const hasIndicadores = visualizacionState.selectedIndicadores.length > 0;
+    const hasYears = visualizacionState.selectedYears.length > 0;
+    const canApply = hasIndicadores && hasYears;
+    
+    applyBtn.disabled = !canApply;
+    
+    if (canApply) {
+        applyBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        
+        // Actualizar contador en el botón
+        const countSpan = applyBtn.querySelector('.bg-white.bg-opacity-20');
+        if (countSpan) {
+            countSpan.textContent = `${visualizacionState.selectedIndicadores.length}×${visualizacionState.selectedYears.length}`;
+        } else {
+            const span = document.createElement('span');
+            span.className = 'bg-white bg-opacity-20 px-2 py-0.5 rounded-full text-xs';
+            span.textContent = `${visualizacionState.selectedIndicadores.length}×${visualizacionState.selectedYears.length}`;
+            applyBtn.appendChild(span);
+        }
+    } else {
+        applyBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        
+        // Remover contador si existe
+        const countSpan = applyBtn.querySelector('.bg-white.bg-opacity-20');
+        if (countSpan) {
+            countSpan.remove();
+        }
+    }
+}
+
+/**
+ * Refrescar dropdown de indicadores con nueva estructura
+ */
+function refreshIndicadoresDropdown() {
+    const container = document.querySelector('#indicadores-filter-dropdown .p-3:last-child');
+    if (!container) return;
+    
+    container.innerHTML = createIndicadoresFilterOptions();
+    
+    // Re-configurar event listeners para los nuevos checkboxes
+    setTimeout(() => {
+        document.querySelectorAll('.indicador-checkbox').forEach(cb => {
+            cb.removeEventListener('change', updateIndicadoresSelection);
+            cb.addEventListener('change', updateIndicadoresSelection);
+        });
+        
+        // Recrear iconos si es necesario
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Refrescar todos los dropdowns con datos actualizados
+ */
+function refreshAllDropdowns() {
+    // Refrescar dropdown de áreas
+    const areasContainer = document.querySelector('#areas-filter-dropdown .space-y-1');
+    if (areasContainer) {
+        areasContainer.innerHTML = createAreasFilterOptions();
+        
+        // Re-configurar event listeners
+        setTimeout(() => {
+            document.querySelectorAll('.area-checkbox').forEach(cb => {
+                cb.removeEventListener('change', updateAreasSelection);
+                cb.addEventListener('change', updateAreasSelection);
+            });
+        }, 10);
+    }
+    
+    // Refrescar dropdown de indicadores
+    refreshIndicadoresDropdown();
+    
+    // Refrescar dropdown de años
+    const yearsContainer = document.querySelector('#years-filter-dropdown .space-y-2');
+    if (yearsContainer) {
+        yearsContainer.innerHTML = visualizacionState.availableYears.map(year => `
+            <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 rounded p-1 transition-colors">
+                <input 
+                    type="checkbox" 
+                    value="${year}" 
+                    ${visualizacionState.selectedYears.includes(year) ? 'checked' : ''}
+                    class="year-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                >
+                <span class="text-sm text-gray-700 font-medium">${year}</span>
+            </label>
+        `).join('');
+        
+        // Re-configurar event listeners
+        setTimeout(() => {
+            document.querySelectorAll('.year-checkbox').forEach(cb => {
+                cb.removeEventListener('change', updateYearsSelection);
+                cb.addEventListener('change', updateYearsSelection);
+            });
+        }, 10);
+    }
+    
+    // Re-configurar checkboxes de "seleccionar todo"
+    setupSelectAllCheckboxes();
+}
+
+/**
+ * Configurar checkboxes de seleccionar todo
+ */
+function setupSelectAllCheckboxes() {
+    // Select all para áreas
+    const selectAllAreas = document.getElementById('select-all-areas');
+    if (selectAllAreas) {
+        selectAllAreas.removeEventListener('change', handleSelectAllAreas);
+        selectAllAreas.addEventListener('change', handleSelectAllAreas);
+    }
+    
+    // Select all para indicadores
+    const selectAllIndicadores = document.getElementById('select-all-indicadores');
+    if (selectAllIndicadores) {
+        selectAllIndicadores.removeEventListener('change', handleSelectAllIndicadores);
+        selectAllIndicadores.addEventListener('change', handleSelectAllIndicadores);
+    }
+    
+    // Select all para años
+    const selectAllYears = document.getElementById('select-all-years');
+    if (selectAllYears) {
+        selectAllYears.removeEventListener('change', handleSelectAllYears);
+        selectAllYears.addEventListener('change', handleSelectAllYears);
+    }
+}
+
+/**
+ * Handlers para checkboxes de seleccionar todo
+ */
+function handleSelectAllAreas(e) {
+    const checkboxes = document.querySelectorAll('.area-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = e.target.checked;
+    });
+    updateAreasSelection();
+}
+
+function handleSelectAllIndicadores(e) {
+    const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
+    checkboxes.forEach(cb => {
+        cb.checked = e.target.checked;
+    });
+    updateIndicadoresSelection();
+}
+
+function handleSelectAllYears(e) {
+    const checkboxes = document.querySelectorAll('.year-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = e.target.checked;
+    });
+    updateYearsSelection();
+}
+
+/**
+ * Actualizar displays de filtros sin reload completo
+ */
+function updateFiltersDisplay() {
+    // Actualizar textos de filtros
+    const areasText = document.getElementById('areas-filter-text');
+    const indicadoresText = document.getElementById('indicadores-filter-text');
+    const yearsText = document.getElementById('years-filter-text');
+    
+    if (areasText) areasText.textContent = getAreasFilterText();
+    if (indicadoresText) indicadoresText.textContent = getIndicadoresFilterText();
+    if (yearsText) yearsText.textContent = getYearsFilterText();
+    
+    // Actualizar contadores en labels
+    const areasLabel = document.querySelector('label[for="areas"] .text-xs');
+    const indicadoresLabel = document.querySelector('label[for="indicadores"] .text-xs');
+    const yearsLabel = document.querySelector('label[for="years"] .text-xs');
+    
+    if (areasLabel) areasLabel.textContent = `(${visualizacionState.availableAreas.length} disponibles)`;
+    if (indicadoresLabel) indicadoresLabel.textContent = `(${visualizacionState.availableIndicadores.length} disponibles)`;
+    if (yearsLabel) yearsLabel.textContent = `(${visualizacionState.availableYears.length} disponibles)`;
+    
+    // Actualizar botón de aplicar filtros
+    updateApplyFiltersButton();
+}
+
+/**
  * Actualizar botones de modo de visualización
  */
 function updateViewModeButtons() {
@@ -2038,17 +2424,38 @@ function updateStatsDisplay() {
 /**
  * Obtener texto de filtro de áreas
  */
+/**
+ * Obtener texto de filtro de áreas
+ */
 function getAreasFilterText() {
     const count = visualizacionState.selectedAreas.length;
     const total = visualizacionState.availableAreas.length;
     
     if (count === 0) return 'Seleccionar áreas';
-    if (count === total) return 'Todas las áreas';
+    if (count === total) return `Todas las áreas (${total})`;
+    
     if (count === 1) {
         const area = visualizacionState.availableAreas.find(a => a.id === visualizacionState.selectedAreas[0]);
-        return area?.nombre || 'Área seleccionada';
+        if (area) {
+            // Mostrar nombre jerárquico truncado si es muy largo
+            const displayName = getAreaDisplayName(area);
+            return displayName.length > 25 ? displayName.substring(0, 25) + '...' : displayName;
+        }
+        return 'Área seleccionada';
     }
-    return `${count} áreas seleccionadas`;
+    
+    if (count <= 3) {
+        const selectedAreaNames = visualizacionState.selectedAreas
+            .map(areaId => {
+                const area = visualizacionState.availableAreas.find(a => a.id === areaId);
+                return area ? getAreaDisplayName(area).split('/').pop().trim() : 'Área';
+            })
+            .join(', ');
+        
+        return selectedAreaNames.length > 30 ? `${count} áreas seleccionadas` : selectedAreaNames;
+    }
+    
+    return `${count} de ${total} áreas seleccionadas`;
 }
 
 /**
@@ -2080,4 +2487,26 @@ function getYearsFilterText() {
         return visualizacionState.selectedYears.sort((a, b) => b - a).join(', ');
     }
     return `${count} años seleccionados`;
+}
+/**
+ * Función de debugging para visualizar el estado actual
+ */
+function debugVisualizacionState() {
+    if (!DEBUG.enabled) return;
+    
+    console.group('🔍 Estado de Visualización');
+    console.log('Áreas disponibles:', visualizacionState.availableAreas.length);
+    console.log('Áreas seleccionadas:', visualizacionState.selectedAreas);
+    console.log('Indicadores disponibles:', visualizacionState.availableIndicadores.length);
+    console.log('Indicadores seleccionados:', visualizacionState.selectedIndicadores);
+    console.log('Años disponibles:', visualizacionState.availableYears);
+    console.log('Años seleccionados:', visualizacionState.selectedYears);
+    console.log('Datos de gráficas:', visualizacionState.chartData.length);
+    console.log('Modo actual:', visualizacionState.viewMode);
+    console.groupEnd();
+}
+
+// Exponer función globalmente para debugging
+if (DEBUG.enabled) {
+    window.debugViz = debugVisualizacionState;
 }
