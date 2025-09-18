@@ -359,34 +359,78 @@ function createIndicadoresFilterOptions() {
     
     let html = '';
     
-    // Crear opciones agrupadas
+    // Crear opciones agrupadas con jerarquía
     visualizacionState.availableAreas.forEach(area => {
         const indicadores = indicadoresByArea[area.id] || [];
         if (indicadores.length === 0) return;
         
+        // Determinar nivel de indentación basado en la jerarquía
+        const indentClass = getAreaIndentClass(area);
+        const areaDisplayName = getAreaDisplayName(area);
+        
         html += `
             <div class="border-t border-gray-100 pt-2 mt-2 first:border-t-0 first:pt-0 first:mt-0">
-                <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 flex items-center">
-                    <div class="w-2 h-2 rounded mr-2" style="background-color: ${area.color_hex}"></div>
-                    ${area.nombre}
+                <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 flex items-center ${indentClass}">
+                    <div class="w-2 h-2 rounded mr-2 flex-shrink-0" style="background-color: ${area.color_hex || '#6B7280'}"></div>
+                    <span class="truncate">${areaDisplayName}</span>
+                    <span class="ml-1 text-gray-400">(${indicadores.length})</span>
                 </div>
                 ${indicadores.map(indicador => `
-                    <label class="flex items-center space-x-2 cursor-pointer ml-4 mb-1">
+                    <label class="flex items-center space-x-2 cursor-pointer ${indentClass} ml-4 mb-1 hover:bg-gray-50 rounded px-1 py-0.5">
                         <input 
                             type="checkbox" 
                             value="${indicador.id}" 
                             ${visualizacionState.selectedIndicadores.includes(indicador.id) ? 'checked' : ''}
-                            class="indicador-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            class="indicador-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue flex-shrink-0"
                         >
-                        <span class="text-sm text-gray-700">${indicador.nombre}</span>
-                        <span class="text-xs text-gray-500">(${indicador.clave})</span>
+                        <div class="flex-1 min-w-0">
+                            <span class="text-sm text-gray-700 block truncate">${indicador.nombre}</span>
+                            <span class="text-xs text-gray-500">Clave: ${indicador.clave}</span>
+                        </div>
                     </label>
                 `).join('')}
             </div>
         `;
     });
     
-    return html;
+    return html || '<div class="text-center py-4 text-gray-500">No hay indicadores disponibles</div>';
+}
+
+/**
+ * Obtener clase de indentación según la jerarquía del área
+ */
+function getAreaIndentClass(area) {
+    if (!area.path) return '';
+    
+    // Contar niveles en el path (asumiendo separación por puntos)
+    const pathParts = area.path.split('.');
+    const level = pathParts.length;
+    
+    switch (level) {
+        case 1: return ''; // Nivel raíz
+        case 2: return 'pl-2'; // Direcciones
+        case 3: return 'pl-4'; // Subdirecciones
+        default: return 'pl-6'; // Niveles más profundos
+    }
+}
+
+/**
+ * Obtener nombre de display formateado para el área
+ */
+function getAreaDisplayName(area) {
+    if (!area.nombre) return area.clave || 'Área';
+    
+    // Si el nombre ya incluye jerarquía (tiene "/"), mostrarlo tal como está
+    if (area.nombre.includes('/')) {
+        return area.nombre;
+    }
+    
+    // Si es una dirección, agregar indicador visual
+    if (area.nombre.includes('(Dirección)')) {
+        return area.nombre.replace('(Dirección)', '📋');
+    }
+    
+    return area.nombre;
 }
 
 /**
@@ -602,35 +646,107 @@ async function loadAvailableAreas() {
         const userRole = visualizacionState.userProfile?.rol_principal;
         
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
-            // Roles altos ven todas las áreas
+            // Roles altos ven todas las áreas con jerarquía
             const { data } = await selectData('areas', {
-                select: '*',
+                select: `
+                    id,
+                    clave,
+                    path,
+                    color_hex,
+                    estado,
+                    CASE 
+                        WHEN nlevel(path) = 1 THEN ltree2text(path)
+                        WHEN nlevel(path) = 2 THEN 
+                            CASE 
+                                WHEN path ~ '*.DIRECCION.*' THEN ltree2text(subpath(path, -1)) || ' (Dirección)'
+                                ELSE ltree2text(path)
+                            END
+                        WHEN nlevel(path) >= 3 THEN 
+                            ltree2text(subpath(path, -2, 1)) || ' / ' || ltree2text(subpath(path, -1))
+                        ELSE ltree2text(path)
+                    END as nombre
+                `,
                 filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'nombre', ascending: true }
+                orderBy: { column: 'path', ascending: true }
             });
             visualizacionState.availableAreas = data || [];
         } else {
-            // Otros roles ven solo sus áreas asignadas
+            // Otros roles ven solo sus áreas asignadas con jerarquía
+            const userAreaIds = await getUserAreaIds();
+            if (userAreaIds.length === 0) {
+                visualizacionState.availableAreas = [];
+                return;
+            }
+            
             const { data } = await selectData('areas', {
                 select: `
-                    areas.*
+                    id,
+                    clave,
+                    path,
+                    color_hex,
+                    estado,
+                    CASE 
+                        WHEN nlevel(path) = 1 THEN ltree2text(path)
+                        WHEN nlevel(path) = 2 THEN 
+                            CASE 
+                                WHEN path ~ '*.DIRECCION.*' THEN ltree2text(subpath(path, -1)) || ' (Dirección)'
+                                ELSE ltree2text(path)
+                            END
+                        WHEN nlevel(path) >= 3 THEN 
+                            ltree2text(subpath(path, -2, 1)) || ' / ' || ltree2text(subpath(path, -1))
+                        ELSE ltree2text(path)
+                    END as nombre
                 `,
                 filters: { 
                     estado: 'ACTIVO',
-                    id: { operator: 'in', value: await getUserAreaIds() }
+                    id: userAreaIds
                 },
-                orderBy: { column: 'nombre', ascending: true }
+                orderBy: { column: 'path', ascending: true }
             });
             visualizacionState.availableAreas = data || [];
         }
         
         if (DEBUG.enabled) {
-            console.log(`📁 Cargadas ${visualizacionState.availableAreas.length} áreas disponibles`);
+            console.log(`📁 Cargadas ${visualizacionState.availableAreas.length} áreas disponibles con jerarquía`);
         }
         
     } catch (error) {
         console.error('❌ Error al cargar áreas:', error);
-        visualizacionState.availableAreas = [];
+        // Fallback sin jerarquía si hay problemas con ltree
+        try {
+            const { data } = await selectData('areas', {
+                select: 'id, clave, path, color_hex, estado, clave as nombre',
+                filters: { estado: 'ACTIVO' },
+                orderBy: { column: 'clave', ascending: true }
+            });
+            visualizacionState.availableAreas = data || [];
+            console.warn('⚠️ Usando fallback sin jerarquía para áreas');
+        } catch (fallbackError) {
+            console.error('❌ Error en fallback:', fallbackError);
+            visualizacionState.availableAreas = [];
+        }
+    }
+}
+
+ * Obtener IDs de áreas asignadas al usuario
+ */
+async function getUserAreaIds() {
+    try {
+        if (!visualizacionState.userProfile?.id) return [];
+        
+        const { data } = await selectData('usuario_areas', {
+            select: 'area_id',
+            filters: { 
+                usuario_id: visualizacionState.userProfile.id,
+                estado: 'ACTIVO'
+            }
+        });
+        
+        return data ? data.map(ua => ua.area_id) : [];
+        
+    } catch (error) {
+        console.error('❌ Error al obtener áreas del usuario:', error);
+        return [];
     }
 }
 
@@ -1863,16 +1979,25 @@ function updateAvailableIndicadoresFilter() {
                 checkbox.checked = false;
             }
             
-            // Actualizar estilo visual
+            // Actualizar estilo visual con mejor feedback
             const label = checkbox.closest('label');
             if (label) {
-                label.classList.toggle('opacity-50', !isAreaSelected);
+                if (!isAreaSelected) {
+                    label.classList.add('opacity-40', 'cursor-not-allowed');
+                    label.classList.remove('hover:bg-gray-50');
+                } else {
+                    label.classList.remove('opacity-40', 'cursor-not-allowed');
+                    label.classList.add('hover:bg-gray-50');
+                }
             }
         }
     });
     
     // Actualizar selección de indicadores
     updateIndicadoresSelection();
+    
+    // Actualizar contador en el dropdown de áreas
+    updateAreaIndicatorCounts();
 }
 
 /**
