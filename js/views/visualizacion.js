@@ -698,6 +698,12 @@ function createStatsHTML() {
 async function loadAvailableAreas() {
     try {
         const userRole = visualizacionState.userProfile?.rol_principal;
+        const queryOptions = {
+            filters: { estado: 'ACTIVO' },
+            orderBy: { column: 'path', ascending: true }
+        };
+
+        if (!['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
 
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas - consulta simple
@@ -716,6 +722,12 @@ async function loadAvailableAreas() {
                 visualizacionState.availableAreas = [];
                 return;
             }
+
+            queryOptions.filters.id = userAreaIds;
+        }
+
+        visualizacionState.availableAreas = await fetchAreasHierarchy(queryOptions);
+
 
             visualizacionState.availableAreas = await fetchAreasWithHierarchy({
 
@@ -739,6 +751,42 @@ async function loadAvailableAreas() {
         visualizacionState.availableAreas = [];
     }
 }
+
+async function fetchAreasHierarchy(options) {
+    const enrichedOptions = {
+        ...options,
+        select: 'id, nombre, clave, path, color_hex, estado'
+    };
+
+    try {
+        const { data } = await selectData('areas', enrichedOptions);
+        const safeAreas = Array.isArray(data) ? data : [];
+        return buildAreasHierarchy(safeAreas.map(area => ({
+            ...area,
+            nombre: normalizeAreaName(area.nombre) || area.clave || 'Área'
+        })));
+    } catch (error) {
+        if (!isPolicyRecursionError(error)) {
+            throw error;
+        }
+
+        if (DEBUG.enabled) {
+            console.warn('⚠️ RLS detectó recursión al consultar áreas con nombre. Usando fallback.');
+        }
+
+        const fallbackOptions = {
+            ...options,
+            select: 'id, clave, path, color_hex, estado'
+        };
+
+        const { data } = await selectData('areas', fallbackOptions);
+        const safeAreas = Array.isArray(data) ? data : [];
+
+        return buildAreasHierarchy(safeAreas.map(area => ({
+            ...area,
+            nombre: formatAreaNameFromPath(area.path, area.clave)
+        })));
+    }
 
 async function fetchAreasWithHierarchy(options = {}) {
     const baseSelect = 'id, clave, path, color_hex, estado';
@@ -820,7 +868,11 @@ function buildAreasHierarchy(areas) {
     return areas.map(area => {
         const hierarchyLevel = getAreaHierarchyLevel(area);
         const breadcrumbs = buildAreaBreadcrumbs(area, pathMap);
+
+        const displayName = (breadcrumbs.join(' / ') || '').trim() || normalizeAreaName(area.nombre) || area.clave || 'Área';
+
         const displayName = (breadcrumbs.join(' / ') || '').trim() || area.nombre || area.clave || 'Área';
+
 
         return {
             ...area,
@@ -829,6 +881,74 @@ function buildAreasHierarchy(areas) {
             breadcrumbs,
             shortName: breadcrumbs.length > 0
                 ? breadcrumbs[breadcrumbs.length - 1]
+
+                : (normalizeAreaName(area.nombre) || area.clave || 'Área')
+        };
+    });
+}
+
+/**
+ * Obtener nivel jerárquico del área a partir de su path
+ */
+function getAreaHierarchyLevel(area) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return 1;
+    }
+
+    return area.path.split('.').filter(Boolean).length || 1;
+}
+
+/**
+ * Formatear un segmento del path para mostrarlo de forma legible
+ */
+function formatAreaSegment(segment) {
+    if (!segment) return 'Área';
+
+    return segment
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function buildAreaBreadcrumbs(area, pathMap) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return [normalizeAreaName(area?.nombre) || area?.clave || 'Área'];
+    }
+
+    const segments = area.path.split('.').filter(Boolean);
+    if (segments.length === 0) {
+        return [normalizeAreaName(area?.nombre) || area?.clave || 'Área'];
+    }
+
+    return segments.map((_, index) => {
+        const partialPath = segments.slice(0, index + 1).join('.');
+        const matchedArea = pathMap.get(partialPath);
+
+        if (matchedArea) {
+            return normalizeAreaName(matchedArea.nombre) || matchedArea.clave || formatAreaSegment(segments[index]);
+        }
+
+        return formatAreaSegment(segments[index]);
+    });
+}
+
+function normalizeAreaName(name) {
+    if (typeof name !== 'string') return null;
+    const trimmed = name.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function formatAreaNameFromPath(path, clave) {
+    if (!path || typeof path !== 'string') {
+        return clave || 'Área';
+    }
+
+    const segments = path.split('.').filter(Boolean);
+    if (segments.length === 0) {
+        return clave || 'Área';
+    }
+
+    return formatAreaSegment(segments[segments.length - 1]);
+
                 : (area.nombre || area.clave || 'Área')
         };
     });
