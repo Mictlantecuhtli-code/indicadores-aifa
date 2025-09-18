@@ -460,12 +460,8 @@ function createIndicadoresFilterOptions() {
  * Obtener clase de indentación según la jerarquía del área
  */
 function getAreaIndentClass(area) {
-    if (!area.path) return '';
-    
-    // Contar niveles en el path (asumiendo separación por puntos)
-    const pathParts = area.path.split('.');
-    const level = pathParts.length;
-    
+    const level = area?.hierarchyLevel || (area?.path ? area.path.split('.').filter(Boolean).length : 1);
+
     switch (level) {
         case 1: return ''; // Nivel raíz
         case 2: return 'pl-2'; // Direcciones
@@ -478,19 +474,17 @@ function getAreaIndentClass(area) {
  * Obtener nombre de display formateado para el área
  */
 function getAreaDisplayName(area) {
-    if (!area.nombre) return area.clave || 'Área';
-    
-    // Si el nombre ya incluye jerarquía (tiene "/"), mostrarlo tal como está
-    if (area.nombre.includes('/')) {
+    if (!area) return 'Área';
+
+    if (area.displayName) {
+        return area.displayName;
+    }
+
+    if (area.nombre) {
         return area.nombre;
     }
-    
-    // Si es una dirección, agregar indicador visual
-    if (area.nombre.includes('(Dirección)')) {
-        return area.nombre.replace('(Dirección)', '📋');
-    }
-    
-    return area.nombre;
+
+    return area.clave || 'Área';
 }
 
 /**
@@ -708,17 +702,13 @@ async function loadAvailableAreas() {
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas - consulta simple
             const { data } = await selectData('areas', {
-                select: 'id, clave, path, color_hex, estado',
+                select: 'id, clave, nombre, path, color_hex, estado',
                 filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'path', ascending: true }
             });
-            
-            // Procesar nombres con jerarquía en el cliente
-            visualizacionState.availableAreas = (data || []).map(area => ({
-                ...area,
-                nombre: formatAreaNameFromPath(area.path, area.clave)
-            }));
-            
+
+            visualizacionState.availableAreas = buildAreasHierarchy(data || []);
+
         } else {
             // Otros roles ven solo sus áreas asignadas
             const userAreaIds = await getUserAreaIds();
@@ -726,23 +716,19 @@ async function loadAvailableAreas() {
                 visualizacionState.availableAreas = [];
                 return;
             }
-            
+
             const { data } = await selectData('areas', {
-                select: 'id, clave, path, color_hex, estado',
-                filters: { 
+                select: 'id, clave, nombre, path, color_hex, estado',
+                filters: {
                     estado: 'ACTIVO',
                     id: userAreaIds
                 },
                 orderBy: { column: 'path', ascending: true }
             });
-            
-            // Procesar nombres con jerarquía en el cliente
-            visualizacionState.availableAreas = (data || []).map(area => ({
-                ...area,
-                nombre: formatAreaNameFromPath(area.path, area.clave)
-            }));
+
+            visualizacionState.availableAreas = buildAreasHierarchy(data || []);
         }
-        
+
         if (DEBUG.enabled) {
             console.log(`📁 Cargadas ${visualizacionState.availableAreas.length} áreas disponibles con jerarquía`);
         }
@@ -754,42 +740,84 @@ async function loadAvailableAreas() {
 }
 
 /**
- * Formatear nombre de área desde path ltree
+ * Construir jerarquía de áreas utilizando el path (ltree)
  */
-function formatAreaNameFromPath(path, clave) {
-    if (!path || typeof path !== 'string') {
-        return clave || 'Área';
+function buildAreasHierarchy(rawAreas) {
+    if (!Array.isArray(rawAreas)) return [];
+
+    const areas = rawAreas.map(area => ({
+        ...area,
+        nombre: area?.nombre?.trim() || area?.clave || 'Área'
+    }));
+
+    const pathMap = new Map();
+    areas.forEach(area => {
+        if (area.path) {
+            pathMap.set(area.path, area);
+        }
+    });
+
+    return areas.map(area => {
+        const hierarchyLevel = getAreaHierarchyLevel(area);
+        const displayName = formatAreaDisplayName(area, pathMap);
+
+        return {
+            ...area,
+            hierarchyLevel,
+            displayName
+        };
+    });
+}
+
+/**
+ * Obtener nivel jerárquico del área a partir de su path
+ */
+function getAreaHierarchyLevel(area) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return 1;
     }
-    
-    // Dividir el path por puntos
-    const parts = path.split('.');
-    const level = parts.length;
-    
-    switch (level) {
-        case 1:
-            // Nivel raíz - usar la parte tal como está
-            return parts[0].replace(/_/g, ' ');
-            
-        case 2:
-            // Segundo nivel - mostrar como dirección
-            const secondLevel = parts[1].replace(/_/g, ' ');
-            if (secondLevel.toLowerCase().includes('direccion')) {
-                return `${secondLevel} 📋`;
-            }
-            return secondLevel;
-            
-        case 3:
-            // Tercer nivel - mostrar jerarquía
-            const parent = parts[1].replace(/_/g, ' ');
-            const child = parts[2].replace(/_/g, ' ');
-            return `${parent} / ${child}`;
-            
-        default:
-            // Niveles más profundos - mostrar los últimos 2
-            const parentLevel = parts[parts.length - 2].replace(/_/g, ' ');
-            const currentLevel = parts[parts.length - 1].replace(/_/g, ' ');
-            return `${parentLevel} / ${currentLevel}`;
+
+    return area.path.split('.').filter(Boolean).length || 1;
+}
+
+/**
+ * Construir nombre jerárquico del área utilizando el mapa de paths
+ */
+function formatAreaDisplayName(area, pathMap) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return area?.nombre || area?.clave || 'Área';
     }
+
+    const segments = area.path.split('.').filter(Boolean);
+    if (segments.length === 0) {
+        return area?.nombre || area?.clave || 'Área';
+    }
+
+    const hierarchyNames = segments.map((_, index) => {
+        const partialPath = segments.slice(0, index + 1).join('.');
+        const matchedArea = pathMap.get(partialPath);
+
+        if (matchedArea?.nombre) {
+            return matchedArea.nombre;
+        }
+
+        const segment = segments[index];
+        return formatAreaSegment(segment);
+    });
+
+    const displayName = hierarchyNames.join(' / ').trim();
+    return displayName || area?.nombre || area?.clave || 'Área';
+}
+
+/**
+ * Formatear un segmento del path para mostrarlo de forma legible
+ */
+function formatAreaSegment(segment) {
+    if (!segment) return 'Área';
+
+    return segment
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
 }
 
 /*
