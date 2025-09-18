@@ -706,32 +706,21 @@ async function loadAvailableAreas() {
         const userRole = visualizacionState.userProfile?.rol_principal;
         
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
-            // Roles altos ven todas las áreas con jerarquía
+            // Roles altos ven todas las áreas - consulta simple
             const { data } = await selectData('areas', {
-                select: `
-                    id,
-                    clave,
-                    path,
-                    color_hex,
-                    estado,
-                    CASE 
-                        WHEN nlevel(path) = 1 THEN ltree2text(path)
-                        WHEN nlevel(path) = 2 THEN 
-                            CASE 
-                                WHEN path ~ '*.DIRECCION.*' THEN ltree2text(subpath(path, -1)) || ' (Dirección)'
-                                ELSE ltree2text(path)
-                            END
-                        WHEN nlevel(path) >= 3 THEN 
-                            ltree2text(subpath(path, -2, 1)) || ' / ' || ltree2text(subpath(path, -1))
-                        ELSE ltree2text(path)
-                    END as nombre
-                `,
+                select: 'id, clave, path, color_hex, estado',
                 filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'path', ascending: true }
             });
-            visualizacionState.availableAreas = data || [];
+            
+            // Procesar nombres con jerarquía en el cliente
+            visualizacionState.availableAreas = (data || []).map(area => ({
+                ...area,
+                nombre: formatAreaNameFromPath(area.path, area.clave)
+            }));
+            
         } else {
-            // Otros roles ven solo sus áreas asignadas con jerarquía
+            // Otros roles ven solo sus áreas asignadas
             const userAreaIds = await getUserAreaIds();
             if (userAreaIds.length === 0) {
                 visualizacionState.availableAreas = [];
@@ -739,31 +728,19 @@ async function loadAvailableAreas() {
             }
             
             const { data } = await selectData('areas', {
-                select: `
-                    id,
-                    clave,
-                    path,
-                    color_hex,
-                    estado,
-                    CASE 
-                        WHEN nlevel(path) = 1 THEN ltree2text(path)
-                        WHEN nlevel(path) = 2 THEN 
-                            CASE 
-                                WHEN path ~ '*.DIRECCION.*' THEN ltree2text(subpath(path, -1)) || ' (Dirección)'
-                                ELSE ltree2text(path)
-                            END
-                        WHEN nlevel(path) >= 3 THEN 
-                            ltree2text(subpath(path, -2, 1)) || ' / ' || ltree2text(subpath(path, -1))
-                        ELSE ltree2text(path)
-                    END as nombre
-                `,
+                select: 'id, clave, path, color_hex, estado',
                 filters: { 
                     estado: 'ACTIVO',
                     id: userAreaIds
                 },
                 orderBy: { column: 'path', ascending: true }
             });
-            visualizacionState.availableAreas = data || [];
+            
+            // Procesar nombres con jerarquía en el cliente
+            visualizacionState.availableAreas = (data || []).map(area => ({
+                ...area,
+                nombre: formatAreaNameFromPath(area.path, area.clave)
+            }));
         }
         
         if (DEBUG.enabled) {
@@ -772,21 +749,49 @@ async function loadAvailableAreas() {
         
     } catch (error) {
         console.error('❌ Error al cargar áreas:', error);
-        // Fallback sin jerarquía si hay problemas con ltree
-        try {
-            const { data } = await selectData('areas', {
-                select: 'id, clave, path, color_hex, estado, clave as nombre',
-                filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'clave', ascending: true }
-            });
-            visualizacionState.availableAreas = data || [];
-            console.warn('⚠️ Usando fallback sin jerarquía para áreas');
-        } catch (fallbackError) {
-            console.error('❌ Error en fallback:', fallbackError);
-            visualizacionState.availableAreas = [];
-        }
+        visualizacionState.availableAreas = [];
     }
 }
+
+/**
+ * Formatear nombre de área desde path ltree
+ */
+function formatAreaNameFromPath(path, clave) {
+    if (!path || typeof path !== 'string') {
+        return clave || 'Área';
+    }
+    
+    // Dividir el path por puntos
+    const parts = path.split('.');
+    const level = parts.length;
+    
+    switch (level) {
+        case 1:
+            // Nivel raíz - usar la parte tal como está
+            return parts[0].replace(/_/g, ' ');
+            
+        case 2:
+            // Segundo nivel - mostrar como dirección
+            const secondLevel = parts[1].replace(/_/g, ' ');
+            if (secondLevel.toLowerCase().includes('direccion')) {
+                return `${secondLevel} 📋`;
+            }
+            return secondLevel;
+            
+        case 3:
+            // Tercer nivel - mostrar jerarquía
+            const parent = parts[1].replace(/_/g, ' ');
+            const child = parts[2].replace(/_/g, ' ');
+            return `${parent} / ${child}`;
+            
+        default:
+            // Niveles más profundos - mostrar los últimos 2
+            const parentLevel = parts[parts.length - 2].replace(/_/g, ' ');
+            const currentLevel = parts[parts.length - 1].replace(/_/g, ' ');
+            return `${parentLevel} / ${currentLevel}`;
+    }
+}
+
 /*
  * Obtener IDs de áreas asignadas al usuario
  */
