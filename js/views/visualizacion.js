@@ -698,9 +698,10 @@ function createStatsHTML() {
 async function loadAvailableAreas() {
     try {
         const userRole = visualizacionState.userProfile?.rol_principal;
-        
+
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas - consulta simple
+            visualizacionState.availableAreas = await fetchAreasWithHierarchy({
             const { data } = await selectData('areas', {
                 select: 'id, clave, nombre, path, color_hex, estado',
                 filters: { estado: 'ACTIVO' },
@@ -708,7 +709,6 @@ async function loadAvailableAreas() {
             });
 
             visualizacionState.availableAreas = buildAreasHierarchy(data || []);
-
         } else {
             // Otros roles ven solo sus áreas asignadas
             const userAreaIds = await getUserAreaIds();
@@ -716,6 +716,8 @@ async function loadAvailableAreas() {
                 visualizacionState.availableAreas = [];
                 return;
             }
+
+            visualizacionState.availableAreas = await fetchAreasWithHierarchy({
 
             const { data } = await selectData('areas', {
                 select: 'id, clave, nombre, path, color_hex, estado',
@@ -725,22 +727,164 @@ async function loadAvailableAreas() {
                 },
                 orderBy: { column: 'path', ascending: true }
             });
-
             visualizacionState.availableAreas = buildAreasHierarchy(data || []);
         }
 
         if (DEBUG.enabled) {
             console.log(`📁 Cargadas ${visualizacionState.availableAreas.length} áreas disponibles con jerarquía`);
         }
-        
+
     } catch (error) {
         console.error('❌ Error al cargar áreas:', error);
         visualizacionState.availableAreas = [];
     }
 }
 
+async function fetchAreasWithHierarchy(options = {}) {
+    const baseSelect = 'id, clave, path, color_hex, estado';
+
+    const baseQueryOptions = {
+        ...options,
+        select: baseSelect
+    };
+
+    const { data: baseAreas } = await selectData('areas', baseQueryOptions);
+    const safeAreas = Array.isArray(baseAreas) ? baseAreas : [];
+
+    if (safeAreas.length === 0) {
+        return [];
+    }
+
+    const nameMap = await fetchAreaNamesSafely(options);
+
+    const areasWithNames = safeAreas.map(area => {
+        const fallbackName = typeof area?.nombre === 'string' ? area.nombre.trim() : null;
+        const rawName = nameMap.get(area.id) || fallbackName || null;
+
+        return {
+            ...area,
+            rawName,
+            nombre: rawName || area?.clave || 'Área'
+        };
+    });
+
+    return buildAreasHierarchy(areasWithNames);
+}
+
+async function fetchAreaNamesSafely(options = {}) {
+    const nameMap = new Map();
+
+    try {
+        const { data } = await selectData('areas', {
+            select: 'id, nombre',
+            filters: options.filters,
+            limit: options.limit,
+            from: options.from,
+            to: options.to
+        });
+
+        if (Array.isArray(data)) {
+            data.forEach(area => {
+                const rawName = typeof area?.nombre === 'string' ? area.nombre.trim() : null;
+                if (rawName) {
+                    nameMap.set(area.id, rawName);
+                }
+            });
+        }
+    } catch (error) {
+        if (isPolicyRecursionError(error)) {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ RLS detectó recursión al obtener los nombres de áreas. Continuando con datos mínimos.');
+            }
+        } else {
+            throw error;
+        }
+    }
+
+    return nameMap;
+}
+
 /**
  * Construir jerarquía de áreas utilizando el path (ltree)
+ */
+function buildAreasHierarchy(areas) {
+    if (!Array.isArray(areas) || areas.length === 0) return [];
+
+    const pathMap = new Map();
+    areas.forEach(area => {
+        if (area.path) {
+            pathMap.set(area.path, area);
+        }
+    });
+
+    return areas.map(area => {
+        const hierarchyLevel = getAreaHierarchyLevel(area);
+        const breadcrumbs = buildAreaBreadcrumbs(area, pathMap);
+        const displayName = (breadcrumbs.join(' / ') || '').trim() || area.nombre || area.clave || 'Área';
+
+        return {
+            ...area,
+            hierarchyLevel,
+            displayName,
+            breadcrumbs,
+            shortName: breadcrumbs.length > 0
+                ? breadcrumbs[breadcrumbs.length - 1]
+                : (area.nombre || area.clave || 'Área')
+        };
+    });
+}
+
+/**
+ * Obtener nivel jerárquico del área a partir de su path
+ */
+function getAreaHierarchyLevel(area) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return 1;
+    }
+
+    return area.path.split('.').filter(Boolean).length || 1;
+}
+
+/**
+ * Formatear un segmento del path para mostrarlo de forma legible
+ */
+function formatAreaSegment(segment) {
+    if (!segment) return 'Área';
+
+    return segment
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function buildAreaBreadcrumbs(area, pathMap) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return [area?.nombre || area?.clave || 'Área'];
+    }
+
+    const segments = area.path.split('.').filter(Boolean);
+    if (segments.length === 0) {
+        return [area?.nombre || area?.clave || 'Área'];
+    }
+
+    return segments.map((_, index) => {
+        const partialPath = segments.slice(0, index + 1).join('.');
+        const matchedArea = pathMap.get(partialPath);
+
+        if (matchedArea) {
+            return matchedArea.rawName || matchedArea.nombre || formatAreaSegment(segments[index]);
+        }
+
+        return formatAreaSegment(segments[index]);
+    });
+}
+
+function isPolicyRecursionError(error) {
+    if (!error) return false;
+
+    const code = error.code || error?.originalError?.code;
+    const message = (error.message || '').toLowerCase();
+
+    return code === '42P17' || message.includes('infinite recursion detected');
  */
 function buildAreasHierarchy(rawAreas) {
     if (!Array.isArray(rawAreas)) return [];
@@ -2446,15 +2590,24 @@ function getAreasFilterText() {
         }
         return 'Área seleccionada';
     }
-    
+
     if (count <= 3) {
         const selectedAreaNames = visualizacionState.selectedAreas
             .map(areaId => {
                 const area = visualizacionState.availableAreas.find(a => a.id === areaId);
-                return area ? getAreaDisplayName(area).split('/').pop().trim() : 'Área';
+                if (!area) return 'Área';
+
+                if (area.shortName) {
+                    return area.shortName;
+                }
+
+                const displayName = getAreaDisplayName(area);
+                return displayName.includes('/')
+                    ? displayName.split('/').pop().trim()
+                    : displayName;
             })
             .join(', ');
-        
+
         return selectedAreaNames.length > 30 ? `${count} áreas seleccionadas` : selectedAreaNames;
     }
     
