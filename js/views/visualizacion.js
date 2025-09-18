@@ -1625,7 +1625,7 @@ function setupFilterEventListeners() {
  * Configurar checkboxes de filtros
  */
 function setupFilterCheckboxes() {
-   setupSelectAllCheckboxes();
+    setupSelectAllCheckboxes();
     // Checkboxes individuales
     document.querySelectorAll('.area-checkbox').forEach(cb => {
         cb.addEventListener('change', updateAreasSelection);
@@ -1638,38 +1638,8 @@ function setupFilterCheckboxes() {
     document.querySelectorAll('.year-checkbox').forEach(cb => {
         cb.addEventListener('change', updateYearsSelection);
     });
-
+    
     // Botones de limpiar filtros
-    const clearAreasBtn = document.getElementById('clear-areas-btn');
-    if (clearAreasBtn) {
-        clearAreasBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.area-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('select-all-areas').checked = false;
-            updateAreasSelection();
-        });
-    }
-    
-    const clearIndicadoresBtn = document.getElementById('clear-indicadores-btn');
-    if (clearIndicadoresBtn) {
-        clearIndicadoresBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('select-all-indicadores').checked = false;
-            updateIndicadoresSelection();
-        });
-    }
-    
-    const clearYearsBtn = document.getElementById('clear-years-btn');
-    if (clearYearsBtn) {
-        clearYearsBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.year-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('select-all-years').checked = false;
-            updateYearsSelection();
-        });
-    }
-        // Botones de limpiar filtros
     const clearAreasBtn = document.getElementById('clear-areas-btn');
     if (clearAreasBtn) {
         clearAreasBtn.addEventListener('click', (e) => {
