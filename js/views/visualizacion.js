@@ -734,34 +734,25 @@ async function loadAvailableAreas() {
 }
 
 async function fetchAreasWithHierarchy(options = {}) {
-    const fullSelect = 'id, clave, nombre, path, color_hex, estado';
-    const minimalSelect = 'id, clave, path, color_hex, estado';
+    const baseSelect = 'id, clave, path, color_hex, estado';
 
-    try {
-        const { data } = await selectData('areas', { ...options, select: fullSelect });
-        return buildAreasHierarchy(data || []);
-    } catch (error) {
-        if (isPolicyRecursionError(error)) {
-            if (DEBUG.enabled) {
-                console.warn('⚠️ RLS detectó recursión al obtener áreas. Aplicando consulta alternativa sin columna "nombre".');
-            }
+    const baseQueryOptions = {
+        ...options,
+        select: baseSelect
+    };
 
-            const { data } = await selectData('areas', { ...options, select: minimalSelect });
-            return buildAreasHierarchy(data || []);
-        }
+    const { data: baseAreas } = await selectData('areas', baseQueryOptions);
+    const safeAreas = Array.isArray(baseAreas) ? baseAreas : [];
 
-        throw error;
+    if (safeAreas.length === 0) {
+        return [];
     }
-}
 
-/**
- * Construir jerarquía de áreas utilizando el path (ltree)
- */
-function buildAreasHierarchy(rawAreas) {
-    if (!Array.isArray(rawAreas)) return [];
+    const nameMap = await fetchAreaNamesSafely(options);
 
-    const areas = rawAreas.map(area => {
-        const rawName = typeof area?.nombre === 'string' ? area.nombre.trim() : null;
+    const areasWithNames = safeAreas.map(area => {
+        const fallbackName = typeof area?.nombre === 'string' ? area.nombre.trim() : null;
+        const rawName = nameMap.get(area.id) || fallbackName || null;
 
         return {
             ...area,
@@ -769,6 +760,48 @@ function buildAreasHierarchy(rawAreas) {
             nombre: rawName || area?.clave || 'Área'
         };
     });
+
+    return buildAreasHierarchy(areasWithNames);
+}
+
+async function fetchAreaNamesSafely(options = {}) {
+    const nameMap = new Map();
+
+    try {
+        const { data } = await selectData('areas', {
+            select: 'id, nombre',
+            filters: options.filters,
+            limit: options.limit,
+            from: options.from,
+            to: options.to
+        });
+
+        if (Array.isArray(data)) {
+            data.forEach(area => {
+                const rawName = typeof area?.nombre === 'string' ? area.nombre.trim() : null;
+                if (rawName) {
+                    nameMap.set(area.id, rawName);
+                }
+            });
+        }
+    } catch (error) {
+        if (isPolicyRecursionError(error)) {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ RLS detectó recursión al obtener los nombres de áreas. Continuando con datos mínimos.');
+            }
+        } else {
+            throw error;
+        }
+    }
+
+    return nameMap;
+}
+
+/**
+ * Construir jerarquía de áreas utilizando el path (ltree)
+ */
+function buildAreasHierarchy(areas) {
+    if (!Array.isArray(areas) || areas.length === 0) return [];
 
     const pathMap = new Map();
     areas.forEach(area => {
@@ -803,15 +836,6 @@ function getAreaHierarchyLevel(area) {
     }
 
     return area.path.split('.').filter(Boolean).length || 1;
-}
-
-/**
- * Construir nombre jerárquico del área utilizando el mapa de paths
- */
-function formatAreaDisplayName(area, pathMap) {
-    const breadcrumbs = buildAreaBreadcrumbs(area, pathMap);
-    const displayName = breadcrumbs.join(' / ').trim();
-    return displayName || area?.nombre || area?.clave || 'Área';
 }
 
 /**
