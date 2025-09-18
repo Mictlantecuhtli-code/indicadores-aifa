@@ -702,10 +702,13 @@ async function loadAvailableAreas() {
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
             // Roles altos ven todas las áreas - consulta simple
             visualizacionState.availableAreas = await fetchAreasWithHierarchy({
+            const { data } = await selectData('areas', {
+                select: 'id, clave, nombre, path, color_hex, estado',
                 filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'path', ascending: true }
             });
 
+            visualizacionState.availableAreas = buildAreasHierarchy(data || []);
         } else {
             // Otros roles ven solo sus áreas asignadas
             const userAreaIds = await getUserAreaIds();
@@ -715,12 +718,16 @@ async function loadAvailableAreas() {
             }
 
             visualizacionState.availableAreas = await fetchAreasWithHierarchy({
+
+            const { data } = await selectData('areas', {
+                select: 'id, clave, nombre, path, color_hex, estado',
                 filters: {
                     estado: 'ACTIVO',
                     id: userAreaIds
                 },
                 orderBy: { column: 'path', ascending: true }
             });
+            visualizacionState.availableAreas = buildAreasHierarchy(data || []);
         }
 
         if (DEBUG.enabled) {
@@ -878,6 +885,83 @@ function isPolicyRecursionError(error) {
     const message = (error.message || '').toLowerCase();
 
     return code === '42P17' || message.includes('infinite recursion detected');
+ */
+function buildAreasHierarchy(rawAreas) {
+    if (!Array.isArray(rawAreas)) return [];
+
+    const areas = rawAreas.map(area => ({
+        ...area,
+        nombre: area?.nombre?.trim() || area?.clave || 'Área'
+    }));
+
+    const pathMap = new Map();
+    areas.forEach(area => {
+        if (area.path) {
+            pathMap.set(area.path, area);
+        }
+    });
+
+    return areas.map(area => {
+        const hierarchyLevel = getAreaHierarchyLevel(area);
+        const displayName = formatAreaDisplayName(area, pathMap);
+
+        return {
+            ...area,
+            hierarchyLevel,
+            displayName
+        };
+    });
+}
+
+/**
+ * Obtener nivel jerárquico del área a partir de su path
+ */
+function getAreaHierarchyLevel(area) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return 1;
+    }
+
+    return area.path.split('.').filter(Boolean).length || 1;
+}
+
+/**
+ * Construir nombre jerárquico del área utilizando el mapa de paths
+ */
+function formatAreaDisplayName(area, pathMap) {
+    if (!area?.path || typeof area.path !== 'string') {
+        return area?.nombre || area?.clave || 'Área';
+    }
+
+    const segments = area.path.split('.').filter(Boolean);
+    if (segments.length === 0) {
+        return area?.nombre || area?.clave || 'Área';
+    }
+
+    const hierarchyNames = segments.map((_, index) => {
+        const partialPath = segments.slice(0, index + 1).join('.');
+        const matchedArea = pathMap.get(partialPath);
+
+        if (matchedArea?.nombre) {
+            return matchedArea.nombre;
+        }
+
+        const segment = segments[index];
+        return formatAreaSegment(segment);
+    });
+
+    const displayName = hierarchyNames.join(' / ').trim();
+    return displayName || area?.nombre || area?.clave || 'Área';
+}
+
+/**
+ * Formatear un segmento del path para mostrarlo de forma legible
+ */
+function formatAreaSegment(segment) {
+    if (!segment) return 'Área';
+
+    return segment
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
 }
 
 /*
