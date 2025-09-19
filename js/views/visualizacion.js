@@ -1914,8 +1914,8 @@ function setupFilterCheckboxes() {
         cb.addEventListener('change', updateAreasSelection);
     });
     
-    document.querySelectorAll('.indicador-checkbox').forEach(cb => {
-        cb.addEventListener('change', updateIndicadoresSelection);
+        document.querySelectorAll('.indicador-radio').forEach(rb => {
+            rb.addEventListener('change', updateIndicadoresSelection);
     });
     
     document.querySelectorAll('.year-checkbox').forEach(cb => {
@@ -2312,25 +2312,20 @@ function updateAreasSelection() {
  * Actualizar selección de indicadores
  */
 function updateIndicadoresSelection() {
-    const checkboxes = document.querySelectorAll('.indicador-checkbox');
+    const radioButtons = document.querySelectorAll('.indicador-radio');
+    const selectedIndicador = Array.from(radioButtons)
+        .find(rb => rb.checked);
     
-    // Encontrar cuál checkbox se acaba de marcar
-    const justChecked = Array.from(checkboxes).find(cb => 
-        cb.checked && !visualizacionState.selectedIndicadores.includes(cb.value)
-    );
-    
-    if (justChecked) {
-        // Desmarcar todos los demás
-        checkboxes.forEach(cb => {
-            if (cb !== justChecked) cb.checked = false;
-        });
-        visualizacionState.selectedIndicadores = [justChecked.value];
+    if (selectedIndicador) {
+        visualizacionState.selectedIndicadores = [selectedIndicador.value];
     } else {
-        // Si se desmarcó algo, actualizar normalmente
-        const selectedIndicadores = Array.from(checkboxes)
-            .filter(cb => cb.checked)
-            .map(cb => cb.value);
-        visualizacionState.selectedIndicadores = selectedIndicadores;
+        visualizacionState.selectedIndicadores = [];
+    }
+    
+    // Actualizar texto del filtro
+    const filterText = document.getElementById('indicadores-filter-text');
+    if (filterText) {
+        filterText.textContent = getIndicadoresFilterText();
     }
 }
 
@@ -2491,7 +2486,7 @@ function refreshIndicadoresDropdown() {
     
     // Re-configurar event listeners para los nuevos checkboxes
     setTimeout(() => {
-        document.querySelectorAll('.indicador-checkbox').forEach(cb => {
+        document.querySelectorAll('.indicador-radio').forEach(cb => {
             cb.removeEventListener('change', updateIndicadoresSelection);
             cb.addEventListener('change', updateIndicadoresSelection);
         });
