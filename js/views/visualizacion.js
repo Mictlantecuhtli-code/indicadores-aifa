@@ -2361,10 +2361,28 @@ function updateAreasSelection() {
  * Actualizar selección de indicadores
  */
 function updateIndicadoresSelection() {
-    const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
+ /* const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
+    const selectedIndicadores = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);*/
+    const checkboxes = document.querySelectorAll('.indicador-checkbox');
     const selectedIndicadores = Array.from(checkboxes)
         .filter(cb => cb.checked)
         .map(cb => cb.value);
+    
+    // Permitir solo un indicador seleccionado
+    if (selectedIndicadores.length > 1) {
+        // Desmarcar todos excepto el último seleccionado
+        checkboxes.forEach(cb => cb.checked = false);
+        checkboxes.forEach(cb => {
+            if (cb.value === selectedIndicadores[selectedIndicadores.length - 1]) {
+                cb.checked = true;
+            }
+        });
+        visualizacionState.selectedIndicadores = [selectedIndicadores[selectedIndicadores.length - 1]];
+    } else {
+        visualizacionState.selectedIndicadores = selectedIndicadores;
+    }
     
     visualizacionState.selectedIndicadores = selectedIndicadores;
     
