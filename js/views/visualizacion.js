@@ -7,20 +7,7 @@ import { DEBUG, APP_CONFIG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
-const CHART_COLORS = [
-    '#3B82F6', // Azul
-    '#EF4444', // Rojo
-    '#10B981', // Verde
-    '#F59E0B', // Amarillo
-    '#8B5CF6', // Púrpura
-    '#06B6D4', // Cian
-    '#84CC16', // Lima
-    '#F97316', // Naranja
-    '#EC4899', // Rosa
-    '#6B7280', // Gris
-    '#14B8A6', // Teal
-    '#A855F7'  // Violeta
-];
+const CHART_COLORS = [ '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4','#84CC16', '#F97316', '#EC4899', '#6B7280', '#14B8A6', '#A855F7'];
 
 
         /**
