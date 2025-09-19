@@ -2361,53 +2361,26 @@ function updateAreasSelection() {
  * Actualizar selección de indicadores
  */
 function updateIndicadoresSelection() {
- /* const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
-    const selectedIndicadores = Array.from(checkboxes)
-        .filter(cb => cb.checked)
-        .map(cb => cb.value);*/
     const checkboxes = document.querySelectorAll('.indicador-checkbox');
-    const selectedIndicadores = Array.from(checkboxes)
-        .filter(cb => cb.checked)
-        .map(cb => cb.value);
     
-    // Permitir solo un indicador seleccionado
-    if (selectedIndicadores.length > 1) {
-        // Desmarcar todos excepto el último seleccionado
-        checkboxes.forEach(cb => cb.checked = false);
+    // Encontrar cuál checkbox se acaba de marcar
+    const justChecked = Array.from(checkboxes).find(cb => 
+        cb.checked && !visualizacionState.selectedIndicadores.includes(cb.value)
+    );
+    
+    if (justChecked) {
+        // Desmarcar todos los demás
         checkboxes.forEach(cb => {
-            if (cb.value === selectedIndicadores[selectedIndicadores.length - 1]) {
-                cb.checked = true;
-            }
+            if (cb !== justChecked) cb.checked = false;
         });
-        visualizacionState.selectedIndicadores = [selectedIndicadores[selectedIndicadores.length - 1]];
+        visualizacionState.selectedIndicadores = [justChecked.value];
     } else {
+        // Si se desmarcó algo, actualizar normalmente
+        const selectedIndicadores = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
         visualizacionState.selectedIndicadores = selectedIndicadores;
     }
-    
-    visualizacionState.selectedIndicadores = selectedIndicadores;
-    
-    // Actualizar texto del filtro
-    const filterText = document.getElementById('indicadores-filter-text');
-    if (filterText) {
-        filterText.textContent = getIndicadoresFilterText();
-    }
-    
-    // Actualizar estado del checkbox "seleccionar todos"
-    const selectAllCheckbox = document.getElementById('select-all-indicadores');
-    if (selectAllCheckbox) {
-        const enabledCheckboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
-        const checkedEnabledCheckboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled):checked');
-        
-        selectAllCheckbox.checked = enabledCheckboxes.length > 0 && checkedEnabledCheckboxes.length === enabledCheckboxes.length;
-        selectAllCheckbox.indeterminate = checkedEnabledCheckboxes.length > 0 && checkedEnabledCheckboxes.length < enabledCheckboxes.length;
-    }
-    
-    // Actualizar contadores de indicadores por área
-    updateAreaIndicatorCounts();
-    
-    // Actualizar estado del botón de aplicar filtros
-    updateApplyFiltersButton();
-}
 
 /**
  * Actualizar selección de años
