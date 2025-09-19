@@ -1559,23 +1559,6 @@ function prepareTrendsChartData() {
 }
 
 /**
- * Calcular promedio móvil
- */
-function calculateMovingAverage(data, window) {
-    const result = [];
-    
-    for (let i = 0; i < data.length; i++) {
-        const start = Math.max(0, i - Math.floor(window / 2));
-        const end = Math.min(data.length, i + Math.ceil(window / 2));
-        const subset = data.slice(start, end);
-        const average = subset.reduce((sum, val) => sum + val, 0) / subset.length;
-        result.push(average);
-    }
-    
-    return result;
-}
-
-/**
  * Actualizar tabla comparativa
  */
 function updateComparativeTable() {
