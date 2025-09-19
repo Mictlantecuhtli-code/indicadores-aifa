@@ -310,40 +310,28 @@ return `
             </div>
             
             <!-- Filtro de indicadores -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Indicadores <span class="text-xs text-gray-500">(${visualizacionState.availableIndicadores.length} disponibles)</span>
-                </label>
-                <div class="relative">
-                    <button 
-                        id="indicadores-filter-btn"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between focus:ring-2 focus:ring-aifa-blue focus:border-aifa-blue"
-                        ${visualizacionState.selectedAreas.length === 0 ? 'disabled' : ''}
-                    >
-                        <span id="indicadores-filter-text" class="truncate">${getIndicadoresFilterText()}</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4 flex-shrink-0 ml-2"></i>
-                    </button>
-                    
-                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-80 overflow-hidden">
-                        <div class="p-3 border-b border-gray-100">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-sm font-medium text-gray-700">Seleccionar indicadores</span>
-                                <button 
-                                    id="clear-indicadores-btn"
-                                    class="text-xs text-gray-500 hover:text-red-600 transition-colors"
-                                >
-                                    Limpiar todo
-                                </button>
-                            </div>
-                        </div>
-                        <div class="max-h-64 overflow-y-auto">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Indicadores
+                    </label>
+                    <div class="relative">
+                        <button 
+                            id="indicadores-filter-btn"
+                            class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                        >
+                            <span id="indicadores-filter-text">${getIndicadoresFilterText()}</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </button>
+                        
+                        <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
                             <div class="p-3">
-                                ${createIndicadoresFilterOptions()}
+                                <div class="space-y-2">
+                                    ${createIndicadoresFilterOptions()}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
             
             <!-- Filtro de años -->
             <div>
@@ -457,56 +445,28 @@ function createAreasFilterOptions() {
 /**
  * Crear opciones de filtro de indicadores agrupadas por área
  */
-function createIndicadoresFilterOptions() {
-    const indicadoresByArea = {};
-    
-    // Agrupar indicadores por área
-    visualizacionState.availableIndicadores.forEach(indicador => {
-        const areaId = indicador.area_id;
-        if (!indicadoresByArea[areaId]) {
-            indicadoresByArea[areaId] = [];
-        }
-        indicadoresByArea[areaId].push(indicador);
-    });
-    
-    let html = '';
-    
-    // Crear opciones agrupadas con jerarquía
-    visualizacionState.availableAreas.forEach(area => {
-        const indicadores = indicadoresByArea[area.id] || [];
-        if (indicadores.length === 0) return;
-        
-        // Determinar nivel de indentación basado en la jerarquía
-        const indentClass = getAreaIndentClass(area);
-        const areaDisplayName = getAreaDisplayName(area);
-        
-        html += `
-            <div class="border-t border-gray-100 pt-2 mt-2 first:border-t-0 first:pt-0 first:mt-0">
-                <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 flex items-center ${indentClass}">
-                    <div class="w-2 h-2 rounded mr-2 flex-shrink-0" style="background-color: ${area.color_hex || '#6B7280'}"></div>
-                    <span class="truncate">${areaDisplayName}</span>
-                    <span class="ml-1 text-gray-400">(${indicadores.length})</span>
-                </div>
-                ${indicadores.map(indicador => `
-                    <label class="flex items-center space-x-2 cursor-pointer ${indentClass} ml-4 mb-1 hover:bg-gray-50 rounded px-1 py-0.5">
+        function createIndicadoresFilterOptions() {
+            let html = '';
+            
+            // Solo mostrar indicadores sin agrupar por área
+            visualizacionState.availableIndicadores.forEach(indicador => {
+                html += `
+                    <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                         <input 
-                            type="checkbox" 
+                            type="radio" 
+                            name="indicador-selection"
                             value="${indicador.id}" 
                             ${visualizacionState.selectedIndicadores.includes(indicador.id) ? 'checked' : ''}
-                            class="indicador-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue flex-shrink-0"
+                            class="indicador-radio rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
                         >
-                        <div class="flex-1 min-w-0">
-                            <span class="text-sm text-gray-700 block truncate">${indicador.nombre}</span>
-                            <span class="text-xs text-gray-500">Clave: ${indicador.clave}</span>
-                        </div>
+                        <span class="text-sm text-gray-700">${indicador.nombre}</span>
+                        <span class="text-xs text-gray-500">(${indicador.clave})</span>
                     </label>
-                `).join('')}
-            </div>
-        `;
-    });
-    
-    return html || '<div class="text-center py-4 text-gray-500">No hay indicadores disponibles</div>';
-}
+                `;
+            });
+            
+            return html;
+        }
 
 /**
  * Obtener clase de indentación según la jerarquía del área
