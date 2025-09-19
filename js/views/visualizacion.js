@@ -2381,6 +2381,7 @@ function updateIndicadoresSelection() {
             .map(cb => cb.value);
         visualizacionState.selectedIndicadores = selectedIndicadores;
     }
+}
 
 /**
  * Actualizar selección de años
