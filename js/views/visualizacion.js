@@ -1124,8 +1124,7 @@ async function loadAvailableYears() {
  */
 async function loadChartData() {
     try {
-        if (visualizacionState.selectedIndicadores.length === 0 || 
-            visualizacionState.selectedYears.length === 0) {
+        if (visualizacionState.selectedIndicadores.length === 0) {
             visualizacionState.chartData = [];
             return;
         }
@@ -1988,7 +1987,7 @@ function setupFilterCheckboxes() {
             e.preventDefault();
             document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('select-all-indicadores').checked = false;
-            updateIndicadoresSelection();
+            //updateIndicadoresSelection();
         });
     }
     
