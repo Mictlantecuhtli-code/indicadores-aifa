@@ -1775,10 +1775,10 @@ function setupDefaultSelections() {
         visualizacionState.selectedIndicadores = areaIndicadores.slice(0, 3).map(i => i.id);
     }
     
-    // Si no hay años seleccionados, seleccionar los últimos 2 años
-    if (visualizacionState.selectedYears.length === 0 && visualizacionState.availableYears.length > 0) {
-        visualizacionState.selectedYears = visualizacionState.availableYears.slice(0, 2);
-    }
+        // Si no hay años seleccionados, seleccionar TODOS los años disponibles
+        if (visualizacionState.selectedYears.length === 0 && visualizacionState.availableYears.length > 0) {
+        visualizacionState.selectedYears = [...visualizacionState.availableYears];
+}
 }
 
 /**
@@ -2615,7 +2615,17 @@ function setupSelectAllCheckboxes() {
     const selectAllIndicadores = document.getElementById('select-all-indicadores');
     if (selectAllIndicadores) {
         selectAllIndicadores.removeEventListener('change', handleSelectAllIndicadores);
-        selectAllIndicadores.addEventListener('change', handleSelectAllIndicadores);
+        selectAllIndicadores.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.indicador-checkbox');
+        if (e.target.checked) {
+        // Solo marcar el primero para selección única
+        checkboxes.forEach((cb, index) => cb.checked = index === 0);
+        visualizacionState.selectedIndicadores = checkboxes[0] ? [checkboxes[0].value] : [];
+        } else {
+        checkboxes.forEach(cb => cb.checked = false);
+        visualizacionState.selectedIndicadores = [];
+    }
+});
     }
     
     // Select all para años
