@@ -7,6 +7,234 @@ import { DEBUG, APP_CONFIG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
+        /**
+         * Limpiar nombre de área removiendo "Dirección General" y prefijos similares
+         */
+        function cleanAreaName(nombre) {
+            if (!nombre) return nombre;
+            
+            // Lista de prefijos a remover (en orden de prioridad)
+            const prefixesToRemove = [
+                'Dirección General ',
+                'Dirección General de ',
+                'Dirección General del ',
+                'Dirección General de la ',
+                'Dirección General de las ',
+                'Dirección General de los ',
+                'Dirección ',
+                'Subdirección ',
+                'Subdirección General ',
+                'Subdirección General de ',
+                'Subdirección General del ',
+                'Subdirección General de la ',
+                'Subdirección General de las ',
+                'Subdirección General de los '
+            ];
+            
+            let cleanedName = nombre.trim();
+            
+            // Remover prefijos uno por uno
+            for (const prefix of prefixesToRemove) {
+                if (cleanedName.startsWith(prefix)) {
+                    cleanedName = cleanedName.substring(prefix.length).trim();
+                    break; // Solo remover el primer prefijo encontrado
+                }
+            }
+            
+            // Capitalizar primera letra si es necesario
+            if (cleanedName.length > 0) {
+                cleanedName = cleanedName.charAt(0).toUpperCase() + cleanedName.slice(1);
+            }
+            
+            return cleanedName || nombre; // Fallback al nombre original si queda vacío
+        }
+        
+        // =====================================================
+        // MODIFICAR LA FUNCIÓN fetchAreasHierarchy
+        // =====================================================
+        
+        /**
+         * Cargar áreas disponibles y construir jerarquía (VERSIÓN MODIFICADA)
+         */
+        async function fetchAreasHierarchy() {
+            try {
+                if (DEBUG.enabled) console.log('🏢 Cargando jerarquía de áreas...');
+                
+                // Intentar consulta con nombre primero
+                let { data } = await selectData('areas', {
+                    select: 'id, nombre, clave, path, color_hex, estado',
+                    filters: { estado: 'ACTIVO' },
+                    orderBy: { column: 'path', ascending: true }
+                });
+                
+                if (!data || data.length === 0) {
+                    console.warn('⚠️ RLS detectó recursión al consultar áreas con nombre. Usando fallback.');
+                    
+                    // Fallback sin nombre
+                    const fallbackResult = await selectData('areas', {
+                        select: 'id, clave, path, color_hex, estado',
+                        filters: { estado: 'ACTIVO' },
+                        orderBy: { column: 'path', ascending: true }
+                    });
+                    
+                    data = fallbackResult.data || [];
+                }
+                
+                // AQUÍ ES DONDE APLICAMOS LA LIMPIEZA DE NOMBRES
+                const processedAreas = data.map(area => ({
+                    ...area,
+                    displayName: cleanAreaName(area.nombre || area.clave), // Nombre limpio para mostrar
+                    originalName: area.nombre // Guardar nombre original
+                }));
+                
+                if (DEBUG.enabled) {
+                    console.log('✅ Áreas cargadas y procesadas:', processedAreas.length);
+                    // Mostrar ejemplos de limpieza
+                    processedAreas.slice(0, 3).forEach(area => {
+                        if (area.originalName !== area.displayName) {
+                            console.log(`📝 "${area.originalName}" → "${area.displayName}"`);
+                        }
+                    });
+                }
+                
+                return processedAreas;
+                
+            } catch (error) {
+                console.error('❌ Error al cargar áreas:', error);
+                throw error;
+            }
+        }
+        
+        // =====================================================
+        // MODIFICAR LA FUNCIÓN QUE CREA EL DROPDOWN DE ÁREAS
+        // =====================================================
+        
+        /**
+         * Crear HTML del dropdown de filtro de áreas (VERSIÓN MODIFICADA)
+         */
+        function createAreasFilterHTML() {
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Áreas
+                    </label>
+                    <div class="relative">
+                        <button 
+                            id="areas-filter-btn"
+                            class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                        >
+                            <span id="areas-filter-text">${getAreasFilterText()}</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </button>
+                        
+                        <div id="areas-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                            <div class="p-3">
+                                <div class="space-y-2">
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            id="select-all-areas"
+                                            class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                        >
+                                        <span class="text-sm font-medium text-gray-700">Seleccionar todas</span>
+                                    </label>
+                                    <hr class="border-gray-200">
+                                    ${visualizacionState.availableAreas.map(area => {
+                                        const displayName = area.displayName || cleanAreaName(area.nombre);
+                                        const isSelected = visualizacionState.selectedAreas.includes(area.id);
+                                        const level = area.path ? (area.path.match(/\./g) || []).length : 0;
+                                        const indent = '&nbsp;'.repeat(level * 3); // Indentación para jerarquía
+                                        
+                                        return `
+                                            <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                                <input 
+                                                    type="checkbox" 
+                                                    value="${area.id}" 
+                                                    ${isSelected ? 'checked' : ''}
+                                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue area-filter-checkbox"
+                                                >
+                                                <span class="text-sm text-gray-700" style="margin-left: ${level * 12}px">
+                                                    ${displayName}
+                                                </span>
+                                                <span class="text-xs text-gray-400">(${area.clave})</span>
+                                            </label>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // =====================================================
+        // MODIFICAR LA FUNCIÓN getAreasFilterText
+        // =====================================================
+        
+        /**
+         * Obtener texto de filtro de áreas (VERSIÓN MODIFICADA)
+         */
+        function getAreasFilterText() {
+            const count = visualizacionState.selectedAreas.length;
+            const total = visualizacionState.availableAreas.length;
+            
+            if (count === 0) return 'Seleccionar áreas';
+            if (count === total) return 'Todas las áreas';
+            if (count === 1) {
+                const area = visualizacionState.availableAreas.find(a => a.id === visualizacionState.selectedAreas[0]);
+                // Usar displayName si está disponible, si no limpiar el nombre
+                const displayName = area?.displayName || cleanAreaName(area?.nombre) || 'Área seleccionada';
+                return displayName;
+            }
+            return `${count} áreas seleccionadas`;
+        }
+        
+        // =====================================================
+        // MODIFICAR LA FUNCIÓN loadAvailableAreas
+        // =====================================================
+        
+        /**
+         * Cargar áreas disponibles (VERSIÓN MODIFICADA)
+         */
+        async function loadAvailableAreas() {
+            try {
+                // Usar la función modificada que ya limpia los nombres
+                const areas = await fetchAreasHierarchy();
+                visualizacionState.availableAreas = areas;
+                
+                // Auto-seleccionar la primera área si no hay ninguna seleccionada
+                if (visualizacionState.selectedAreas.length === 0 && areas.length > 0) {
+                    visualizacionState.selectedAreas = [areas[0].id];
+                }
+                
+                if (DEBUG.enabled) {
+                    console.log('✅ Áreas disponibles cargadas:', areas.length);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error al cargar áreas:', error);
+                visualizacionState.availableAreas = [];
+            }
+        }
+        
+        // =====================================================
+        // FUNCIÓN PARA ACTUALIZAR GRÁFICAS CON NOMBRES LIMPIOS
+        // =====================================================
+        
+        /**
+         * Procesar datos para gráficas con nombres de áreas limpios
+         */
+        function processChartDataWithCleanNames(rawData) {
+            if (!Array.isArray(rawData)) return [];
+            
+            return rawData.map(item => ({
+                ...item,
+                area_nombre: item.area_displayName || cleanAreaName(item.area_nombre) || item.area_nombre,
+                originalAreaName: item.area_nombre // Mantener referencia al original
+            }));
+        }
+
 // Estado de la vista de visualización
 const visualizacionState = {
     userProfile: null,
