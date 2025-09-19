@@ -71,6 +71,7 @@ const visualizacionState = {
  * Renderizar vista de visualización
  */
 export async function render(container, params = {}, query = {}) {
+
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando vista de visualización');
         
@@ -85,12 +86,15 @@ export async function render(container, params = {}, query = {}) {
         // Procesar parámetros de query
         processQueryParams(query);
         
-        // Cargar datos iniciales
-        await Promise.all([
-            loadAvailableAreas(),
-            loadAvailableIndicadores(),
-            loadAvailableYears()
-        ]);
+        // CAMBIO CRÍTICO: Cargar datos EN SECUENCIA, no en paralelo
+        console.log('🔄 Cargando áreas primero...');
+        await loadAvailableAreas();
+        
+        console.log('🔄 Cargando indicadores después de las áreas...');
+        await loadAvailableIndicadores();
+        
+        console.log('🔄 Cargando años disponibles...');
+        await loadAvailableYears();
         
         // Configurar selecciones por defecto
         setupDefaultSelections();
@@ -106,46 +110,22 @@ export async function render(container, params = {}, query = {}) {
         // Configurar event listeners
         setupEventListeners();
         
-        // Crear gráficas iniciales
-        if (visualizacionState.chartData.length > 0) {
-            createCharts();
-        }
+        // Configurar auto-refresh
+        setupAutoRefresh();
+        
+        // Marcar tiempo de carga
+        visualizacionState.lastRefresh = new Date();
         
         hideLoading();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-        
-        visualizacionState.lastRefresh = new Date();
         
         if (DEBUG.enabled) console.log('✅ Vista de visualización renderizada correctamente');
         
     } catch (error) {
-        console.error('❌ Error al renderizar visualización:', error);
         hideLoading();
-        
-        container.innerHTML = `
-            <div class="text-center py-12">
-                <i data-lucide="bar-chart-x" class="w-16 h-16 text-gray-400 mx-auto mb-4"></i>
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">Error al cargar visualización</h2>
-                <p class="text-gray-600 mb-6">No se pudieron cargar los datos para la visualización.</p>
-                <div class="space-x-3">
-                    <button onclick="location.reload()" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                        Recargar página
-                    </button>
-                    <button onclick="window.router.navigateTo('/')" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
-                        Volver al inicio
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
+        console.error('❌ Error al renderizar vista de visualización:', error);
+        container.innerHTML = createErrorHTML(error.message);
     }
+        
 }
 
 /**
@@ -951,186 +931,132 @@ async function getUserAreaIds() {
  * Cargar indicadores disponibles
  */
 async function loadAvailableIndicadores() {
-        try {
+    try {
         console.log('📊 Cargando indicadores disponibles...');
         
-        // VERIFICAR que visualizacionState.availableAreas existe y tiene datos
+        // Verificar que las áreas se hayan cargado
         if (!visualizacionState.availableAreas || visualizacionState.availableAreas.length === 0) {
-            console.warn('⚠️ No hay áreas disponibles para cargar indicadores');
+            console.error('❌ Las áreas no se han cargado aún. No se pueden cargar indicadores.');
             visualizacionState.availableIndicadores = [];
             return;
         }
         
-        // DEFINIR areaIds correctamente
-        const areaIds = visualizacionState.availableAreas.map(a => a.id).filter(id => id != null);
-        console.log(`🔍 Buscando indicadores en ${areaIds.length} áreas:`, areaIds);
+        console.log(`✅ Áreas disponibles: ${visualizacionState.availableAreas.length}`);
         
-        if (areaIds.length === 0) {
-            console.warn('⚠️ No hay IDs de áreas válidos');
+        // Buscar el área "Sin Asignar" 
+        const areaSinAsignar = visualizacionState.availableAreas.find(area => 
+            area.clave === 'SIN' || 
+            area.nombre.toLowerCase().includes('sin asignar') ||
+            area.clave === 'SIN_ASIGNAR'
+        );
+        
+        if (areaSinAsignar) {
+            console.log(`🔍 Área "Sin Asignar" encontrada:`, areaSinAsignar);
+        }
+        
+        // Obtener TODOS los indicadores activos del sistema
+        console.log('📋 Cargando todos los indicadores activos...');
+        
+        const { data: todosIndicadores } = await selectData('indicadores', {
+            select: 'id, clave, area_id, nombre, descripcion, unidad_medida, frecuencia, meta_anual, es_acumulativo, orden_visualizacion, estado',
+            filters: { estado: 'ACTIVO' },
+            orderBy: { column: 'orden_visualizacion', ascending: true }
+        });
+        
+        console.log(`📊 Total indicadores activos encontrados: ${todosIndicadores?.length || 0}`);
+        
+        if (!todosIndicadores || todosIndicadores.length === 0) {
+            console.warn('⚠️ No hay indicadores activos en el sistema');
             visualizacionState.availableIndicadores = [];
             return;
         }
         
-        // OPCIÓN 1: Intentar con la vista v_indicadores_area
-        try {
-            console.log('📋 Intentando cargar desde vista v_indicadores_area...');
+        // Procesar indicadores y asignar información de área
+        const indicadoresProcesados = todosIndicadores.map(indicador => {
+            // Buscar el área correspondiente
+            const area = visualizacionState.availableAreas.find(a => a.id === indicador.area_id);
             
-            const { data: vistaDatos } = await selectData('v_indicadores_area', {
-                select: '*',
-                filters: { area_id: areaIds },
-                orderBy: { column: 'area_nombre', ascending: true }
-            });
-            
-            if (vistaDatos && vistaDatos.length > 0) {
-                visualizacionState.availableIndicadores = vistaDatos;
-                console.log(`✅ Cargados ${vistaDatos.length} indicadores desde vista`);
-                return;
+            if (area) {
+                // Indicador con área asignada
+                return {
+                    ...indicador,
+                    area_nombre: area.displayName || area.nombre,
+                    area_clave: area.clave,
+                    area_color_hex: area.color_hex || '#6B7280',
+                    total_mediciones: 0, // Se puede calcular después si es necesario
+                    ultimo_anio_con_datos: null,
+                    ultimo_mes_con_datos: null
+                };
             } else {
-                console.log('ℹ️ Vista v_indicadores_area no devolvió datos');
+                // Indicador sin área válida o en "Sin Asignar"
+                return {
+                    ...indicador,
+                    area_nombre: '(Sin asignar)',
+                    area_clave: 'SIN_ASIGNAR',
+                    area_color_hex: '#9CA3AF',
+                    total_mediciones: 0,
+                    ultimo_anio_con_datos: null,
+                    ultimo_mes_con_datos: null
+                };
             }
-        } catch (vistaError) {
-            console.warn('⚠️ Error con vista v_indicadores_area:', vistaError);
+        });
+        
+        // Filtrar indicadores según el rol del usuario
+        let indicadoresParaMostrar;
+        
+        if (visualizacionState.userProfile?.rol_principal === 'ADMIN') {
+            // Los administradores ven todos los indicadores
+            indicadoresParaMostrar = indicadoresProcesados;
+            console.log(`👤 Usuario ADMIN: mostrando ${indicadoresParaMostrar.length} indicadores (todos)`);
+        } else {
+            // Usuarios normales solo ven indicadores con área válida (no "Sin Asignar")
+            indicadoresParaMostrar = indicadoresProcesados.filter(ind => 
+                ind.area_id && ind.area_clave !== 'SIN_ASIGNAR'
+            );
+            console.log(`👤 Usuario estándar: mostrando ${indicadoresParaMostrar.length} indicadores (solo con área asignada)`);
         }
         
-        // OPCIÓN 2: Consulta directa a tabla indicadores con filtro de área
-        try {
-            console.log('📊 Intentando cargar desde tabla indicadores...');
-            
-            const { data: indicadoresDatos } = await selectData('indicadores', {
-                select: '*',
-                filters: { 
-                    area_id: areaIds,
-                    estado: 'ACTIVO'
-                },
-                orderBy: { column: 'nombre', ascending: true }
-            });
-            
-            if (indicadoresDatos && indicadoresDatos.length > 0) {
-                // Enriquecer datos con información de área
-                const indicadoresEnriquecidos = indicadoresDatos.map(ind => {
-                    const area = visualizacionState.availableAreas.find(a => a.id === ind.area_id);
-                    return {
-                        ...ind,
-                        area_nombre: area?.nombre || area?.displayName || 'Área desconocida',
-                        area_clave: area?.clave || 'N/A',
-                        area_color_hex: area?.color_hex || '#6B7280',
-                        total_mediciones: 0,
-                        ultimo_anio_con_datos: null,
-                        ultimo_mes_con_datos: null
-                    };
-                });
-                
-                visualizacionState.availableIndicadores = indicadoresEnriquecidos;
-                console.log(`✅ Cargados ${indicadoresEnriquecidos.length} indicadores desde tabla directa`);
-                return;
-            } else {
-                console.log('ℹ️ Tabla indicadores no devolvió datos para las áreas especificadas');
-            }
-        } catch (tablaError) {
-            console.warn('⚠️ Error con tabla indicadores:', tablaError);
-        }
+        visualizacionState.availableIndicadores = indicadoresParaMostrar;
         
-        // OPCIÓN 3: Consulta de emergencia - todos los indicadores activos
-        try {
-            console.log('🚨 Usando consulta de emergencia - todos los indicadores');
-            
-            const { data: todosIndicadores } = await selectData('indicadores', {
-                select: '*',
-                filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'nombre', ascending: true }
-            });
-            
-            console.log(`📊 Total indicadores activos en sistema: ${todosIndicadores?.length || 0}`);
-            
-            if (!todosIndicadores || todosIndicadores.length === 0) {
-                console.warn('⚠️ No hay indicadores activos en el sistema');
-                visualizacionState.availableIndicadores = [];
-                return;
-            }
-            
-            // Categorizar indicadores
-            const indicadoresConArea = [];
-            const indicadoresSinArea = [];
-            
-            todosIndicadores.forEach(ind => {
-                if (ind.area_id && areaIds.includes(ind.area_id)) {
-                    // Indicador con área válida
-                    const area = visualizacionState.availableAreas.find(a => a.id === ind.area_id);
-                    indicadoresConArea.push({
-                        ...ind,
-                        area_nombre: area?.nombre || area?.displayName || 'Área desconocida',
-                        area_clave: area?.clave || 'N/A',
-                        area_color_hex: area?.color_hex || '#6B7280',
-                        total_mediciones: 0,
-                        ultimo_anio_con_datos: null,
-                        ultimo_mes_con_datos: null
-                    });
-                } else if (!ind.area_id) {
-                    // Indicador sin área asignada
-                    indicadoresSinArea.push({
-                        ...ind,
-                        area_id: null,
-                        area_nombre: '(Sin asignar)',
-                        area_clave: 'SIN_ASIGNAR',
-                        area_color_hex: '#9CA3AF',
-                        total_mediciones: 0,
-                        ultimo_anio_con_datos: null,
-                        ultimo_mes_con_datos: null
-                    });
-                }
-            });
-            
-            console.log(`📈 Análisis de indicadores:`);
-            console.log(`   - Con área válida: ${indicadoresConArea.length}`);
-            console.log(`   - Sin área asignada: ${indicadoresSinArea.length}`);
-            console.log(`   - Con área inválida: ${todosIndicadores.length - indicadoresConArea.length - indicadoresSinArea.length}`);
-            
-            // Decidir qué mostrar según el rol del usuario
-            let indicadoresParaMostrar = [...indicadoresConArea];
-            
-            // Si es admin, mostrar también los sin asignar para que pueda gestionarlos
-            if (visualizacionState.userProfile?.rol_principal === 'ADMIN') {
-                indicadoresParaMostrar.push(...indicadoresSinArea);
-                console.log(`👤 Usuario ADMIN: mostrando ${indicadoresParaMostrar.length} indicadores (incluyendo sin asignar)`);
-            } else {
-                console.log(`👤 Usuario estándar: mostrando ${indicadoresParaMostrar.length} indicadores (solo con área válida)`);
-            }
-            
-            visualizacionState.availableIndicadores = indicadoresParaMostrar;
-            
-            // Mostrar advertencia si hay indicadores sin asignar y es admin
-            if (indicadoresSinArea.length > 0 && visualizacionState.userProfile?.rol_principal === 'ADMIN') {
-                setTimeout(() => {
-                    showToast(
-                        `⚠️ ${indicadoresSinArea.length} indicadores sin área asignada. Ejecute 'diagnosticarIndicadores()' en la consola para más detalles.`,
-                        'warning',
-                        10000
-                    );
-                }, 2000);
-            }
-            
-        } catch (emergenciaError) {
-            console.error('❌ Error en consulta de emergencia:', emergenciaError);
-            visualizacionState.availableIndicadores = [];
-        }
+        // Mostrar estadísticas detalladas
+        const stats = {
+            total: todosIndicadores.length,
+            conAreaValida: indicadoresProcesados.filter(ind => ind.area_id && ind.area_clave !== 'SIN_ASIGNAR').length,
+            sinAsignar: indicadoresProcesados.filter(ind => !ind.area_id || ind.area_clave === 'SIN_ASIGNAR').length,
+            mostrandose: indicadoresParaMostrar.length
+        };
         
-        console.log(`✅ Total indicadores disponibles para visualización: ${visualizacionState.availableIndicadores.length}`);
+        console.log('📈 Estadísticas de indicadores:');
+        console.table(stats);
         
-        // Log detallado si está en debug
-        if (DEBUG.enabled && visualizacionState.availableIndicadores.length > 0) {
-            console.log('📋 Indicadores cargados:');
-            console.table(visualizacionState.availableIndicadores.map(ind => ({
+        // Mostrar algunos ejemplos de los indicadores cargados
+        if (DEBUG.enabled && indicadoresParaMostrar.length > 0) {
+            console.log('📋 Primeros 5 indicadores cargados:');
+            console.table(indicadoresParaMostrar.slice(0, 5).map(ind => ({
                 clave: ind.clave,
-                nombre: ind.nombre,
+                nombre: ind.nombre.substring(0, 30) + (ind.nombre.length > 30 ? '...' : ''),
                 area: ind.area_nombre
             })));
         }
         
-    } catch (error) {
-        console.error('❌ Error general al cargar indicadores:', error);
-        visualizacionState.availableIndicadores = [];
-    }
+        // Advertencia para administradores si hay muchos indicadores sin asignar
+        if (stats.sinAsignar > 0 && visualizacionState.userProfile?.rol_principal === 'ADMIN') {
+            setTimeout(() => {
+                showToast(
+                    `⚠️ ${stats.sinAsignar} indicadores en "Sin Asignar". Use el panel de administración para asignarlos a áreas específicas.`,
+                    'warning',
+                    8000
+                );
+            }, 3000);
+        }
         
+    } catch (error) {
+        console.error('❌ Error al cargar indicadores:', error);
+        visualizacionState.availableIndicadores = [];
+        
+        // Mostrar error al usuario
+        showToast('Error al cargar indicadores. Verifique la consola para más detalles.', 'error');
+    } 
 }
 
 /**
@@ -2878,6 +2804,87 @@ window.diagnosticarIndicadores = async function() {
     } catch (error) {
         console.error('❌ Error en diagnóstico:', error);
         return null;
+    }
+};
+/**
+ * FUNCIÓN ADICIONAL: Para asignar indicadores rápidamente desde consola
+ */
+window.asignarIndicadorAArea = async function(claveIndicador, claveArea) {
+    try {
+        console.log(`🔧 Asignando indicador ${claveIndicador} al área ${claveArea}...`);
+        
+        // Buscar indicador
+        const { data: indicadores } = await selectData('indicadores', {
+            select: 'id, clave, nombre, area_id',
+            filters: { clave: claveIndicador }
+        });
+        
+        if (!indicadores || indicadores.length === 0) {
+            console.error(`❌ Indicador ${claveIndicador} no encontrado`);
+            return false;
+        }
+        
+        // Buscar área
+        const area = visualizacionState.availableAreas.find(a => a.clave === claveArea);
+        if (!area) {
+            console.error(`❌ Área ${claveArea} no encontrada`);
+            console.log('Áreas disponibles:', visualizacionState.availableAreas.map(a => a.clave));
+            return false;
+        }
+        
+        // Actualizar indicador
+        await updateData('indicadores', 
+            { area_id: area.id },
+            { id: indicadores[0].id }
+        );
+        
+        console.log(`✅ ${claveIndicador} asignado al área ${claveArea} (${area.nombre})`);
+        
+        // Recargar indicadores
+        await loadAvailableIndicadores();
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error al asignar indicador:', error);
+        return false;
+    }
+};
+
+/**
+ * FUNCIÓN DE AYUDA: Listar indicadores sin asignar
+ */
+window.listarIndicadoresSinAsignar = async function() {
+    try {
+        const { data: indicadores } = await selectData('indicadores', {
+            select: 'clave, nombre, area_id',
+            filters: { estado: 'ACTIVO' }
+        });
+        
+        const areaSinAsignar = visualizacionState.availableAreas?.find(a => a.clave === 'SIN');
+        const sinAsignar = indicadores?.filter(ind => 
+            !ind.area_id || ind.area_id === areaSinAsignar?.id
+        ) || [];
+        
+        console.log(`📋 Indicadores sin asignar correctamente: ${sinAsignar.length}`);
+        
+        if (sinAsignar.length > 0) {
+            console.table(sinAsignar.map(ind => ({
+                clave: ind.clave,
+                nombre: ind.nombre.substring(0, 50) + (ind.nombre.length > 50 ? '...' : '')
+            })));
+            
+            console.log('\n💡 Para asignar un indicador use:');
+            console.log(`asignarIndicadorAArea('${sinAsignar[0].clave}', 'CLAVE_AREA')`);
+            console.log('\n📋 Áreas disponibles:');
+            console.log(visualizacionState.availableAreas?.map(a => `${a.clave}: ${a.nombre}`).join('\n'));
+        }
+        
+        return sinAsignar;
+        
+    } catch (error) {
+        console.error('Error:', error);
+        return [];
     }
 };
 
