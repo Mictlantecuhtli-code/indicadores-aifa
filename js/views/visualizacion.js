@@ -2364,22 +2364,22 @@ function updateYearsSelection() {
  */
 function updateAvailableIndicadoresFilter() {
     // Deshabilitar indicadores que no pertenecen a áreas seleccionadas
-    const checkboxes = document.querySelectorAll('.indicador-checkbox');
-    
-    checkboxes.forEach(checkbox => {
-        const indicadorId = checkbox.value;
+        const radioButtons = document.querySelectorAll('.indicador-radio');
+        
+        radioButtons.forEach(radioButton => {
+        const indicadorId = radioButton.value;
         const indicador = visualizacionState.availableIndicadores.find(i => i.id === indicadorId);
         
         if (indicador) {
             const isAreaSelected = visualizacionState.selectedAreas.includes(indicador.area_id);
-            checkbox.disabled = !isAreaSelected;
-            
-            if (!isAreaSelected) {
-                checkbox.checked = false;
-            }
-            
-            // Actualizar estilo visual con mejor feedback
-            const label = checkbox.closest('label');
+        radioButton.disabled = !isAreaSelected;
+        
+        if (!isAreaSelected) {
+            radioButton.checked = false;
+        }
+        
+        // Actualizar estilo visual
+        const label = radioButton.closest('label');
             if (label) {
                 if (!isAreaSelected) {
                     label.classList.add('opacity-40', 'cursor-not-allowed');
