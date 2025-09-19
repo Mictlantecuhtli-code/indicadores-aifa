@@ -7,6 +7,22 @@ import { DEBUG, APP_CONFIG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
+const CHART_COLORS = [
+    '#3B82F6', // Azul
+    '#EF4444', // Rojo
+    '#10B981', // Verde
+    '#F59E0B', // Amarillo
+    '#8B5CF6', // Púrpura
+    '#06B6D4', // Cian
+    '#84CC16', // Lima
+    '#F97316', // Naranja
+    '#EC4899', // Rosa
+    '#6B7280', // Gris
+    '#14B8A6', // Teal
+    '#A855F7'  // Violeta
+];
+
+
         /**
          * Limpiar nombre de área removiendo "Dirección General" y prefijos similares
          */
@@ -1407,8 +1423,10 @@ function createTrendsChart() {
  * Preparar datos para gráfica comparativa
  */
 function prepareComparativeChartData() {
-    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-    const colors = APP_CONFIG.charts.defaultColors;
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    // Usar colores locales en lugar de APP_CONFIG.charts.defaultColors
+    const colors = CHART_COLORS;
     const datasets = [];
     
     let colorIndex = 0;
@@ -1423,21 +1441,26 @@ function prepareComparativeChartData() {
                 d => d.indicador_id === indicadorId && d.anio === year
             );
             
-            const data = months.map(month => {
-                const medicion = yearData.find(d => d.mes.toString().padStart(2, '0') === month);
+            const data = months.map((month, index) => {
+                const monthNumber = (index + 1).toString().padStart(2, '0');
+                const medicion = yearData.find(d => d.mes.toString().padStart(2, '0') === monthNumber);
                 return medicion ? medicion.valor : null;
             });
             
-            datasets.push({
-                label: `${indicador.nombre} (${year})`,
-                data: data,
-                borderColor: colors[colorIndex % colors.length],
-                backgroundColor: colors[colorIndex % colors.length] + '20',
-                fill: false,
-                spanGaps: false
-            });
-            
-            colorIndex++;
+            // Solo agregar dataset si tiene datos
+            if (data.some(value => value !== null)) {
+                datasets.push({
+                    label: `${indicador.nombre} (${year})`,
+                    data: data,
+                    borderColor: colors[colorIndex % colors.length],
+                    backgroundColor: colors[colorIndex % colors.length] + '20',
+                    fill: false,
+                    spanGaps: false,
+                    tension: 0.1
+                });
+                
+                colorIndex++;
+            }
         });
     });
     
@@ -1451,8 +1474,8 @@ function prepareComparativeChartData() {
  * Preparar datos para gráfica individual del dashboard
  */
 function prepareDashboardChartData(indicadorId) {
-    const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-    const colors = APP_CONFIG.charts.defaultColors;
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const colors = CHART_COLORS;
     const datasets = [];
     
     let colorIndex = 0;
@@ -1462,8 +1485,9 @@ function prepareDashboardChartData(indicadorId) {
             d => d.indicador_id === indicadorId && d.anio === year
         );
         
-        const data = months.map(month => {
-            const medicion = yearData.find(d => d.mes.toString().padStart(2, '0') === month);
+        const data = months.map((month, index) => {
+            const monthNumber = (index + 1).toString().padStart(2, '0');
+            const medicion = yearData.find(d => d.mes.toString().padStart(2, '0') === monthNumber);
             return medicion ? medicion.valor : null;
         });
         
@@ -1473,7 +1497,8 @@ function prepareDashboardChartData(indicadorId) {
             borderColor: colors[colorIndex % colors.length],
             backgroundColor: colors[colorIndex % colors.length] + '20',
             fill: false,
-            spanGaps: false
+            spanGaps: false,
+            tension: 0.1
         });
         
         colorIndex++;
@@ -1490,7 +1515,7 @@ function prepareDashboardChartData(indicadorId) {
  */
 function prepareTrendsChartData() {
     const datasets = [];
-    const colors = APP_CONFIG.charts.defaultColors;
+    const colors = CHART_COLORS;
     
     let colorIndex = 0;
     
@@ -1509,8 +1534,9 @@ function prepareTrendsChartData() {
             return a.mes - b.mes;
         });
         
-        // Calcular promedio móvil de 3 meses
-        const movingAverage = calculateMovingAverage(indicadorData.map(d => d.valor), 3);
+        // Calcular promedio móvil de 3 meses (función auxiliar incluida abajo)
+        const values = indicadorData.map(d => d.valor);
+        const movingAverage = calculateMovingAverage(values, 3);
         
         // Normalizar valores (0-100)
         const maxValue = Math.max(...movingAverage);
@@ -1528,19 +1554,19 @@ function prepareTrendsChartData() {
             data: normalizedData,
             borderColor: colors[colorIndex % colors.length],
             backgroundColor: colors[colorIndex % colors.length] + '20',
-            fill: false
+            fill: false,
+            tension: 0.1
         });
         
         colorIndex++;
     });
     
-    // Usar las etiquetas del primer dataset
-    const labels = visualizacionState.chartData.length > 0 ? 
-        [...new Set(visualizacionState.chartData.map(d => `${d.anio}/${d.mes.toString().padStart(2, '0')}`))].sort() : 
-        [];
-    
     return {
-        labels: labels,
+        labels: visualizacionState.chartData.length > 0 ? 
+            visualizacionState.chartData
+                .map(d => `${d.anio}/${d.mes.toString().padStart(2, '0')}`)
+                .filter((label, index, arr) => arr.indexOf(label) === index)
+                .sort() : [],
         datasets: datasets
     };
 }
@@ -1873,6 +1899,35 @@ function setupEventListeners() {
     
     // Configurar controles específicos del modo actual
     setupModeSpecificEventListeners();
+}
+
+/**
+ * FUNCIÓN AUXILIAR: Calcular promedio móvil
+ */
+function calculateMovingAverage(values, window) {
+    if (!values || values.length === 0) return [];
+    
+    const result = [];
+    for (let i = 0; i < values.length; i++) {
+        const start = Math.max(0, i - Math.floor(window / 2));
+        const end = Math.min(values.length, start + window);
+        const slice = values.slice(start, end);
+        const average = slice.reduce((sum, val) => sum + val, 0) / slice.length;
+        result.push(average);
+    }
+    return result;
+}
+
+/**
+ * VERIFICAR SI APP_CONFIG EXISTE, SI NO, CREARLO
+ * Agrega esto también si no existe APP_CONFIG en tu proyecto
+ */
+if (typeof APP_CONFIG === 'undefined') {
+    window.APP_CONFIG = {
+        charts: {
+            defaultColors: CHART_COLORS
+        }
+    };
 }
 
 /**
