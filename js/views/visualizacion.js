@@ -951,31 +951,38 @@ async function getUserAreaIds() {
  * Cargar indicadores disponibles
  */
 async function loadAvailableIndicadores() {
-    try {
-        // Solo cargar indicadores de áreas disponibles
-        if (visualizacionState.availableAreas.length === 0) {
-            visualizacionState.availableIndicadores = [];
-            return;
+        try {
+            const { data: indicadoresDatos } = await selectData('indicadores', {
+                select: '*',
+                filters: { 
+                    area_id: areaIds,
+                    estado: 'ACTIVO'
+                },
+                orderBy: { column: 'nombre', ascending: true }
+            });
+            
+            if (indicadoresDatos && indicadoresDatos.length > 0) {
+                // Enriquecer datos con información de área
+                const indicadoresEnriquecidos = indicadoresDatos.map(ind => {
+                    const area = visualizacionState.availableAreas.find(a => a.id === ind.area_id);
+                    return {
+                        ...ind,
+                        area_nombre: area?.nombre || 'Área desconocida',
+                        area_clave: area?.clave || 'N/A',
+                        area_color_hex: area?.color_hex || '#6B7280',
+                        total_mediciones: 0, // Se podría calcular después
+                        ultimo_anio_con_datos: null,
+                        ultimo_mes_con_datos: null
+                    };
+                });
+                
+                visualizacionState.availableIndicadores = indicadoresEnriquecidos;
+                console.log(`✅ Cargados ${indicadoresEnriquecidos.length} indicadores desde tabla directa`);
+                return;
+            }
+        } catch (tablaError) {
+            console.warn('⚠️ Error con tabla indicadores:', tablaError);
         }
-        
-        const areaIds = visualizacionState.availableAreas.map(a => a.id);
-        
-        const { data } = await selectData('v_indicadores_area', {
-            select: '*',
-            filters: { area_id: areaIds },
-            orderBy: { column: 'area_nombre', ascending: true }
-        });
-        
-        visualizacionState.availableIndicadores = data || [];
-        
-        if (DEBUG.enabled) {
-            console.log(`📊 Cargados ${visualizacionState.availableIndicadores.length} indicadores disponibles`);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al cargar indicadores:', error);
-        visualizacionState.availableIndicadores = [];
-    }
 }
 
 /**
