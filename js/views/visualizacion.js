@@ -71,7 +71,6 @@ const visualizacionState = {
  * Renderizar vista de visualización
  */
 export async function render(container, params = {}, query = {}) {
-
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando vista de visualización');
         
@@ -83,8 +82,10 @@ export async function render(container, params = {}, query = {}) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
         
-        // Procesar parámetros de query
-        processQueryParams(query);
+        // Procesar parámetros de query (si esta función existe)
+        if (typeof processQueryParams === 'function') {
+            processQueryParams(query);
+        }
         
         // CAMBIO CRÍTICO: Cargar datos EN SECUENCIA, no en paralelo
         console.log('🔄 Cargando áreas primero...');
@@ -96,22 +97,37 @@ export async function render(container, params = {}, query = {}) {
         console.log('🔄 Cargando años disponibles...');
         await loadAvailableYears();
         
-        // Configurar selecciones por defecto
-        setupDefaultSelections();
+        // Configurar selecciones por defecto (si esta función existe)
+        if (typeof setupDefaultSelections === 'function') {
+            setupDefaultSelections();
+        }
         
         // Cargar datos de gráficas si hay selecciones
         if (visualizacionState.selectedIndicadores.length > 0) {
             await loadChartData();
         }
         
-        // Renderizar HTML
-        container.innerHTML = createVisualizacionHTML();
+        // Renderizar HTML (busca la función que ya tienes)
+        if (typeof createVisualizacionHTML === 'function') {
+            container.innerHTML = createVisualizacionHTML();
+        } else {
+            // HTML básico si la función no existe
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h1 class="text-2xl font-bold mb-4">Visualización de Indicadores</h1>
+                        <p>Áreas cargadas: ${visualizacionState.availableAreas?.length || 0}</p>
+                        <p>Indicadores cargados: ${visualizacionState.availableIndicadores?.length || 0}</p>
+                        <p>Años disponibles: ${visualizacionState.availableYears?.join(', ') || 'Ninguno'}</p>
+                    </div>
+                </div>
+            `;
+        }
         
-        // Configurar event listeners
-        setupEventListeners();
-        
-        // Configurar auto-refresh
-        setupAutoRefresh();
+        // Configurar event listeners (si esta función existe)
+        if (typeof setupEventListeners === 'function') {
+            setupEventListeners();
+        }
         
         // Marcar tiempo de carga
         visualizacionState.lastRefresh = new Date();
@@ -123,9 +139,30 @@ export async function render(container, params = {}, query = {}) {
     } catch (error) {
         hideLoading();
         console.error('❌ Error al renderizar vista de visualización:', error);
-        container.innerHTML = createErrorHTML(error.message);
-    }
         
+        // HTML de error simple
+        container.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-6 m-4">
+                <div class="flex items-center space-x-3">
+                    <div class="text-red-500">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-red-800">Error al cargar la visualización</h3>
+                        <p class="text-red-600 mt-1">${error.message}</p>
+                        <button 
+                            onclick="window.location.reload()" 
+                            class="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                        >
+                            Recargar página
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 /**
@@ -943,17 +980,6 @@ async function loadAvailableIndicadores() {
         
         console.log(`✅ Áreas disponibles: ${visualizacionState.availableAreas.length}`);
         
-        // Buscar el área "Sin Asignar" 
-        const areaSinAsignar = visualizacionState.availableAreas.find(area => 
-            area.clave === 'SIN' || 
-            area.nombre.toLowerCase().includes('sin asignar') ||
-            area.clave === 'SIN_ASIGNAR'
-        );
-        
-        if (areaSinAsignar) {
-            console.log(`🔍 Área "Sin Asignar" encontrada:`, areaSinAsignar);
-        }
-        
         // Obtener TODOS los indicadores activos del sistema
         console.log('📋 Cargando todos los indicadores activos...');
         
@@ -983,7 +1009,7 @@ async function loadAvailableIndicadores() {
                     area_nombre: area.displayName || area.nombre,
                     area_clave: area.clave,
                     area_color_hex: area.color_hex || '#6B7280',
-                    total_mediciones: 0, // Se puede calcular después si es necesario
+                    total_mediciones: 0,
                     ultimo_anio_con_datos: null,
                     ultimo_mes_con_datos: null
                 };
@@ -1042,11 +1068,13 @@ async function loadAvailableIndicadores() {
         // Advertencia para administradores si hay muchos indicadores sin asignar
         if (stats.sinAsignar > 0 && visualizacionState.userProfile?.rol_principal === 'ADMIN') {
             setTimeout(() => {
-                showToast(
-                    `⚠️ ${stats.sinAsignar} indicadores en "Sin Asignar". Use el panel de administración para asignarlos a áreas específicas.`,
-                    'warning',
-                    8000
-                );
+                if (typeof showToast === 'function') {
+                    showToast(
+                        `⚠️ ${stats.sinAsignar} indicadores en "Sin Asignar". Use el panel de administración para asignarlos a áreas específicas.`,
+                        'warning',
+                        8000
+                    );
+                }
             }, 3000);
         }
         
@@ -1054,9 +1082,11 @@ async function loadAvailableIndicadores() {
         console.error('❌ Error al cargar indicadores:', error);
         visualizacionState.availableIndicadores = [];
         
-        // Mostrar error al usuario
-        showToast('Error al cargar indicadores. Verifique la consola para más detalles.', 'error');
-    } 
+        // Mostrar error al usuario si la función existe
+        if (typeof showToast === 'function') {
+            showToast('Error al cargar indicadores. Verifique la consola para más detalles.', 'error');
+        }
+    }
 }
 
 /**
