@@ -186,6 +186,10 @@ async function renderRoute(route) {
                 // navigateTo('/', {}, true);
                 viewModule = await import('../views/home.js');
                 break;
+
+            case '/panel-directivos':
+                viewModule = await import('../views/panel-directivos.js');
+                break;
                 
             default:
                 // Rutas con parámetros
