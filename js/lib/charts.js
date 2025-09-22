@@ -767,16 +767,6 @@ function obtenerInstanciaGrafica(tipo) {
     return chartInstances[tipo] || null;
 }
 
-/**
- * Verificar si Chart.js está disponible
- */
-function verificarChart() {
-    if (typeof Chart === 'undefined') {
-        console.error('Chart.js no está disponible');
-        return false;
-    }
-    return true;
-}
 // =====================================================
 // CONFIGURACIÓN DE EVENTOS Y LISTENERS
 // =====================================================
