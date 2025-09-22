@@ -67,19 +67,24 @@ async function cargarIndicadores() {
         });
         
         if (data) {
-            // Separar por categoría basándose en el nombre del área o indicador
+            // Filtrar SOLO los 6 indicadores específicos solicitados
+            const indicadoresPermitidos = [
+                'Pasajeros Comercial',
+                'Operaciones Comercial', 
+                'Carga - Operaciones',
+                'Carga - Toneladas',
+                'Pasajeros', // FBO
+                'Operaciones' // FBO
+            ];
+            
             panelState.indicadoresOperativos = data.filter(ind => 
-                ind.area_nombre.toLowerCase().includes('comercial') || 
-                ind.area_nombre.toLowerCase().includes('carga') ||
-                ind.nombre.toLowerCase().includes('comercial') ||
-                ind.nombre.toLowerCase().includes('carga')
+                indicadoresPermitidos.includes(ind.nombre) && 
+                (ind.area_nombre.toLowerCase().includes('comercial') || ind.area_nombre.toLowerCase().includes('carga'))
             );
             
             panelState.indicadoresFBO = data.filter(ind => 
-                ind.area_nombre.toLowerCase().includes('general') || 
-                ind.area_nombre.toLowerCase().includes('fbo') ||
-                ind.nombre.toLowerCase().includes('general') ||
-                ind.nombre.toLowerCase().includes('fbo')
+                indicadoresPermitidos.includes(ind.nombre) && 
+                (ind.area_nombre.toLowerCase().includes('general') || ind.area_nombre.toLowerCase().includes('fbo'))
             );
         }
         
