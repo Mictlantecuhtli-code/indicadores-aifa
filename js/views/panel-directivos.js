@@ -748,5 +748,4 @@ async function renderizarGrafica(tipo = 'comparativa') {
             unidadMedida: indicador.unidad_medida || 'Unidades'
         });
     }
-}
-    
+}   
