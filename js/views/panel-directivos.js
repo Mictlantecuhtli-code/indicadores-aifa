@@ -407,6 +407,28 @@ function calcularVariacion(actual, anterior) {
 
 function obtenerUltimoTrimestreCompleto() {
     const ultimoMes = obtenerUltimoMesConDatos();
+    if (!ultimoMes) return null;
+    
+    const trimestre = Math.floor((ultimoMes.mes - 1) / 3) + 1;
+    const mesFinTrimestre = trimestre * 3;
+    
+    if (ultimoMes.mes < mesFinTrimestre) {
+        const trimestreAnterior = trimestre - 1;
+        if (trimestreAnterior < 1) return null;
+        
+        return {
+            trimestre: trimestreAnterior,
+            año: ultimoMes.año,
+            meses: [(trimestreAnterior - 1) * 3 + 1, (trimestreAnterior - 1) * 3 + 2, (trimestreAnterior - 1) * 3 + 3]
+        };
+    }
+    
+    return {
+        trimestre,
+        año: ultimoMes.año,
+        meses: [(trimestre - 1) * 3 + 1, (trimestre - 1) * 3 + 2, (trimestre - 1) * 3 + 3]
+    };
+}
 // =====================================================
 // GENERACIÓN DE HTML DE RESULTADOS
 // =====================================================
