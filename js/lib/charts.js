@@ -799,7 +799,7 @@ function configurarEventosGraficas() {
 /**
  * Limpiar todas las gráficas al cambiar de módulo/vista
  */
-export function limpiarGraficas() {
+function limpiarGraficas() {
     destruirTodasLasGraficas();
     if (DEBUG.enabled) console.log('🗑️ Gráficas limpiadas al cambiar de vista');
 }
@@ -839,7 +839,7 @@ export {
     
     // Utilidades
     verificarChart,
-    limpiarGraficas,
+    limpiarGraficas,  // <-- ESTÁ AQUÍ
     
     // Configuraciones y constantes
     CHART_CONFIGS,
