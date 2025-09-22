@@ -432,6 +432,97 @@ async function cargarDatosMetas(indicador, escenario) {
     }
 }
 
+async function generarGraficaComparativa(tipo = 'mensual') {
+    const ultimoMes = obtenerUltimoMesConDatos();
+    if (!ultimoMes) return '';
+    
+    const datos = panelState.datosReales;
+    const indicador = panelState.indicadorSeleccionado;
+    
+    // Determinar años a mostrar
+    const checkbox = document.getElementById('check-4anios');
+    const mostrar4Anios = checkbox?.checked || false;
+    
+    const aniosDisponibles = [...new Set(datos.map(d => new Date(d.fecha).getFullYear()))].sort();
+    const aniosAMostrar = mostrar4Anios ? aniosDisponibles.slice(-4) : [ultimoMes.año - 1, ultimoMes.año];
+    
+    // Preparar datos por año
+    const datasets = aniosAMostrar.map((anio, index) => {
+        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const valores = meses.map((_, mesIdx) => {
+            const medicion = datos.find(d => {
+                const fecha = new Date(d.fecha);
+                return fecha.getFullYear() === anio && fecha.getMonth() === mesIdx;
+            });
+            return medicion ? medicion.valor : null;
+        });
+        
+        const colores = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+        
+        return {
+            label: `${anio}`,
+            data: valores,
+            borderColor: colores[index % colores.length],
+            backgroundColor: colores[index % colores.length] + '20',
+            tension: 0.4,
+            fill: false
+        };
+    });
+    
+    return {
+        labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+        datasets
+    };
+}
+
+async function generarGraficaMeta() {
+    const ultimoMes = obtenerUltimoMesConDatos();
+    if (!ultimoMes || panelState.datosMetas.length === 0) return '';
+    
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    // Datos reales del año actual
+    const valoresReales = meses.map((_, mesIdx) => {
+        const medicion = panelState.datosReales.find(d => {
+            const fecha = new Date(d.fecha);
+            return fecha.getFullYear() === ultimoMes.año && fecha.getMonth() === mesIdx;
+        });
+        return medicion ? medicion.valor : null;
+    });
+    
+    // Datos de meta
+    const valoresMeta = meses.map((_, mesIdx) => {
+        const meta = panelState.datosMetas.find(d => {
+            const fecha = new Date(d.fecha);
+            return fecha.getFullYear() === ultimoMes.año && fecha.getMonth() === mesIdx;
+        });
+        return meta ? meta.valor : null;
+    });
+    
+    return {
+        labels: meses,
+        datasets: [
+            {
+                label: 'Real',
+                data: valoresReales,
+                borderColor: '#3B82F6',
+                backgroundColor: '#3B82F620',
+                tension: 0.4,
+                fill: false
+            },
+            {
+                label: 'Meta',
+                data: valoresMeta,
+                borderColor: '#EF4444',
+                backgroundColor: 'transparent',
+                borderDash: [5, 5],
+                tension: 0.4,
+                fill: false
+            }
+        ]
+    };
+}
+
 function obtenerUltimoMesConDatos() {
     if (panelState.datosReales.length === 0) return null;
     
@@ -543,9 +634,7 @@ async function generarComparativoMensual() {
                         <span class="text-sm text-gray-600">Mostrar últimos 4 años</span>
                     </label>
                 </div>
-                <div id="grafica-container" class="h-80 bg-gray-50 rounded-lg flex items-center justify-center">
-                    <p class="text-gray-400">Gráfica en desarrollo</p>
-                </div>
+                    <canvas id="grafica-container"></canvas>
             </div>
             
             <!-- Botones de acción -->
@@ -824,8 +913,14 @@ window.panelDirectivos.imprimirReporte = function() {
 // Funciones auxiliares (ya están en el objeto expuesto en setupEventListeners)
 // Solo agregar estas funciones al objeto existente
 function toggleAnios() {
-    console.log('Toggle 4 años');
-    // Implementar lógica para mostrar/ocultar años en la gráfica
+    const graficaContainer = document.getElementById('grafica-container');
+    if (graficaContainer && panelState.chartInstance) {
+        // Regenerar datos
+        generarGraficaComparativa().then(chartData => {
+            panelState.chartInstance.data = chartData;
+            panelState.chartInstance.update();
+        });
+    }
 }
 
 function descargarDatos() {
