@@ -182,7 +182,7 @@ function crearOpcionesAnalisis(indicador) {
     
     return opciones.map(opcion => `
         <button 
-            onclick="window.panelDirectivos.seleccionarOpcion('${opcion.id}')"
+            onclick="window.panelDirectivos.seleccionarOpcion('${opcion.id}', event)"
             class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-sm"
         >
             <i data-lucide="${opcion.icono}" class="w-4 h-4 inline mr-2"></i>
@@ -339,8 +339,11 @@ async function seleccionarOpcion(opcionId) {
     document.querySelectorAll('.opcion-btn').forEach(btn => {
         btn.classList.remove('border-blue-500', 'bg-blue-100');
     });
-    event.target.closest('.opcion-btn').classList.add('border-blue-500', 'bg-blue-100');
     
+    const botonClickeado = event?.target?.closest('.opcion-btn');
+    if (botonClickeado) {
+        botonClickeado.classList.add('border-blue-500', 'bg-blue-100');
+    }
     // Cargar y mostrar resultados
     await cargarYMostrarResultados();
 }
