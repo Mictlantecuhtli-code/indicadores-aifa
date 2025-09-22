@@ -728,7 +728,7 @@ export async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
 /**
  * Actualizar datos de una gráfica existente
  */
-function actualizarGrafica(tipo, nuevosDatos) {
+export function actualizarGrafica(tipo, nuevosDatos) {
     if (!chartInstances[tipo]) {
         console.warn(`No existe gráfica del tipo ${tipo} para actualizar`);
         return false;
@@ -748,7 +748,7 @@ function actualizarGrafica(tipo, nuevosDatos) {
 /**
  * Redimensionar todas las gráficas activas
  */
-function redimensionarGraficas() {
+export function redimensionarGraficas() {
     Object.keys(chartInstances).forEach(tipo => {
         if (chartInstances[tipo]) {
             try {
@@ -763,7 +763,7 @@ function redimensionarGraficas() {
 /**
  * Obtener instancia de gráfica por tipo
  */
-function obtenerInstanciaGrafica(tipo) {
+export     function obtenerInstanciaGrafica(tipo) {
     return chartInstances[tipo] || null;
 }
 
