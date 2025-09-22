@@ -67,24 +67,25 @@ async function cargarIndicadores() {
         });
         
         if (data) {
-            // Filtrar SOLO los 6 indicadores específicos solicitados
-            const indicadoresPermitidos = [
-                'Pasajeros Comercial',
-                'Operaciones Comercial', 
-                'Carga - Operaciones',
-                'Carga - Toneladas',
-                'Pasajeros', // FBO
-                'Operaciones' // FBO
+            // Filtrar por nombres exactos
+            const nombresOperativos = [
+                'Aviación Comercial Pasajeros',
+                'Aviación Comercial Operaciones',
+                'Aviación Carga Operaciones',
+                'Aviación Carga Toneladas'
+            ];
+            
+            const nombresFBO = [
+                'Aviación General Pasajeros',
+                'Aviación General Operaciones'
             ];
             
             panelState.indicadoresOperativos = data.filter(ind => 
-                indicadoresPermitidos.includes(ind.nombre) && 
-                (ind.area_nombre.toLowerCase().includes('comercial') || ind.area_nombre.toLowerCase().includes('carga'))
+                nombresOperativos.includes(ind.nombre)
             );
             
             panelState.indicadoresFBO = data.filter(ind => 
-                indicadoresPermitidos.includes(ind.nombre) && 
-                (ind.area_nombre.toLowerCase().includes('general') || ind.area_nombre.toLowerCase().includes('fbo'))
+                nombresFBO.includes(ind.nombre)
             );
         }
         
@@ -99,6 +100,7 @@ async function cargarIndicadores() {
         panelState.indicadoresFBO = [];
     }
 }
+
 // =====================================================
 // CREACIÓN DE HTML
 // =====================================================
