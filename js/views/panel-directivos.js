@@ -110,27 +110,11 @@ function createPanelHTML() {
                     <i data-lucide="plane" class="w-5 h-5 text-blue-600"></i>
                     Indicadores Operativos
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('pasajeros_comercial')" 
-                            class="indicador-btn p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-blue-500">
-                        <div class="font-semibold text-blue-900">Pasajeros Comercial</div>
-                        <div class="text-sm text-blue-600">Aviación Comercial</div>
-                    </button>
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('operaciones_comercial')" 
-                            class="indicador-btn p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-blue-500">
-                        <div class="font-semibold text-blue-900">Operaciones Comercial</div>
-                        <div class="text-sm text-blue-600">Aviación Comercial</div>
-                    </button>
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('carga_operaciones')" 
-                            class="indicador-btn p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-blue-500">
-                        <div class="font-semibold text-blue-900">Carga - Operaciones</div>
-                        <div class="text-sm text-blue-600">Operaciones de Carga</div>
-                    </button>
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('carga_toneladas')" 
-                            class="indicador-btn p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-blue-500">
-                        <div class="font-semibold text-blue-900">Carga - Toneladas</div>
-                        <div class="text-sm text-blue-600">Toneladas Transportadas</div>
-                    </button>
+                <div class="space-y-3">
+                    ${crearBotonIndicador('pasajeros_comercial', 'Pasajeros Comercial', 'Aviación Comercial', 'users', 'blue')}
+                    ${crearBotonIndicador('operaciones_comercial', 'Operaciones Comercial', 'Aviación Comercial', 'plane', 'blue')}
+                    ${crearBotonIndicador('carga_operaciones', 'Carga - Operaciones', 'Operaciones de Carga', 'package', 'amber')}
+                    ${crearBotonIndicador('carga_toneladas', 'Carga - Toneladas', 'Toneladas Transportadas', 'weight', 'amber')}
                 </div>
             </div>
 
@@ -140,24 +124,10 @@ function createPanelHTML() {
                     <i data-lucide="plane-takeoff" class="w-5 h-5 text-green-600"></i>
                     Indicadores FBO (Aviación General)
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('pasajeros_fbo')" 
-                            class="indicador-btn p-4 bg-green-50 hover:bg-green-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-green-500">
-                        <div class="font-semibold text-green-900">Pasajeros</div>
-                        <div class="text-sm text-green-600">Aviación General</div>
-                    </button>
-                    <button onclick="window.panelDirectivos.seleccionarIndicador('operaciones_fbo')" 
-                            class="indicador-btn p-4 bg-green-50 hover:bg-green-100 rounded-lg text-left transition-all border-2 border-transparent hover:border-green-500">
-                        <div class="font-semibold text-green-900">Operaciones</div>
-                        <div class="text-sm text-green-600">Aviación General</div>
-                    </button>
+                <div class="space-y-3">
+                    ${crearBotonIndicador('pasajeros_fbo', 'Pasajeros', 'Aviación General', 'users', 'green')}
+                    ${crearBotonIndicador('operaciones_fbo', 'Operaciones', 'Aviación General', 'plane-takeoff', 'green')}
                 </div>
-            </div>
-
-            <!-- Contenedor de opciones (se muestra cuando se selecciona un indicador) -->
-            <div id="opciones-container" class="hidden bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-4" id="opciones-titulo">Opciones disponibles</h3>
-                <div class="space-y-2" id="opciones-lista"></div>
             </div>
 
             <!-- Contenedor de resultados -->
@@ -165,19 +135,104 @@ function createPanelHTML() {
         </div>
     `;
 }
+
+function crearBotonIndicador(id, titulo, subtitulo, icono, color) {
+    const indicador = panelState.indicadoresDisponibles.find(i => i.id === id);
+    if (!indicador) return '';
+    
+    const colorClasses = {
+        blue: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900',
+        amber: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-900',
+        green: 'bg-green-50 hover:bg-green-100 border-green-200 text-green-900'
+    };
+    
+    return `
+        <div class="border-2 border-gray-200 rounded-lg overflow-hidden transition-all" id="card-${id}">
+            <button 
+                onclick="window.panelDirectivos.toggleIndicador('${id}')"
+                class="w-full p-4 ${colorClasses[color]} transition-all text-left flex items-center justify-between"
+            >
+                <div class="flex items-center gap-3">
+                    <i data-lucide="${icono}" class="w-6 h-6"></i>
+                    <div>
+                        <h3 class="font-bold">${titulo}</h3>
+                        <p class="text-sm opacity-75">${subtitulo}</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-5 h-5 transition-transform" id="icon-${id}"></i>
+            </button>
+            <div class="hidden bg-gray-50 border-t p-4 space-y-2" id="submenu-${id}">
+                ${crearOpcionesAnalisis(indicador)}
+            </div>
+        </div>
+    `;
+}
+
+function crearOpcionesAnalisis(indicador) {
+    const opciones = [
+        { id: 'mensual_vs_anterior', texto: `Cantidad de ${indicador.nombre} real mensual del año en curso respecto al mismo periodo del año anterior`, icono: 'trending-up' },
+        { id: 'trimestral_vs_anterior', texto: `Cantidad de ${indicador.nombre} real trimestral del año en curso respecto al mismo periodo del año anterior`, icono: 'bar-chart-2' },
+        { id: 'anual_vs_anterior', texto: `Cantidad de ${indicador.nombre} real anual del año en curso respecto al mismo periodo del año anterior`, icono: 'calendar' },
+        { id: 'mensual_vs_bajo', texto: `Cantidad de ${indicador.nombre} real mensual del año en curso respecto a la proyección de meta escenario Bajo`, icono: 'target' },
+        { id: 'mensual_vs_medio', texto: `Cantidad de ${indicador.nombre} real mensual del año en curso respecto a la proyección de meta escenario Mediano`, icono: 'target' },
+        { id: 'mensual_vs_alto', texto: `Cantidad de ${indicador.nombre} real mensual del año en curso respecto a la proyección de meta escenario Alto`, icono: 'target' }
+    ];
+    
+    return opciones.map(opcion => `
+        <button 
+            onclick="window.panelDirectivos.seleccionarOpcion('${opcion.id}')"
+            class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-sm"
+        >
+            <i data-lucide="${opcion.icono}" class="w-4 h-4 inline mr-2"></i>
+            ${opcion.texto}
+        </button>
+    `).join('');
+    
+}
 // =====================================================
 // EVENT LISTENERS Y FUNCIONES DE SELECCIÓN
 // =====================================================
 
 function setupEventListeners() {
-    // Exponer funciones globalmente para los botones
     window.panelDirectivos = {
+        toggleIndicador,
         seleccionarIndicador,
         seleccionarOpcion,
         toggleAnios,
         descargarDatos,
         imprimirReporte
     };
+}
+
+function toggleIndicador(indicadorId) {
+    const card = document.getElementById(`card-${indicadorId}`);
+    const submenu = document.getElementById(`submenu-${indicadorId}`);
+    const icon = document.getElementById(`icon-${indicadorId}`);
+    
+    // Cerrar cualquier otro indicador abierto
+    document.querySelectorAll('[id^="submenu-"]').forEach(sub => {
+        if (sub.id !== `submenu-${indicadorId}` && !sub.classList.contains('hidden')) {
+            sub.classList.add('hidden');
+            const otherId = sub.id.replace('submenu-', '');
+            document.getElementById(`icon-${otherId}`)?.classList.remove('rotate-180');
+        }
+    });
+    
+    // Toggle del indicador actual
+    submenu.classList.toggle('hidden');
+    icon?.classList.toggle('rotate-180');
+    
+    // Guardar indicador seleccionado
+    const indicador = panelState.indicadoresDisponibles.find(i => i.id === indicadorId);
+    panelState.indicadorSeleccionado = indicador;
+    
+    // Recrear iconos
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+    
+    // Limpiar resultados
+    document.getElementById('resultados-container').innerHTML = '';
 }
 
 function seleccionarIndicador(indicadorId) {
