@@ -728,7 +728,7 @@ export async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
 /**
  * Actualizar datos de una gráfica existente
  */
-export function actualizarGrafica(tipo, nuevosDatos) {
+function actualizarGrafica(tipo, nuevosDatos) {
     if (!chartInstances[tipo]) {
         console.warn(`No existe gráfica del tipo ${tipo} para actualizar`);
         return false;
@@ -748,7 +748,7 @@ export function actualizarGrafica(tipo, nuevosDatos) {
 /**
  * Redimensionar todas las gráficas activas
  */
-export function redimensionarGraficas() {
+function redimensionarGraficas() {
     Object.keys(chartInstances).forEach(tipo => {
         if (chartInstances[tipo]) {
             try {
@@ -763,14 +763,14 @@ export function redimensionarGraficas() {
 /**
  * Obtener instancia de gráfica por tipo
  */
-export function obtenerInstanciaGrafica(tipo) {
+function obtenerInstanciaGrafica(tipo) {
     return chartInstances[tipo] || null;
 }
 
 /**
  * Verificar si Chart.js está disponible
  */
-export function verificarChart() {
+function verificarChart() {
     if (typeof Chart === 'undefined') {
         console.error('Chart.js no está disponible');
         return false;
@@ -780,6 +780,7 @@ export function verificarChart() {
 // =====================================================
 // CONFIGURACIÓN DE EVENTOS Y LISTENERS
 // =====================================================
+
 
 /**
  * Configurar eventos de redimensionamiento
@@ -807,7 +808,7 @@ function limpiarGraficas() {
 /**
  * Inicializar módulo de gráficas
  */
-export function inicializarGraficas() {
+function inicializarGraficas() {
     if (!verificarChart()) {
         console.error('❌ Chart.js no disponible - Las gráficas no funcionarán');
         return false;
@@ -816,6 +817,17 @@ export function inicializarGraficas() {
     configurarEventosGraficas();
     
     if (DEBUG.enabled) console.log('✅ Módulo de gráficas inicializado correctamente');
+    return true;
+}
+
+/**
+ * Verificar si Chart.js está disponible
+ */
+function verificarChart() {
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js no está disponible');
+        return false;
+    }
     return true;
 }
 
@@ -836,10 +848,9 @@ export {
     destruirTodasLasGraficas,
     redimensionarGraficas,
     obtenerInstanciaGrafica,
-    
-    // Utilidades
+    limpiarGraficas,
     verificarChart,
-    limpiarGraficas,  // <-- ESTÁ AQUÍ
+    inicializarGraficas,
     
     // Configuraciones y constantes
     CHART_CONFIGS,
