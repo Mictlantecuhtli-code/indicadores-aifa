@@ -173,7 +173,10 @@ function setupEventListeners() {
     // Exponer funciones globalmente para los botones
     window.panelDirectivos = {
         seleccionarIndicador,
-        seleccionarOpcion
+        seleccionarOpcion,
+        toggleAnios,
+        descargarDatos,
+        imprimirReporte
     };
 }
 
@@ -749,7 +752,7 @@ async function generarComparativoMeta(escenario) {
 }
 
 // Funciones auxiliares
-window.panelDirectivos.toggleAnios = function() {
+/*window.panelDirectivos.toggleAnios = function() {
     console.log('Toggle 4 años');
     // Implementar lógica para mostrar/ocultar años en la gráfica
 };
@@ -761,4 +764,20 @@ window.panelDirectivos.descargarDatos = function() {
 
 window.panelDirectivos.imprimirReporte = function() {
     window.print();
-};
+};*/
+
+// Funciones auxiliares (ya están en el objeto expuesto en setupEventListeners)
+// Solo agregar estas funciones al objeto existente
+function toggleAnios() {
+    console.log('Toggle 4 años');
+    // Implementar lógica para mostrar/ocultar años en la gráfica
+}
+
+function descargarDatos() {
+    showToast('Descargando datos...', 'info');
+    // Implementar descarga de Excel/CSV
+}
+
+function imprimirReporte() {
+    window.print();
+}
