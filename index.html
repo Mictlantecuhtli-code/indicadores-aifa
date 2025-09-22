@@ -135,7 +135,11 @@
             <i data-lucide="edit" class="w-4 h-4"></i><span>Captura</span>
           </button>
           <button id="nav-admin" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
-            <i data-lucide="settings" class="w-4 h-4"></i><span>Admin</span>
+            <i data-lucide="settings" class="w-4 h-4"></i><span>Administración</span>
+          </button>
+          <button id="nav-panel-directivos" class="nav-button px-4 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg hover:bg-gray-100">
+            <i data-lucide="trending-up" class="w-4 h-4 inline mr-2"></i>
+            Panel Directivos
           </button>
         </nav>
         
@@ -250,6 +254,7 @@
         document.getElementById('nav-admin')?.addEventListener('click', () => {
           router.navigateTo('/admin');
         });
+        document.getElementById('nav-panel-directivos')?.addEventListener('click', () => router.navigateTo('/panel-directivos'));
 
         // Menú de usuario
         document.getElementById('user-menu-btn')?.addEventListener('click', () => {
