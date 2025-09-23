@@ -372,50 +372,34 @@ async function loadAreas() {
         const userRole = homeState.userProfile?.rol_principal;
         
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
-            // Roles altos ven todas las áreas
-            /*const { data } = await selectData('areas', {
+            // Roles altos ven todas las direcciones (nivel 1 y 2)
+            const { data } = await selectData('areas', {
                 select: '*',
-                filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'orden_visualizacion', ascending: true }
-            });*/
-
-                const data = [
-                {
-                    id: 1,
-                    clave: 'OPERACIONES',
-                    nombre: 'Operaciones Aeroportuarias',
-                    descripcion: 'Indicadores de operaciones del aeropuerto',
-                    color_hex: '#3B82F6',
-                    estado: 'ACTIVA'
+                filters: { 
+                    estado: 'ACTIVO',
+                    nivel: ['in', '(1,2)'] // Solo nivel 1 (DG) y nivel 2 (Direcciones)
                 },
-                {
-                    id: 2,
-                    clave: 'SEGURIDAD',
-                    nombre: 'Seguridad y Protección',
-                    descripcion: 'Indicadores de seguridad aeroportuaria',
-                    color_hex: '#EF4444',
-                    estado: 'ACTIVA'
-                }
-            ];
+                orderBy: { column: 'orden_visualizacion', ascending: true }
+            });
             homeState.areas = data || [];
         } else {
-            // Capturistas y jefes de área ven solo sus áreas asignadas
+            // Capturistas y jefes de área ven solo sus áreas asignadas (filtradas por nivel)
             const { data } = await selectData('v_areas_usuario', {
                 select: '*',
-                filters: { usuario_id: homeState.userProfile.id },
+                filters: { 
+                    usuario_id: homeState.userProfile.id,
+                    nivel: ['in', '(1,2)']
+                },
                 orderBy: { column: 'orden_visualizacion', ascending: true }
             });
             homeState.areas = data || [];
         }
         
-        if (DEBUG.enabled) {
-            console.log(`📁 Cargadas ${homeState.areas.length} áreas para rol ${userRole}`);
-        }
+        if (DEBUG.enabled) console.log('✅ Direcciones cargadas:', homeState.areas.length);
         
     } catch (error) {
         console.error('❌ Error al cargar áreas:', error);
         homeState.areas = [];
-        showToast('Error al cargar las áreas', 'error');
     }
 }
 
