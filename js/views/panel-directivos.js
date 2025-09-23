@@ -16,6 +16,8 @@ const panelState = {
     indicadoresFBO: [],
     datosReales: [],
     datosMetas: [],
+    subdirecciones: new Map(), // Map<parentAreaId, subdirecciones[]>
+    expandedDirecciones: new Set(), // Set de IDs de direcciones expandidas
     loading: false
 };
 
@@ -37,6 +39,8 @@ export async function render(container, params = {}, query = {}) {
         
         // Cargar indicadores disponibles
         await cargarIndicadores();
+        panelState.expandedDirecciones.clear();
+        panelState.subdirecciones.clear();
         const direcciones = await cargarDirecciones();
         // Renderizar HTML principal
         container.innerHTML = createPanelHTML(direcciones);
@@ -103,11 +107,18 @@ async function cargarIndicadores() {
 async function cargarDirecciones() {
     try {
         const { data } = await selectData('areas', {
-            filters: { estado: 'ACTIVO' },
-            orderBy: { column: 'nombre', ascending: true }
+            filters: { 
+                estado: 'ACTIVO'
+            },
+            orderBy: { column: 'orden_visualizacion', ascending: true }
         });
         
-        return data || [];
+        // Filtrar solo nivel 1 (DG) y nivel 2 (Direcciones)
+        const direccionesFiltradas = (data || []).filter(area => 
+            area.nivel === 1 || area.nivel === 2
+        );
+        
+        return direccionesFiltradas;
         
     } catch (error) {
         console.error('❌ Error al cargar direcciones:', error);
@@ -115,7 +126,30 @@ async function cargarDirecciones() {
     }
 }
 
-
+async function cargarSubdirecciones(parentAreaId) {
+    try {
+        // Si ya están en caché, retornarlas
+        if (panelState.subdirecciones.has(parentAreaId)) {
+            return panelState.subdirecciones.get(parentAreaId);
+        }
+        
+        const { data } = await selectData('areas', {
+            filters: { 
+                estado: 'ACTIVO',
+                parent_area_id: parentAreaId
+            },
+            orderBy: { column: 'orden_visualizacion', ascending: true }
+        });
+        
+        // Guardar en caché
+        panelState.subdirecciones.set(parentAreaId, data || []);
+        return data || [];
+        
+    } catch (error) {
+        console.error('❌ Error al cargar subdirecciones:', error);
+        return [];
+    }
+}
 
 // =====================================================
 // CREACIÓN DE HTML
@@ -158,20 +192,16 @@ function createPanelHTML(direcciones = []) {
 
             <!-- Contenedor de resultados -->
             <div id="resultados-container"></div>
-            <!-- Direcciones -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-lg font-bold text-gray-900 mb-4">Direcciones</h2>
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    ${direcciones.map(dir => `
-                        <button 
-                            onclick="window.panelDirectivos.seleccionarDireccion('${dir.id}')"
-                            class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium text-gray-700"
-                        >
-                            ${dir.nombre}
-                        </button>
-                    `).join('')}
-                </div>
-            </div>
+          <!-- Direcciones -->
+          <div class="bg-white rounded-lg shadow-lg p-6">
+              <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <i data-lucide="folder-tree" class="w-5 h-5 text-blue-600"></i>
+                  Direcciones
+              </h2>
+              <div class="space-y-3">
+                  ${crearDireccionesJerarquicas(direcciones)}
+              </div>
+          </div>
         </div>
     `;
 }
@@ -225,6 +255,88 @@ function crearOpcionesAnalisis(indicadorId, nombreIndicador) {
         </button>
     `).join('');
 }
+function crearDireccionesJerarquicas(direcciones) {
+    if (!direcciones || direcciones.length === 0) {
+        return '<p class="text-gray-500 text-center py-4">No hay direcciones disponibles</p>';
+    }
+    
+    // Separar por nivel
+    const direccionGeneral = direcciones.filter(d => d.nivel === 1);
+    const direccionesNivel2 = direcciones.filter(d => d.nivel === 2);
+    
+    let html = '';
+    
+    // Dirección General (nivel 1) - sin subdirecciones, clickeable directo
+    if (direccionGeneral.length > 0) {
+        html += '<div class="space-y-2">';
+        direccionGeneral.forEach(dg => {
+            const isExpanded = panelState.expandedDirecciones.has(dg.id);
+            html += `
+                <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                    <button 
+                        onclick="window.panelDirectivos.seleccionarDireccion('${dg.id}')"
+                        class="w-full p-4 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900 transition-all text-left flex items-center justify-between"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
+                                 style="background-color: ${dg.color_hex || '#3B82F6'}">
+                                ${dg.clave.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                                <h3 class="font-bold">${dg.nombre}</h3>
+                                <p class="text-sm opacity-75">${dg.clave}</p>
+                            </div>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    // Direcciones (nivel 2) - con subdirecciones desplegables
+    if (direccionesNivel2.length > 0) {
+        html += '<div class="space-y-2 mt-4">';
+        direccionesNivel2.forEach(dir => {
+            const isExpanded = panelState.expandedDirecciones.has(dir.id);
+            html += `
+                <div class="border-2 border-gray-200 rounded-lg overflow-hidden" id="dir-card-${dir.id}">
+                    <button 
+                        onclick="window.panelDirectivos.toggleDireccion('${dir.id}')"
+                        class="w-full p-4 bg-gray-50 hover:bg-gray-100 transition-all text-left flex items-center justify-between"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
+                                 style="background-color: ${dir.color_hex || '#6B7280'}">
+                                ${dir.clave.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900">${dir.nombre}</h3>
+                                <p class="text-sm text-gray-600">${dir.clave}</p>
+                            </div>
+                        </div>
+                        <i data-lucide="chevron-${isExpanded ? 'down' : 'right'}" 
+                           class="w-5 h-5 text-gray-400 transition-transform" 
+                           id="chevron-dir-${dir.id}"></i>
+                    </button>
+                    
+                    <!-- Contenedor de subdirecciones -->
+                    <div id="subdirs-${dir.id}" class="${isExpanded ? '' : 'hidden'} bg-white border-t border-gray-200 p-3">
+                        <div class="text-center py-4">
+                            <i data-lucide="loader" class="w-6 h-6 text-gray-400 animate-spin mx-auto"></i>
+                            <p class="text-sm text-gray-500 mt-2">Cargando subdirecciones...</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    return html;
+}
+
 // =====================================================
 // EVENT LISTENERS Y FUNCIONES DE SELECCIÓN
 // =====================================================
@@ -233,6 +345,7 @@ function setupEventListeners() {
     // Exponer funciones globalmente para los botones
     window.panelDirectivos = {
         toggleIndicador,
+        toggleDireccion,
         seleccionarOpcion,
         seleccionarDireccion,
         toggleAnios,
@@ -276,6 +389,79 @@ function toggleIndicador(indicadorId) {
     
     // Limpiar resultados
     document.getElementById('resultados-container').innerHTML = '';
+}
+async function toggleDireccion(direccionId) {
+    const container = document.getElementById(`subdirs-${direccionId}`);
+    const chevron = document.getElementById(`chevron-dir-${direccionId}`);
+    
+    if (!container) return;
+    
+    try {
+        // Si está colapsado, expandir y cargar subdirecciones
+        if (container.classList.contains('hidden')) {
+            // Expandir
+            container.classList.remove('hidden');
+            if (chevron) {
+                chevron.setAttribute('data-lucide', 'chevron-down');
+            }
+            
+            // Agregar a expandidos
+            panelState.expandedDirecciones.add(direccionId);
+            
+            // Cargar subdirecciones
+            const subdirecciones = await cargarSubdirecciones(direccionId);
+            
+            // Renderizar subdirecciones
+            if (subdirecciones && subdirecciones.length > 0) {
+                container.innerHTML = `
+                    <div class="space-y-2">
+                        ${subdirecciones.map(subdir => `
+                            <button 
+                                onclick="window.panelDirectivos.seleccionarDireccion('${subdir.id}')"
+                                class="w-full p-3 ml-6 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left flex items-center gap-3"
+                            >
+                                <div class="w-8 h-8 rounded flex items-center justify-center text-white text-sm font-bold"
+                                     style="background-color: ${subdir.color_hex || '#9CA3AF'}">
+                                    ${subdir.clave.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-gray-900 text-sm">${subdir.nombre}</h4>
+                                    <p class="text-xs text-gray-500">${subdir.clave}</p>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-6 bg-gray-50 rounded">
+                        <i data-lucide="folder-x" class="w-10 h-10 text-gray-300 mx-auto mb-2"></i>
+                        <p class="text-sm text-gray-500">No hay subdirecciones disponibles</p>
+                    </div>
+                `;
+            }
+            
+        } else {
+            // Colapsar
+            container.classList.add('hidden');
+            if (chevron) {
+                chevron.setAttribute('data-lucide', 'chevron-right');
+            }
+            
+            // Quitar de expandidos
+            panelState.expandedDirecciones.delete(direccionId);
+        }
+        
+        // Recrear iconos de Lucide
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al toggle dirección:', error);
+        showToast('Error al cargar subdirecciones', 'error');
+    }
 }
 
 async function seleccionarOpcion(opcionId, event) {
