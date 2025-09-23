@@ -9,6 +9,8 @@ import { showToast, showLoading, hideLoading, formatDate, formatNumber } from '.
 // Estado de la vista home
 const homeState = {
     areas: [],
+    subdirecciones: new Map(), // Map<parentAreaId, subdirecciones[]>
+    expandedAreas: new Set(), // Set de IDs de áreas expandidas
     resumenDashboard: [],
     userProfile: null,
     loading: false,
