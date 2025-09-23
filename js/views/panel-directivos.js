@@ -28,9 +28,6 @@ const panelState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando Panel de Directivos');
-        
-        showLoading('Cargando panel...');
-        
         // Obtener perfil del usuario
         panelState.userProfile = await getCurrentProfile();
         if (!panelState.userProfile) {
