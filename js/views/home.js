@@ -436,7 +436,7 @@ async function loadAreas() {
                 select: '*',
                 filters: { 
                     estado: 'ACTIVO',
-                    nivel: ['in', '(1,2)'] // Solo nivel 1 (DG) y nivel 2 (Direcciones)
+                  //  nivel: ['in', '(1,2)'] // Solo nivel 1 (DG) y nivel 2 (Direcciones)
                 },
                 orderBy: { column: 'orden_visualizacion', ascending: true }
             });
