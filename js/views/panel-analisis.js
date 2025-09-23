@@ -382,39 +382,71 @@ function createTablaComparativa(comparativo, nombresMeses) {
         `;
     }
     
-    if (comparativo.tipo === 'trimestral') {
-        return `
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-4">Comparación Trimestral</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Periodo</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${ultimo.anio}</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${ultimo.anio - 1}</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Diferencia</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% Variación</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <tr>
-                                <td class="px-6 py-4 whitespace-nowrap font-medium">Q${comparativo.trimestre}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">${formatNumber(comparativo.valorActual)}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">${formatNumber(comparativo.valorAnterior)}</td>
-                                <td class="px-6 py-4 whitespace-nowrap ${comparativo.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                    ${comparativo.diferencia >= 0 ? '+' : ''}${formatNumber(comparativo.diferencia)}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap ${comparativo.porcentaje >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                    ${comparativo.porcentaje >= 0 ? '+' : ''}${comparativo.porcentaje}%
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+        if (comparativo.tipo === 'trimestral') {
+            // Determinar todos los trimestres completos del año
+            const trimestresCompletos = [];
+            const anioActual = ultimo.anio;
+            
+            for (let t = 1; t <= 4; t++) {
+                const mesFinTrimestre = t * 3;
+                if (ultimo.mes >= mesFinTrimestre) {
+                    const mesesTrimestre = [(t - 1) * 3 + 1, (t - 1) * 3 + 2, (t - 1) * 3 + 3];
+                    
+                    const valorActual = analisisState.datosReales
+                        .filter(d => d.anio === anioActual && mesesTrimestre.includes(d.mes))
+                        .reduce((sum, d) => sum + d.valor, 0);
+                        
+                    const valorAnterior = analisisState.datosReales
+                        .filter(d => d.anio === anioActual - 1 && mesesTrimestre.includes(d.mes))
+                        .reduce((sum, d) => sum + d.valor, 0);
+                        
+                    const diferencia = valorActual - valorAnterior;
+                    const porcentaje = valorAnterior > 0 ? ((diferencia / valorAnterior) * 100).toFixed(2) : 0;
+                    
+                    trimestresCompletos.push({
+                        trimestre: t,
+                        valorActual,
+                        valorAnterior,
+                        diferencia,
+                        porcentaje
+                    });
+                }
+            }
+            
+            return `
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">Comparación Trimestral ${anioActual} vs ${anioActual - 1}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Periodo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${anioActual}</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${anioActual - 1}</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Diferencia</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% Variación</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${trimestresCompletos.map(t => `
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap font-medium">Trimestre ${t.trimestre}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">${formatNumber(t.valorActual)}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">${formatNumber(t.valorAnterior)}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap ${t.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                            ${t.diferencia >= 0 ? '+' : ''}${formatNumber(t.diferencia)}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap ${t.porcentaje >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                            ${t.porcentaje >= 0 ? '+' : ''}${t.porcentaje}%
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-        `;
-    }
+            `;
+        }
     
     if (comparativo.tipo === 'anual') {
         return `
