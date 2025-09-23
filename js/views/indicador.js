@@ -46,9 +46,6 @@ export async function render(container, params = {}, query = {}) {
         
         indicadorState.indicadorClave = params.clave;
         indicadorState.currentTab = query.tab || 'historico';
-        
-        showLoading('Cargando datos del indicador...');
-        
         // Obtener perfil del usuario
         indicadorState.userProfile = await getCurrentProfile();
         if (!indicadorState.userProfile) {
