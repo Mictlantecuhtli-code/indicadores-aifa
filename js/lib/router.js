@@ -1,11 +1,9 @@
 // =====================================================
 // SISTEMA DE ENRUTAMIENTO HASH-BASED
 // =====================================================
-
 import { DEBUG } from '../config.js';
 import { appState, getCurrentProfile, hasRoleLevel, isAuthenticated } from './supa.js';
 import { showToast, showLoading, hideLoading } from './ui.js';
-
 // Estado del router
 export const routerState = {
     currentRoute: null,
@@ -14,21 +12,17 @@ export const routerState = {
     history: [],
     isNavigating: false
 };
-
 // =====================================================
 // FUNCIONES PRINCIPALES DEL ROUTER
 // =====================================================
-
 /**
  * Parsear la URL hash actual
  */
 export function parseCurrentRoute() {
     const hash = window.location.hash.slice(1) || '/';
     const [path, queryString] = hash.split('?');
-    
     const params = {};
     const query = {};
-    
     // Parsear query string
     if (queryString) {
         const searchParams = new URLSearchParams(queryString);
@@ -36,7 +30,6 @@ export function parseCurrentRoute() {
             query[key] = value;
         }
     }
-    
     // Extraer parámetros de rutas dinámicas
     if (path.startsWith('/area/')) {
         const segments = path.split('/');
@@ -49,7 +42,6 @@ export function parseCurrentRoute() {
             params.clave = segments[2];
         }
     }
-    
     return {
         path,
         params,
@@ -57,34 +49,28 @@ export function parseCurrentRoute() {
         fullPath: hash
     };
 }
-
 /**
  * Navegar a una ruta específica
  */
 export function navigateTo(path, query = {}, replace = false) {
     if (routerState.isNavigating) return;
-    
     try {
         routerState.isNavigating = true;
-        
         // Construir URL completa
         let url = path;
         const queryString = new URLSearchParams(query).toString();
         if (queryString) {
             url += '?' + queryString;
         }
-        
         // Actualizar URL
         if (replace) {
             window.location.replace('#' + url);
         } else {
             window.location.hash = url;
         }
-        
         if (DEBUG.enabled) {
             console.log(`🧭 Navegando a: ${url}`);
         }
-        
     } catch (error) {
         console.error('❌ Error al navegar:', error);
         showToast('Error de navegación', 'error');
@@ -92,7 +78,6 @@ export function navigateTo(path, query = {}, replace = false) {
         routerState.isNavigating = false;
     }
 }
-
 /**
  * Manejar cambio de ruta
  */
@@ -101,15 +86,12 @@ async function handleRouteChange(route) {
         if (DEBUG.enabled) {
             console.log(`🔄 Cambiando a ruta: ${route.path}`, route);
         }
-        
         // Actualizar estado del router
         routerState.currentRoute = route;
         routerState.currentParams = route.params;
         routerState.currentQuery = route.query;
-        
         // Verificar autenticación
         const authRequired = await checkAuthRequirement(route.path);
-        
         if (authRequired && !isAuthenticated()) {
             if (DEBUG.enabled) {
                 console.log('🚫 Ruta protegida, redirigiendo a login');
@@ -117,7 +99,6 @@ async function handleRouteChange(route) {
             navigateTo('/login', {}, true);
             return;
         }
-        
         // Si está en login y ya autenticado, redirigir a home
         if (route.path === '/login' && isAuthenticated()) {
             if (DEBUG.enabled) {
@@ -126,22 +107,17 @@ async function handleRouteChange(route) {
             navigateTo('/', {}, true);
             return;
         }
-        
         // Renderizar vista
         await renderRoute(route);
-        
         // Actualizar navegación activa
         updateActiveNavigation(route.path);
-        
         // Actualizar breadcrumb
         updateBreadcrumb(route);
-        
     } catch (error) {
         console.error('❌ Error al cambiar ruta:', error);
         showErrorPage('Error de navegación', error.message);
     }
 }
-
 /**
  * Verificar si una ruta requiere autenticación
  */
@@ -149,7 +125,6 @@ async function checkAuthRequirement(path) {
     const publicRoutes = ['/login'];
     return !publicRoutes.includes(path);
 }
-
 /**
  * Renderizar la vista correspondiente a la ruta
  */
@@ -158,40 +133,32 @@ async function renderRoute(route) {
     if (!container) {
         throw new Error('Contenedor de la aplicación no encontrado');
     }
-    
     try {
         let viewModule;
         switch (route.path) {
             case '/login':
                 viewModule = await import('../auth/login.js');
                 break;
-           
             case '/':
                 viewModule = await import('../views/home.js');
                 break;
-                
             case '/visualizacion':
                 viewModule = await import('../views/visualizacion.js');
                 break;
-                
             case '/admin':
                 viewModule = await import('../views/captura.js');
                 break;
-                
             case '/captura':
                 // Redirigir a home para mostrar áreas
                 // navigateTo('/', {}, true);
                 viewModule = await import('../views/home.js');
                 break;
-
             case '/panel-directivos':
                 viewModule = await import('../views/panel-directivos.js');
                 break;
-
             case '/panel-directivos/analisis':
                 viewModule = await import('../views/panel-analisis.js');
                 break;
-                
             default:
                 // Rutas con parámetros
                 if (route.path.startsWith('/area/')) {
@@ -202,27 +169,22 @@ async function renderRoute(route) {
                     throw new Error(`Ruta no encontrada: ${route.path}`);
                 }
         }
-        
         // Renderizar vista
         if (viewModule && viewModule.render) {
             await viewModule.render(container, route.params, route.query);
         } else {
             throw new Error('Vista no tiene función render');
         }
-        
         hideLoading();
-        
         if (DEBUG.enabled) {
             console.log(`✅ Vista renderizada: ${route.path}`);
         }
-        
     } catch (error) {
         hideLoading();
         console.error(`❌ Error al renderizar vista ${route.path}:`, error);
         showErrorPage('Error al cargar la vista', error.message);
     }
 }
-
 /**
  * Mostrar página de error
  */
@@ -244,14 +206,12 @@ function showErrorPage(title, message) {
                 </div>
             </div>
         `;
-        
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
         }
     }
 }
-
 /**
  * Actualizar navegación activa
  */
@@ -261,10 +221,8 @@ function updateActiveNavigation(currentPath) {
         btn.classList.remove('text-aifa-blue', 'bg-blue-50');
         btn.classList.add('text-gray-600', 'bg-white');
     });
-    
     // Marcar botón activo
     let activeButton = null;
-    
     if (currentPath === '/') {
         activeButton = document.getElementById('nav-home');
     } else if (currentPath === '/visualizacion') {
@@ -274,29 +232,24 @@ function updateActiveNavigation(currentPath) {
     } else if (currentPath === '/admin') {
         activeButton = document.getElementById('nav-admin');
     }
-    
     if (activeButton) {
         activeButton.classList.remove('text-gray-600', 'bg-white');
         activeButton.classList.add('text-aifa-blue', 'bg-blue-50');
     }
 }
-
 /**
  * Actualizar breadcrumb
  */
 function updateBreadcrumb(route) {
     const breadcrumbContainer = document.getElementById('breadcrumb');
     if (!breadcrumbContainer) return;
-    
     const breadcrumbs = [];
-    
     // Siempre incluir inicio
     breadcrumbs.push({
         text: 'Inicio',
         path: '/',
         icon: 'home'
     });
-    
     // Agregar elementos según la ruta
     if (route.path.startsWith('/area/')) {
         const areaId = route.params.id;
@@ -345,24 +298,20 @@ function updateBreadcrumb(route) {
             </span>
         `;
     }).join('');
-    
     // Recrear iconos
     if (window.lucide) {
         window.lucide.createIcons();
     }
 }
-
 // =====================================================
 // FUNCIONES AUXILIARES DE NAVEGACIÓN
 // =====================================================
-
 /**
  * Volver a la página anterior
  */
 export function goBack() {
     window.history.back();
 }
-
 /**
  * Recargar la ruta actual
  */
@@ -370,11 +319,9 @@ export function reloadCurrentRoute() {
     const route = parseCurrentRoute();
     handleRouteChange(route);
 }
-
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
-
 /**
  * Configurar event listeners del router
  */
@@ -384,14 +331,12 @@ function setupRouterListeners() {
         const route = parseCurrentRoute();
         handleRouteChange(route);
     });
-    
     // Listener para carga inicial
     window.addEventListener('DOMContentLoaded', () => {
         const route = parseCurrentRoute();
         handleRouteChange(route);
     });
 }
-
 /**
  * Inicializar router
  */
@@ -399,21 +344,17 @@ export function initRouter() {
     if (DEBUG.enabled) {
         console.log('🧭 Inicializando router...');
     }
-    
     setupRouterListeners();
-    
     // Cargar ruta inicial
     const route = parseCurrentRoute();
     handleRouteChange(route);
-    
     if (DEBUG.enabled) {
         console.log('✅ Router inicializado');
     }
 }
-
 // Auto-inicializar cuando se carga el módulo
-if (document.readyState === 'loading') {
+/*if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initRouter);
 } else {
     initRouter();
-}
+}*/
