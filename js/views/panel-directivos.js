@@ -217,7 +217,7 @@ function crearOpcionesAnalisis(indicadorId, nombreIndicador) {
     
     return opciones.map(opcion => `
         <button 
-            onclick="window.panelDirectivos.seleccionarOpcion('${opcion.id}', event)"
+            onclick="window.router.navigateTo('/panel-directivos/analisis?indicador=${indicadorId}&opcion=${opcion.id}')"
             class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-sm"
         >
             <i data-lucide="${opcion.icono}" class="w-4 h-4 inline mr-2"></i>
