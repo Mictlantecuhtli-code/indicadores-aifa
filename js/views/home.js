@@ -434,24 +434,23 @@ async function loadAreas() {
             // Roles altos ven todas las direcciones (nivel 1 y 2)
             const { data } = await selectData('areas', {
                 select: '*',
-                filters: { 
-                    estado: 'ACTIVO',
-                  //  nivel: ['in', '(1,2)'] // Solo nivel 1 (DG) y nivel 2 (Direcciones)
-                },
+                filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'orden_visualizacion', ascending: true }
             });
-            homeState.areas = data || [];
+            
+            // Filtrar solo nivel 1 y 2 en JavaScript
+            homeState.areas = (data || []).filter(a => a.nivel === 1 || a.nivel === 2);
+            
         } else {
-            // Capturistas y jefes de área ven solo sus áreas asignadas (filtradas por nivel)
+            // Capturistas y jefes de área
             const { data } = await selectData('v_areas_usuario', {
                 select: '*',
-                filters: { 
-                    usuario_id: homeState.userProfile.id,
-                    nivel: ['in', '(1,2)']
-                },
+                filters: { usuario_id: homeState.userProfile.id },
                 orderBy: { column: 'orden_visualizacion', ascending: true }
             });
-            homeState.areas = data || [];
+            
+            // Filtrar solo nivel 1 y 2 en JavaScript
+            homeState.areas = (data || []).filter(a => a.nivel === 1 || a.nivel === 2);
         }
         
         if (DEBUG.enabled) console.log('✅ Direcciones cargadas:', homeState.areas.length);
