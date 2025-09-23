@@ -256,122 +256,95 @@
         });
         document.getElementById('nav-panel-directivos')?.addEventListener('click', () => router.navigateTo('/panel-directivos'));
 
-        // Menú de usuario
+        // Menú de usuario con modal
         document.getElementById('user-menu-button')?.addEventListener('click', async () => {
-          if (supa.appState.user) {
-            const profile = supa.appState.profile || await supa.getCurrentProfile();
-            
-            // Función para obtener nombre del rol
-            const getRoleName = (role) => {
-              const roles = {
-                'ADMIN': 'Administrador',
-                'DIRECTOR': 'Director',
-                'SUBDIRECTOR': 'Subdirector',
-                'JEFE_AREA': 'Jefe de Área',
-                'CAPTURISTA': 'Capturista'
-              };
-              return roles[role] || role;
-            };
-            
-            // Mostrar menú de usuario mejorado
-            ui.showModal('Mi Cuenta', `
-              <div class="space-y-4">
-                <!-- Información del usuario -->
-                <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                  <div class="flex items-center gap-3 mb-3">
-                    <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                      <i data-lucide="user" class="w-6 h-6 text-white"></i>
-                    </div>
-                    <div class="flex-1">
-                      <p class="font-semibold text-gray-900">${profile?.nombre_completo || 'Usuario'}</p>
-                      <p class="text-sm text-gray-600">${supa.appState.user.email}</p>
-                    </div>
-                  </div>
-                  <div class="bg-white/50 rounded px-3 py-2">
-                    <p class="text-xs text-gray-500">Rol actual</p>
-                    <p class="font-medium text-blue-700">${getRoleName(profile?.rol_principal)}</p>
-                  </div>
-                </div>
+            try {
+                // Importar módulos necesarios
+                const supa = await import('./js/lib/supa.js');
+                const ui = await import('./js/lib/ui.js');
+                const router = await import('./js/lib/router.js');
                 
-                <!-- Opciones del menú -->
-                <div class="space-y-2">
-                  <button 
-                    id="profile-btn" 
-                    class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <i data-lucide="user-circle" class="w-5 h-5"></i>
-                    <span>Mi perfil</span>
-                  </button>
-                  
-                  <button 
-                    id="settings-btn" 
-                    class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <i data-lucide="settings" class="w-5 h-5"></i>
-                    <span>Configuración</span>
-                  </button>
-                  
-                  <div class="border-t border-gray-200 my-2"></div>
-                  
-                  <button 
-                    id="logout-btn" 
-                    class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-3 transition-colors"
-                  >
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
-                    <span>Cerrar sesión</span>
-                  </button>
-                </div>
-              </div>
-            `, [
-              {
-                text: 'Cerrar',
-                class: 'bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600',
-                action: () => ui.hideModal()
-              }
-            ]);
-            
-            // Recrear iconos de Lucide
-            if (window.lucide) {
-              window.lucide.createIcons();
+                if (supa.appState.user) {
+                    const profile = supa.appState.profile || await supa.getCurrentProfile();
+                    
+                    const getRoleName = (role) => {
+                        const roles = {
+                            'ADMIN': 'Administrador',
+                            'DIRECTOR': 'Director',
+                            'SUBDIRECTOR': 'Subdirector',
+                            'JEFE_AREA': 'Jefe de Área',
+                            'CAPTURISTA': 'Capturista'
+                        };
+                        return roles[role] || role;
+                    };
+                    
+                    ui.showModal('Mi Cuenta', `
+                        <div class="space-y-4">
+                            <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                                        <i data-lucide="user" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-semibold text-gray-900">${profile?.nombre_completo || 'Usuario'}</p>
+                                        <p class="text-sm text-gray-600">${supa.appState.user.email}</p>
+                                    </div>
+                                </div>
+                                <div class="bg-white/50 rounded px-3 py-2">
+                                    <p class="text-xs text-gray-500">Rol actual</p>
+                                    <p class="font-medium text-blue-700">${getRoleName(profile?.rol_principal)}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <button id="logout-btn-modal" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-3 transition-colors">
+                                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                                    <span>Cerrar sesión</span>
+                                </button>
+                            </div>
+                        </div>
+                    `, [
+                        {
+                            text: 'Cerrar',
+                            class: 'bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600',
+                            action: () => ui.hideModal()
+                        }
+                    ]);
+                    
+                    // Recrear iconos
+                    setTimeout(() => {
+                        if (window.lucide) window.lucide.createIcons();
+                    }, 100);
+                    
+                    // Logout handler
+                    setTimeout(() => {
+                        document.getElementById('logout-btn-modal')?.addEventListener('click', async () => {
+                            try {
+                                ui.showLoading('Cerrando sesión...');
+                                await supa.signOut();
+                                ui.hideModal();
+                                ui.hideLoading();
+                                ui.showToast('Sesión cerrada correctamente', 'success');
+                                setTimeout(() => {
+                                    window.location.hash = '#/login';
+                                    location.reload();
+                                }, 500);
+                            } catch (error) {
+                                ui.hideLoading();
+                                console.error('Error al cerrar sesión:', error);
+                                ui.showToast('Error al cerrar sesión', 'error');
+                            }
+                        });
+                    }, 150);
+                    
+                } else {
+                    router.navigateTo('/login');
+                }
+            } catch (error) {
+                console.error('Error en menú de usuario:', error);
             }
-            
-            // Configurar botón de perfil
-            document.getElementById('profile-btn')?.addEventListener('click', () => {
-              ui.hideModal();
-              router.navigateTo('/perfil');
-            });
-            
-            // Configurar botón de configuración
-            document.getElementById('settings-btn')?.addEventListener('click', () => {
-              ui.hideModal();
-              router.navigateTo('/configuracion');
-            });
-            
-            // Configurar logout
-            document.getElementById('logout-btn')?.addEventListener('click', async () => {
-              try {
-                ui.showLoading('Cerrando sesión...');
-                await supa.signOut();
-                ui.hideModal();
-                ui.hideLoading();
-                ui.showToast('Sesión cerrada correctamente', 'success');
-                setTimeout(() => {
-                  router.navigateTo('/login', {}, true);
-                  location.reload();
-                }, 500);
-              } catch (error) {
-                ui.hideLoading();
-                console.error('Error al cerrar sesión:', error);
-                ui.showToast('Error al cerrar sesión', 'error');
-              }
-            });
-            
-          } else {
-            // Redirigir a login si no hay usuario
-            router.navigateTo('/login');
-          }
         });
-//      );
+
     }
 
       // Configurar navegación
