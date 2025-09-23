@@ -404,6 +404,55 @@ async function loadAreas() {
 }
 
 /**
+ * Cargar subdirecciones de una dirección específica (nivel 3)
+ */
+async function loadSubdirecciones(parentAreaId) {
+    try {
+        // Si ya están en caché, retornarlas
+        if (homeState.subdirecciones.has(parentAreaId)) {
+            return homeState.subdirecciones.get(parentAreaId);
+        }
+        
+        const userRole = homeState.userProfile?.rol_principal;
+        
+        if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
+            // Roles altos ven todas las subdirecciones de esta dirección
+            const { data } = await selectData('areas', {
+                select: '*',
+                filters: { 
+                    estado: 'ACTIVO',
+                    parent_area_id: parentAreaId
+                },
+                orderBy: { column: 'orden_visualizacion', ascending: true }
+            });
+            
+            // Guardar en caché
+            homeState.subdirecciones.set(parentAreaId, data || []);
+            return data || [];
+            
+        } else {
+            // Capturistas y jefes de área ven solo sus subdirecciones asignadas
+            const { data } = await selectData('v_areas_usuario', {
+                select: '*',
+                filters: { 
+                    usuario_id: homeState.userProfile.id,
+                    parent_area_id: parentAreaId
+                },
+                orderBy: { column: 'orden_visualizacion', ascending: true }
+            });
+            
+            // Guardar en caché
+            homeState.subdirecciones.set(parentAreaId, data || []);
+            return data || [];
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al cargar subdirecciones:', error);
+        return [];
+    }
+}
+
+/**
  * Cargar resumen del dashboard
  */
 async function loadDashboardSummary() {
