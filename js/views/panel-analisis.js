@@ -190,27 +190,52 @@ function calcularDatosComparativos() {
         };
     }
     
-    if (opcion.includes('trimestral_vs_anterior')) {
-        const trimestre = Math.floor((mes - 1) / 3) + 1;
-        const mesesTrimestre = [(trimestre - 1) * 3 + 1, (trimestre - 1) * 3 + 2, (trimestre - 1) * 3 + 3];
-        
-        const valorActual = analisisState.datosReales
-            .filter(d => d.anio === anio && mesesTrimestre.includes(d.mes))
-            .reduce((sum, d) => sum + d.valor, 0);
+        if (opcion.includes('trimestral_vs_anterior')) {
+            const trimestre = Math.floor((mes - 1) / 3) + 1;
+            const mesFinTrimestre = trimestre * 3;
             
-        const valorAnterior = analisisState.datosReales
-            .filter(d => d.anio === anio - 1 && mesesTrimestre.includes(d.mes))
-            .reduce((sum, d) => sum + d.valor, 0);
+            // Solo mostrar si el trimestre está completo
+            if (mes < mesFinTrimestre) {
+                const trimestreAnterior = trimestre - 1;
+                if (trimestreAnterior < 1) return null; // No hay trimestre completo
+                
+                const mesesTrimestre = [(trimestreAnterior - 1) * 3 + 1, (trimestreAnterior - 1) * 3 + 2, (trimestreAnterior - 1) * 3 + 3];
+                
+                const valorActual = analisisState.datosReales
+                    .filter(d => d.anio === anio && mesesTrimestre.includes(d.mes))
+                    .reduce((sum, d) => sum + d.valor, 0);
+                    
+                const valorAnterior = analisisState.datosReales
+                    .filter(d => d.anio === anio - 1 && mesesTrimestre.includes(d.mes))
+                    .reduce((sum, d) => sum + d.valor, 0);
+                    
+                return {
+                    tipo: 'trimestral',
+                    trimestre: trimestreAnterior,
+                    valorActual, valorAnterior,
+                    diferencia: valorActual - valorAnterior,
+                    porcentaje: valorAnterior > 0 ? ((valorActual - valorAnterior) / valorAnterior * 100).toFixed(2) : 0
+                };
+            }
             
-        return {
-            tipo: 'trimestral',
-            trimestre: trimestre,
-            valorActual: valorActual,
-            valorAnterior: valorAnterior,
-            diferencia: valorActual - valorAnterior,
-            porcentaje: valorAnterior > 0 ? ((valorActual - valorAnterior) / valorAnterior * 100).toFixed(2) : 0
-        };
-    }
+            const mesesTrimestre = [(trimestre - 1) * 3 + 1, (trimestre - 1) * 3 + 2, (trimestre - 1) * 3 + 3];
+            
+            const valorActual = analisisState.datosReales
+                .filter(d => d.anio === anio && mesesTrimestre.includes(d.mes))
+                .reduce((sum, d) => sum + d.valor, 0);
+                
+            const valorAnterior = analisisState.datosReales
+                .filter(d => d.anio === anio - 1 && mesesTrimestre.includes(d.mes))
+                .reduce((sum, d) => sum + d.valor, 0);
+                
+            return {
+                tipo: 'trimestral',
+                trimestre: trimestre,
+                valorActual, valorAnterior,
+                diferencia: valorActual - valorAnterior,
+                porcentaje: valorAnterior > 0 ? ((valorActual - valorAnterior) / valorAnterior * 100).toFixed(2) : 0
+            };
+        }
     
     if (opcion.includes('anual_vs_anterior')) {
         const valorActual = analisisState.datosReales
