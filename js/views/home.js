@@ -453,6 +453,28 @@ async function loadSubdirecciones(parentAreaId) {
 }
 
 /**
+ * Verificar si un área tiene subdirecciones
+ */
+async function areaHasSubdirecciones(areaId) {
+    try {
+        const { data, count } = await selectData('areas', {
+            select: 'id',
+            filters: { 
+                estado: 'ACTIVO',
+                parent_area_id: areaId
+            },
+            count: true
+        });
+        
+        return count > 0;
+        
+    } catch (error) {
+        console.error('❌ Error al verificar subdirecciones:', error);
+        return false;
+    }
+}
+
+/**
  * Cargar resumen del dashboard
  */
 async function loadDashboardSummary() {
