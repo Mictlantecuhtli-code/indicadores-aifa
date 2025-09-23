@@ -257,7 +257,7 @@
         document.getElementById('nav-panel-directivos')?.addEventListener('click', () => router.navigateTo('/panel-directivos'));
 
         // Menú de usuario
-        document.getElementById('user-menu-btn')?.addEventListener('click', async () => {
+        document.getElementById('user-menu-button')?.addEventListener('click', async () => {
           if (supa.appState.user) {
             const profile = supa.appState.profile || await supa.getCurrentProfile();
             
