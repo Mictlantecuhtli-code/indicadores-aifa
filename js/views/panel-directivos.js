@@ -1,7 +1,7 @@
 // =====================================================
 // PANEL DE ANÁLISIS DE INDICADORES PARA DIRECTIVOS
 // =====================================================
- 
+  
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
