@@ -621,6 +621,68 @@ async function refreshDataSilently() {
 // =====================================================
 
 /**
+ * Toggle (expandir/colapsar) subdirecciones de una dirección
+ */
+window.toggleSubdirecciones = async function(event, areaId) {
+    event.stopPropagation(); // Evitar propagación del click
+    
+    try {
+        const container = document.getElementById(`subdirecciones-${areaId}`);
+        const chevron = document.getElementById(`chevron-${areaId}`);
+        
+        if (!container) return;
+        
+        // Si está colapsado, expandir y cargar subdirecciones
+        if (container.classList.contains('hidden')) {
+            // Expandir
+            container.classList.remove('hidden');
+            if (chevron) {
+                chevron.setAttribute('data-lucide', 'chevron-down');
+            }
+            
+            // Agregar a expandidos
+            homeState.expandedAreas.add(areaId);
+            
+            // Cargar subdirecciones
+            const subdirecciones = await loadSubdirecciones(areaId);
+            
+            // Renderizar subdirecciones
+            if (subdirecciones && subdirecciones.length > 0) {
+                container.innerHTML = subdirecciones.map(subdir => 
+                    createAreaCardHTML(subdir, true)
+                ).join('');
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-8 bg-gray-50 rounded-lg ml-8">
+                        <i data-lucide="folder-x" class="w-12 h-12 text-gray-300 mx-auto mb-2"></i>
+                        <p class="text-sm text-gray-500">No hay subdirecciones disponibles</p>
+                    </div>
+                `;
+            }
+            
+        } else {
+            // Colapsar
+            container.classList.add('hidden');
+            if (chevron) {
+                chevron.setAttribute('data-lucide', 'chevron-right');
+            }
+            
+            // Quitar de expandidos
+            homeState.expandedAreas.delete(areaId);
+        }
+        
+        // Recrear iconos de Lucide
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al toggle subdirecciones:', error);
+        showToast('Error al cargar subdirecciones', 'error');
+    }
+};
+
+/**
  * Navegar a área específica
  */
 window.navigateToArea = function(areaId, areaNombre) {
