@@ -160,15 +160,12 @@ async function renderRoute(route) {
     }
     
     try {
-        showLoading('Cargando vista...');
-        
         let viewModule;
-        
         switch (route.path) {
             case '/login':
                 viewModule = await import('../auth/login.js');
                 break;
-                
+           
             case '/':
                 viewModule = await import('../views/home.js');
                 break;
