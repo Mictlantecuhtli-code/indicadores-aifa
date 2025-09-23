@@ -260,7 +260,7 @@ function createDashboardSummaryHTML() {
  * Crear HTML de la grilla de áreas
  */
 function createAreasGridHTML() {
-        if (!homeState.areas || homeState.areas.length === 0) {
+    if (!homeState.areas || homeState.areas.length === 0) {
         return `
             <div class="text-center py-12">
                 <i data-lucide="folder-x" class="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
