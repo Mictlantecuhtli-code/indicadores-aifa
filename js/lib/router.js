@@ -175,7 +175,7 @@ async function renderRoute(route) {
                 break;
                 
             case '/admin':
-                viewModule = await import('../views/admin.js');
+                viewModule = await import('../views/captura.js');
                 break;
                 
             case '/captura':
