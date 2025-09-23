@@ -257,11 +257,11 @@
         document.getElementById('nav-panel-directivos')?.addEventListener('click', () => router.navigateTo('/panel-directivos'));
 
         // Menú de usuario con modal
+        // Menú de usuario - VERSIÓN SIMPLIFICADA
         document.getElementById('user-menu-button')?.addEventListener('click', async () => {
             try {
                 const supa = await import('./js/lib/supa.js');
                 const ui = await import('./js/lib/ui.js');
-                const router = await import('./js/lib/router.js');
                 
                 if (supa.appState.user) {
                     const profile = supa.appState.profile || await supa.getCurrentProfile();
@@ -269,7 +269,7 @@
                     const getRoleName = (role) => {
                         const roles = {
                             'ADMIN': 'Administrador',
-                            'DIRECTOR': 'Director',
+                            'DIRECTOR': 'Director', 
                             'SUBDIRECTOR': 'Subdirector',
                             'JEFE_AREA': 'Jefe de Área',
                             'CAPTURISTA': 'Capturista'
@@ -277,8 +277,7 @@
                         return roles[role] || role;
                     };
                     
-                    // USAR EL FORMATO CORRECTO: un objeto con propiedades
-                    ui.showModal({
+                    const modalId = ui.showModal({
                         title: 'Mi Cuenta',
                         content: `
                             <div class="space-y-4">
@@ -298,19 +297,18 @@
                                     </div>
                                 </div>
                                 
-                                <div class="space-y-2">
-                                    <button id="logout-btn-modal" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-3 transition-colors">
-                                        <i data-lucide="log-out" class="w-5 h-5"></i>
-                                        <span>Cerrar sesión</span>
-                                    </button>
-                                </div>
+                                <button id="logout-btn-modal" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-3 transition-colors">
+                                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                                    <span>Cerrar sesión</span>
+                                </button>
                             </div>
                         `,
                         actions: [
                             {
                                 text: 'Cerrar',
-                                handler: () => {
-                                    ui.hideModal();
+                                handler: async () => {
+                                    ui.hideModal(modalId);
+                                    return true; // Cerrar modal
                                 }
                             }
                         ]
@@ -319,37 +317,47 @@
                     // Recrear iconos
                     setTimeout(() => {
                         if (window.lucide) window.lucide.createIcons();
-                    }, 100);
-                    
-                    // Logout handler
-                    setTimeout(() => {
+                        
+                        // Configurar logout
                         document.getElementById('logout-btn-modal')?.addEventListener('click', async () => {
                             try {
-                                ui.showLoading('Cerrando sesión...');
+                                const confirmed = await ui.showConfirmModal(
+                                    '¿Estás seguro de cerrar sesión?',
+                                    {
+                                        title: 'Confirmar cierre de sesión',
+                                        confirmText: 'Cerrar sesión',
+                                        cancelText: 'Cancelar',
+                                        type: 'warning'
+                                    }
+                                );
+                                
+                                if (!confirmed) return;
+                                
+                                ui.hideModal(modalId); // Cerrar modal de usuario primero
+                                
                                 await supa.signOut();
-                                ui.hideModal();
-                                ui.hideLoading();
                                 ui.showToast('Sesión cerrada correctamente', 'success');
+                                
                                 setTimeout(() => {
                                     window.location.hash = '#/login';
                                     location.reload();
-                                }, 500);
+                                }, 300);
+                                
                             } catch (error) {
-                                ui.hideLoading();
                                 console.error('Error al cerrar sesión:', error);
                                 ui.showToast('Error al cerrar sesión', 'error');
                             }
                         });
-                    }, 150);
+                    }, 100);
                     
                 } else {
+                    const router = await import('./js/lib/router.js');
                     router.navigateTo('/login');
                 }
             } catch (error) {
                 console.error('Error en menú de usuario:', error);
             }
         });
-
     }
 
       // Configurar navegación
