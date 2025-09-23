@@ -29,9 +29,6 @@ const adminState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('⚙️ Renderizando panel de administración');
-        
-        showLoading('Cargando panel de administración...');
-        
         // Obtener perfil del usuario
         adminState.userProfile = await getCurrentProfile();
         if (!adminState.userProfile) {
