@@ -565,7 +565,7 @@ function generarComparativoTrimestral() {
             <div class="border-b pb-4">
                 <h3 class="text-xl font-bold text-gray-900">${panelState.indicadorSeleccionado.nombre}</h3>
                 <p class="text-gray-600">Comparativo Trimestral vs Año Anterior</p>
-                <p class="text-sm text-gray-500 mt-2">Último trimestre completo: Q${ultimoTrimestre.trimestre} ${ultimoTrimestre.año}</p>
+                <p class="text-sm text-gray-500 mt-2">Último trimestre completo: Trimestre ${ultimoTrimestre.trimestre}
             </div>
             
             <div class="overflow-x-auto">
@@ -581,7 +581,7 @@ function generarComparativoTrimestral() {
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap font-medium">Q${ultimoTrimestre.trimestre}</td>
+                            <td class="px-6 py-4 whitespace-nowrap font-medium">Trimestre ${ultimoTrimestre.trimestre}</td>
                             <td class="px-6 py-4 whitespace-nowrap">${formatNumber(valorActual)}</td>
                             <td class="px-6 py-4 whitespace-nowrap">${formatNumber(valorAnterior)}</td>
                             <td class="px-6 py-4 whitespace-nowrap ${variacion.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}">
