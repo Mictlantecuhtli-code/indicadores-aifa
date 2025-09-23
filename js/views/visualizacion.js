@@ -76,10 +76,7 @@ const visualizacionState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando vista de visualización');
-        
-        showLoading('Cargando datos para visualización...');
-        
-        // Obtener perfil del usuario
+     // Obtener perfil del usuario
         visualizacionState.userProfile = await getCurrentProfile();
         if (!visualizacionState.userProfile) {
             throw new Error('No se pudo obtener el perfil del usuario');
