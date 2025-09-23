@@ -190,6 +190,10 @@ async function renderRoute(route) {
             case '/panel-directivos':
                 viewModule = await import('../views/panel-directivos.js');
                 break;
+
+            case '/panel-directivos/analisis':
+                viewModule = await import('../views/panel-analisis.js');
+                break;
                 
             default:
                 // Rutas con parámetros
