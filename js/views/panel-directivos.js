@@ -227,36 +227,6 @@ function crearDireccionesJerarquicas(direcciones) {
     const direccionGeneral = direcciones.filter(d => d.nivel === 1);
     const direccionesNivel2 = direcciones.filter(d => d.nivel === 2);
     let html = '';
-    
-    // Dirección General (nivel 1) - sin subdirecciones, clickeable directo
-  /*  if (direccionGeneral.length > 0) {
-        html += '<div class="space-y-2">';
-        direccionGeneral.forEach(dg => {
-            const isExpanded = panelState.expandedDirecciones.has(dg.id);
-            html += `
-                <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
-                    <button 
-                        onclick="window.panelDirectivos.seleccionarDireccion('${dg.id}')"
-                        class="w-full p-4 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900 transition-all text-left flex items-center justify-between"
-                    >
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                                 style="background-color: ${dg.color_hex || '#3B82F6'}">
-                                ${dg.clave.substring(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                                <h3 class="font-bold">${dg.nombre}</h3>
-                                <p class="text-sm opacity-75">${dg.clave}</p>
-                            </div>
-                        </div>
-                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
-                    </button>
-                </div>
-            `;
-        });
-        html += '</div>';
-    } */
-    
     // Direcciones (nivel 2) - con subdirecciones desplegables
     if (direccionesNivel2.length > 0) {
         html += '<div class="space-y-2 mt-4">';
