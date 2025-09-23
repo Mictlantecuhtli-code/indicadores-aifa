@@ -1,12 +1,10 @@
 // =====================================================
 // PANEL DE ANÁLISIS DE INDICADORES PARA DIRECTIVOS
 // =====================================================
-  
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
 import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica } from '../lib/charts.js';
-
 // Estado del panel de directivos
 const panelState = {
     userProfile: null,
@@ -20,11 +18,9 @@ const panelState = {
     expandedDirecciones: new Set(), // Set de IDs de direcciones expandidas
     loading: false
 };
-
 // =====================================================
 // RENDERIZADO PRINCIPAL
 // =====================================================
-
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando Panel de Directivos');
@@ -33,7 +29,6 @@ export async function render(container, params = {}, query = {}) {
         if (!panelState.userProfile) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
-        
         // Cargar indicadores disponibles
         await cargarIndicadores();
         panelState.expandedDirecciones.clear();
@@ -41,32 +36,25 @@ export async function render(container, params = {}, query = {}) {
         const direcciones = await cargarDirecciones();
         // Renderizar HTML principal
         container.innerHTML = createPanelHTML(direcciones);
-        
         // Configurar event listeners
         setupEventListeners();
-        
         hideLoading();
-        
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
         }
-        
-        if (DEBUG.enabled) console.log('✅ Panel de directivos renderizado');
-        
+        if (DEBUG.enabled) console.log('✅ Panel de directivos renderizado');    
     } catch (error) {
         console.error('❌ Error al renderizar panel:', error);
         hideLoading();
         showToast('Error al cargar el panel', 'error');
     }
 }
-
 async function cargarIndicadores() {
     try {
         const { data } = await selectData('v_indicadores_area', {
             orderBy: { column: 'area_nombre', ascending: true }
         });
-        
         if (data) {
             // Filtrar por nombres exactos
             const nombresOperativos = [
@@ -75,26 +63,21 @@ async function cargarIndicadores() {
                 'Aviación Carga Operaciones',
                 'Aviación Carga Toneladas'
             ];
-            
             const nombresFBO = [
                 'Aviación General Pasajeros',
                 'Aviación General Operaciones'
             ];
-            
             panelState.indicadoresOperativos = data.filter(ind => 
                 nombresOperativos.includes(ind.nombre)
             );
-            
             panelState.indicadoresFBO = data.filter(ind => 
                 nombresFBO.includes(ind.nombre)
             );
         }
-        
         if (DEBUG.enabled) {
             console.log('Indicadores operativos:', panelState.indicadoresOperativos.length);
             console.log('Indicadores FBO:', panelState.indicadoresFBO.length);
         }
-        
     } catch (error) {
         console.error('❌ Error al cargar indicadores:', error);
         panelState.indicadoresOperativos = [];
@@ -109,27 +92,22 @@ async function cargarDirecciones() {
             },
             orderBy: { column: 'orden_visualizacion', ascending: true }
         });
-        
         // Filtrar solo nivel 1 (DG) y nivel 2 (Direcciones)
         const direccionesFiltradas = (data || []).filter(area => 
             area.nivel === 1 || area.nivel === 2
         );
-        
         return direccionesFiltradas;
-        
     } catch (error) {
         console.error('❌ Error al cargar direcciones:', error);
         return [];
     }
 }
-
 async function cargarSubdirecciones(parentAreaId) {
     try {
         // Si ya están en caché, retornarlas
         if (panelState.subdirecciones.has(parentAreaId)) {
             return panelState.subdirecciones.get(parentAreaId);
         }
-        
         const { data } = await selectData('areas', {
             filters: { 
                 estado: 'ACTIVO',
@@ -137,21 +115,17 @@ async function cargarSubdirecciones(parentAreaId) {
             },
             orderBy: { column: 'orden_visualizacion', ascending: true }
         });
-        
         // Guardar en caché
         panelState.subdirecciones.set(parentAreaId, data || []);
         return data || [];
-        
     } catch (error) {
         console.error('❌ Error al cargar subdirecciones:', error);
         return [];
     }
 }
-
 // =====================================================
 // CREACIÓN DE HTML
 // =====================================================
-
 function createPanelHTML(direcciones = []) {
     return `
         <div class="space-y-6">
@@ -160,7 +134,6 @@ function createPanelHTML(direcciones = []) {
                 <h1 class="text-2xl font-bold mb-2">Panel de Análisis de Indicadores</h1>
                 <p class="text-blue-100">Seleccione un indicador para ver las opciones disponibles</p>
             </div>
-
             <!-- Indicadores Operativos -->
             <div class="bg-white rounded-lg shadow-lg p-6">
                 <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -173,7 +146,6 @@ function createPanelHTML(direcciones = []) {
                     ).join('')}
                 </div>
             </div>
-
             <!-- Indicadores FBO -->
             <div class="bg-white rounded-lg shadow-lg p-6">
                 <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -186,7 +158,6 @@ function createPanelHTML(direcciones = []) {
                     ).join('')}
                 </div>
             </div>
-
             <!-- Contenedor de resultados -->
             <div id="resultados-container"></div>
           <!-- Direcciones -->
@@ -202,14 +173,12 @@ function createPanelHTML(direcciones = []) {
         </div>
     `;
 }
-
 function crearBotonIndicador(id, titulo, subtitulo, icono, color) {
     const colorClasses = {
         blue: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900',
         amber: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-900',
         green: 'bg-green-50 hover:bg-green-100 border-green-200 text-green-900'
     };
-    
     return `
         <div class="border-2 border-gray-200 rounded-lg overflow-hidden transition-all" id="card-${id}">
             <button 
@@ -231,7 +200,6 @@ function crearBotonIndicador(id, titulo, subtitulo, icono, color) {
         </div>
     `;
 }
-
 function crearOpcionesAnalisis(indicadorId, nombreIndicador) {
     const opciones = [
         { id: 'mensual_vs_anterior', texto: `Cantidad de ${nombreIndicador} real mensual del año en curso respecto al mismo periodo del año anterior`, icono: 'trending-up' },
@@ -241,8 +209,7 @@ function crearOpcionesAnalisis(indicadorId, nombreIndicador) {
         { id: 'mensual_vs_medio', texto: `Cantidad de ${nombreIndicador} real mensual del año en curso respecto a la proyección de meta escenario Mediano`, icono: 'target' },
         { id: 'mensual_vs_alto', texto: `Cantidad de ${nombreIndicador} real mensual del año en curso respecto a la proyección de meta escenario Alto`, icono: 'target' }
     ];
-    
-    return opciones.map(opcion => `
+     return opciones.map(opcion => `
         <button 
             onclick="window.router.navigateTo('/panel-directivos/analisis?indicador=${indicadorId}&opcion=${opcion.id}')"
             class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-sm"
@@ -256,11 +223,9 @@ function crearDireccionesJerarquicas(direcciones) {
     if (!direcciones || direcciones.length === 0) {
         return '<p class="text-gray-500 text-center py-4">No hay direcciones disponibles</p>';
     }
-    
     // Separar por nivel
     const direccionGeneral = direcciones.filter(d => d.nivel === 1);
     const direccionesNivel2 = direcciones.filter(d => d.nivel === 2);
-    
     let html = '';
     
     // Dirección General (nivel 1) - sin subdirecciones, clickeable directo
