@@ -36,6 +36,10 @@ export async function render(container, params = {}, query = {}) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
         
+        // Limpiar estado de expansión y caché al recargar
+        homeState.expandedAreas.clear();
+        homeState.subdirecciones.clear();
+        
         // Cargar datos necesarios
         await Promise.all([
             loadAreas(),
