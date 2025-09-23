@@ -396,6 +396,19 @@ async function toggleDireccion(direccionId) {
     
     if (!container) return;
     
+    // Cerrar cualquier otra dirección abierta (selección única)
+    document.querySelectorAll('[id^="subdirs-"]').forEach(sub => {
+        if (sub.id !== `subdirs-${direccionId}` && !sub.classList.contains('hidden')) {
+            sub.classList.add('hidden');
+            const otherId = sub.id.replace('subdirs-', '');
+            const otherChevron = document.getElementById(`chevron-dir-${otherId}`);
+            if (otherChevron) {
+                otherChevron.setAttribute('data-lucide', 'chevron-right');
+            }
+            panelState.expandedDirecciones.delete(otherId);
+        }
+    });
+    
     try {
         // Si está colapsado, expandir y cargar subdirecciones
         if (container.classList.contains('hidden')) {
