@@ -293,69 +293,96 @@ function createAreaCardHTML(area) {
     const summary = homeState.resumenDashboard.find(r => r.area_id === area.id);
     const hasData = summary && summary.total_indicadores > 0;
     const lastActivity = summary?.ultima_actividad ? formatDate(summary.ultima_actividad, 'short') : 'Sin actividad';
-    
+    // Verificar si tiene subdirecciones (solo para nivel 2)
+    const hasSubdirecciones = area.nivel === 2;
+    const isExpanded = homeState.expandedAreas.has(area.id);
+    // Determinar comportamiento del click
+    const clickAction = hasSubdirecciones 
+        ? `toggleSubdirecciones(event, '${area.id}')` 
+        : `navigateToArea('${area.id}', '${area.nombre}')`;
     return `
-        <div class="area-card bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-aifa-blue transition-all duration-200 group"
-             onclick="navigateToArea('${area.id}', '${area.nombre}')"
-             role="button"
-             tabindex="0"
-             onkeydown="handleAreaKeydown(event, '${area.id}', '${area.nombre}')"
-             aria-label="Ir al área ${area.nombre}">
-            
-            <!-- Header del área -->
-            <div class="flex items-start justify-between mb-4">
-                <div class="flex items-center space-x-3">
-                    <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
-                         style="background-color: ${area.color_hex || '#3B82F6'}">
-                        ${area.clave.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                        <h3 class="font-semibold text-gray-900 group-hover:text-aifa-blue transition-colors">
-                            ${area.nombre}
-                        </h3>
-                        <p class="text-sm text-gray-500">${area.clave}</p>
-                    </div>
-                </div>
-                <i data-lucide="chevron-right" class="w-5 h-5 text-gray-400 group-hover:text-aifa-blue group-hover:translate-x-1 transition-all"></i>
-            </div>
-            
-            <!-- Descripción -->
-            ${area.descripcion ? `
-                <p class="text-sm text-gray-600 mb-4 line-clamp-2">
-                    ${area.descripcion}
-                </p>
-            ` : ''}
-            
-            <!-- Estadísticas del área -->
-            <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm text-gray-600">Indicadores:</span>
-                    <span class="font-medium text-gray-900">${summary?.total_indicadores || 0}</span>
-                </div>
+        <div class="area-card-container ${isSubdireccion ? 'ml-8' : ''}">
+            <div class="area-card bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-aifa-blue transition-all duration-200 group ${isSubdireccion ? 'bg-gray-50' : ''}"
+                 onclick="${clickAction}"
+                 role="button"
+                 tabindex="0"
+                 aria-label="${hasSubdirecciones ? 'Expandir ' : 'Ir a '} ${area.nombre}">
                 
-                ${hasData ? `
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Mediciones:</span>
-                        <span class="font-medium text-gray-900">${formatNumber(summary.total_mediciones, 0)}</span>
+                <!-- Header del área -->
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold text-lg"
+                             style="background-color: ${area.color_hex || '#3B82F6'}">
+                            ${area.clave.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900 group-hover:text-aifa-blue transition-colors">
+                                ${area.nombre}
+                            </h3>
+                            <p class="text-sm text-gray-500">${area.clave}</p>
+                        </div>
                     </div>
                     
+                    <!-- Ícono según tipo -->
+                    ${hasSubdirecciones ? `
+                        <i data-lucide="chevron-${isExpanded ? 'down' : 'right'}" 
+                           class="w-5 h-5 text-gray-400 group-hover:text-aifa-blue transition-all"
+                           id="chevron-${area.id}"></i>
+                    ` : `
+                        <i data-lucide="chevron-right" 
+                           class="w-5 h-5 text-gray-400 group-hover:text-aifa-blue group-hover:translate-x-1 transition-all"></i>
+                    `}
+                </div>
+                
+                <!-- Descripción -->
+                ${area.descripcion ? `
+                    <p class="text-sm text-gray-600 mb-4 line-clamp-2">
+                        ${area.descripcion}
+                    </p>
+                ` : ''}
+                
+                <!-- Estadísticas del área -->
+                <div class="space-y-3">
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Última actividad:</span>
-                        <span class="text-xs text-gray-500">${lastActivity}</span>
+                        <span class="text-sm text-gray-600">Indicadores:</span>
+                        <span class="font-medium text-gray-900">${summary?.total_indicadores || 0}</span>
                     </div>
-                ` : `
-                    <div class="text-center py-2">
-                        <span class="text-xs text-gray-400">Sin mediciones registradas</span>
+                    
+                    ${hasData ? `
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Mediciones:</span>
+                            <span class="font-medium text-gray-900">${formatNumber(summary.total_mediciones, 0)}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Última actividad:</span>
+                            <span class="text-xs text-gray-500">${lastActivity}</span>
+                        </div>
+                    ` : `
+                        <div class="text-center py-2">
+                            <span class="text-xs text-gray-400">Sin mediciones registradas</span>
+                        </div>
+                    `}
+                </div>
+                
+                <!-- Indicador de permisos -->
+                <div class="mt-4 pt-3 border-t border-gray-100">
+                    <div class="flex items-center space-x-2 text-xs">
+                        ${getPermissionBadges(area)}
                     </div>
-                `}
-            </div>
-            
-            <!-- Indicador de permisos -->
-            <div class="mt-4 pt-3 border-t border-gray-100">
-                <div class="flex items-center space-x-2 text-xs">
-                    ${getPermissionBadges(area)}
                 </div>
             </div>
+            
+            <!-- Contenedor de subdirecciones (colapsable) -->
+            ${hasSubdirecciones ? `
+                <div id="subdirecciones-${area.id}" 
+                     class="subdirecciones-container mt-4 space-y-4 ${isExpanded ? '' : 'hidden'}">
+                    <div class="text-center py-4">
+                        <i data-lucide="loader" class="w-6 h-6 text-gray-400 animate-spin mx-auto"></i>
+                        <p class="text-sm text-gray-500 mt-2">Cargando subdirecciones...</p>
+                    </div>
+                </div>
+            ` : ''}
         </div>
     `;
 }
