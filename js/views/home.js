@@ -256,7 +256,7 @@ function createDashboardSummaryHTML() {
  * Crear HTML de la grilla de áreas
  */
 function createAreasGridHTML() {
-    if (!homeState.areas || homeState.areas.length === 0) {
+        if (!homeState.areas || homeState.areas.length === 0) {
         return `
             <div class="text-center py-12">
                 <i data-lucide="folder-x" class="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
@@ -279,9 +279,37 @@ function createAreasGridHTML() {
         `;
     }
     
+    // Separar áreas por nivel
+    const direccionGeneral = homeState.areas.filter(a => a.nivel === 1);
+    const direcciones = homeState.areas.filter(a => a.nivel === 2);
+    
     return `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            ${homeState.areas.map(area => createAreaCardHTML(area)).join('')}
+        <div class="space-y-6">
+            <!-- Dirección General (Nivel 1) -->
+            ${direccionGeneral.length > 0 ? `
+                <div class="direccion-general">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center">
+                        <i data-lucide="building" class="w-4 h-4 mr-2"></i>
+                        Dirección General
+                    </h3>
+                    <div class="grid grid-cols-1 gap-4">
+                        ${direccionGeneral.map(area => createAreaCardHTML(area, false)).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Direcciones (Nivel 2) con sus subdirecciones -->
+            ${direcciones.length > 0 ? `
+                <div class="direcciones">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center">
+                        <i data-lucide="folder-tree" class="w-4 h-4 mr-2"></i>
+                        Direcciones
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${direcciones.map(area => createAreaCardHTML(area, false)).join('')}
+                    </div>
+                </div>
+            ` : ''}
         </div>
     `;
 }
