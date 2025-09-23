@@ -25,9 +25,6 @@ const homeState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('🏠 Renderizando vista home');
-        
-        showLoading('Cargando áreas...');
-        
         // Obtener perfil del usuario actual
         homeState.userProfile = await getCurrentProfile();
         if (!homeState.userProfile) {
