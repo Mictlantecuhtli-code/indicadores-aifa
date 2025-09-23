@@ -37,9 +37,9 @@ export async function render(container, params = {}, query = {}) {
         
         // Cargar indicadores disponibles
         await cargarIndicadores();
-        
+        const direcciones = await cargarDirecciones();
         // Renderizar HTML principal
-        container.innerHTML = createPanelHTML();
+        container.innerHTML = createPanelHTML(direcciones);
         
         // Configurar event listeners
         setupEventListeners();
@@ -100,12 +100,28 @@ async function cargarIndicadores() {
         panelState.indicadoresFBO = [];
     }
 }
+async function cargarDirecciones() {
+    try {
+        const { data } = await selectData('areas', {
+            filters: { estado: 'ACTIVO' },
+            orderBy: { column: 'nombre', ascending: true }
+        });
+        
+        return data || [];
+        
+    } catch (error) {
+        console.error('❌ Error al cargar direcciones:', error);
+        return [];
+    }
+}
+
+
 
 // =====================================================
 // CREACIÓN DE HTML
 // =====================================================
 
-function createPanelHTML() {
+function createPanelHTML(direcciones = []) {
     return `
         <div class="space-y-6">
             <!-- Header -->
@@ -142,6 +158,20 @@ function createPanelHTML() {
 
             <!-- Contenedor de resultados -->
             <div id="resultados-container"></div>
+            <!-- Direcciones -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4">Direcciones</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    ${direcciones.map(dir => `
+                        <button 
+                            onclick="window.panelDirectivos.seleccionarDireccion('${dir.id}')"
+                            class="p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium text-gray-700"
+                        >
+                            ${dir.nombre}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
         </div>
     `;
 }
@@ -204,6 +234,7 @@ function setupEventListeners() {
     window.panelDirectivos = {
         toggleIndicador,
         seleccionarOpcion,
+        seleccionarDireccion,
         toggleAnios,
         descargarDatos,
         imprimirReporte
@@ -778,3 +809,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
         });
     }
 }   
+function seleccionarDireccion(direccionId) {
+    showToast('Funcionalidad de dirección en desarrollo', 'info');
+    // TODO: Implementar navegación a vista de dirección
+}
