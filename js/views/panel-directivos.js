@@ -450,9 +450,10 @@ function obtenerUltimoTrimestreCompleto() {
     const trimestre = Math.floor((ultimoMes.mes - 1) / 3) + 1;
     const mesFinTrimestre = trimestre * 3;
     
+    // Si el trimestre actual NO está completo, usar el anterior
     if (ultimoMes.mes < mesFinTrimestre) {
         const trimestreAnterior = trimestre - 1;
-        if (trimestreAnterior < 1) return null;
+        if (trimestreAnterior < 1) return null; // No hay trimestre completo en el año
         
         return {
             trimestre: trimestreAnterior,
@@ -461,6 +462,7 @@ function obtenerUltimoTrimestreCompleto() {
         };
     }
     
+    // El trimestre actual está completo
     return {
         trimestre,
         año: ultimoMes.año,
