@@ -267,7 +267,7 @@ function crearDireccionesJerarquicas(direcciones) {
     let html = '';
     
     // Dirección General (nivel 1) - sin subdirecciones, clickeable directo
-    if (direccionGeneral.length > 0) {
+  /*  if (direccionGeneral.length > 0) {
         html += '<div class="space-y-2">';
         direccionGeneral.forEach(dg => {
             const isExpanded = panelState.expandedDirecciones.has(dg.id);
@@ -293,7 +293,7 @@ function crearDireccionesJerarquicas(direcciones) {
             `;
         });
         html += '</div>';
-    }
+    } */
     
     // Direcciones (nivel 2) - con subdirecciones desplegables
     if (direccionesNivel2.length > 0) {
