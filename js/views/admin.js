@@ -1766,42 +1766,6 @@ function updateUsersTable() {
         }
     }
 }
-
-/**
- * Manejar refresh de usuarios
- */
-async function handleRefreshUsers() {
-    try {
-        const refreshBtn = document.getElementById('refresh-users-btn');
-        if (refreshBtn) {
-        const icon = refreshBtn.querySelector('i');
-        if (icon) {
-            icon.classList.add('animate-spin');
-        }
-        }
-        
-        await loadUsuarios();
-        updateUsersTable();
-        updateSystemCounts();
-        
-        showToast('Lista de usuarios actualizada', 'success');
-        
-    } catch (error) {
-        console.error('❌ Error al refrescar usuarios:', error);
-        showToast('Error al actualizar los usuarios', 'error');
-    }
-}
-
-/**
- * Manejar selección de todos los usuarios
- */
-function handleSelectAllUsers(e) {
-    const checkboxes = document.querySelectorAll('.user-checkbox');
-    checkboxes.forEach(cb => {
-        cb.checked = e.target.checked;
-    });
-}
-
 /**
  * Mostrar modal de invitar usuario
  */
@@ -1932,87 +1896,6 @@ async function handleRefreshPermissions() {
         showToast('Error al actualizar los permisos', 'error');
     }
 }
-
-/**
- * Manejar asignación rápida
- */
-async function handleQuickAssign() {
-    const email = document.getElementById('quick-assign-email')?.value.trim();
-    const areaId = document.getElementById('quick-assign-area')?.value;
-    const rol = document.getElementById('quick-assign-role')?.value;
-    
-    if (!email || !areaId || !rol) {
-        showToast('Complete todos los campos para la asignación', 'warning');
-        return;
-    }
-    
-    // Validar email del dominio
-    if (!VALIDATION.email.pattern.test(email)) {
-        showToast('El email debe ser del dominio @aifa.aero', 'error');
-        return;
-    }
-    
-    try {
-        // Buscar usuario por email
-        const { data: usuarios } = await selectData('perfiles', {
-            select: '*',
-            filters: { email: email }
-        });
-        
-        if (!usuarios || usuarios.length === 0) {
-            showToast('Usuario no encontrado. Debe estar registrado en el sistema primero.', 'error');
-            return;
-        }
-        
-        const usuario = usuarios[0];
-        
-        // Verificar si ya existe la asignación
-        const { data: existingAssignment } = await selectData('usuario_areas', {
-            select: '*',
-            filters: { 
-                usuario_id: usuario.id,
-                area_id: areaId,
-                estado: 'ACTIVO'
-            }
-        });
-        
-        if (existingAssignment && existingAssignment.length > 0) {
-            showToast('El usuario ya tiene una asignación activa en esta área', 'warning');
-            return;
-        }
-        
-        // Crear asignación
-        const assignmentData = {
-            usuario_id: usuario.id,
-            area_id: areaId,
-            rol: rol,
-            puede_capturar: true,
-            puede_editar: ['JEFE_AREA', 'SUBDIRECTOR', 'DIRECTOR', 'ADMIN'].includes(rol),
-            puede_eliminar: ['SUBDIRECTOR', 'DIRECTOR', 'ADMIN'].includes(rol),
-            asignado_por: adminState.userProfile.id,
-            estado: 'ACTIVO'
-        };
-        
-        await insertData('usuario_areas', assignmentData);
-        
-        showToast('Asignación creada correctamente', 'success');
-        
-        // Limpiar formulario
-        document.getElementById('quick-assign-email').value = '';
-        document.getElementById('quick-assign-area').value = '';
-        document.getElementById('quick-assign-role').value = '';
-        
-        // Actualizar datos
-        await loadPermisos();
-        updatePermissionsTable();
-        updateSystemCounts();
-        
-    } catch (error) {
-        console.error('❌ Error en asignación rápida:', error);
-        showToast('Error al crear la asignación', 'error');
-    }
-}
-
 /**
  * Mostrar modal de agregar permiso
  */
