@@ -215,10 +215,10 @@ function setupStaticListeners(container) {
 // =====================================================
 // CARGA DE DATOS
 // =====================================================
-
 async function ensureAdminProfile() {
     if (!appState.profile) {
         await getCurrentProfile();
+
     }
 
     if (appState.profile?.rol_principal === 'ADMIN') {
@@ -228,6 +228,7 @@ async function ensureAdminProfile() {
     if (DEBUG.enabled) {
         console.warn('⚠️ Usuario sin privilegios de administrador');
     }
+
 
     return false;
 }
@@ -972,7 +973,6 @@ function getUserValidationRules(requirePassword) {
             message: VALIDATION.password?.message || 'Contraseña no válida'
         };
     }
-
     return rules;
 }
 
