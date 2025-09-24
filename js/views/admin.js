@@ -219,6 +219,10 @@ async function ensureAdminProfile() {
     if (!appState.profile) {
         await getCurrentProfile();
 
+async function ensureAdminProfile() {
+    if (!appState.profile) {
+        await getCurrentProfile();
+
     }
 
     if (appState.profile?.rol_principal === 'ADMIN') {
@@ -228,7 +232,6 @@ async function ensureAdminProfile() {
     if (DEBUG.enabled) {
         console.warn('⚠️ Usuario sin privilegios de administrador');
     }
-
 
     return false;
 }

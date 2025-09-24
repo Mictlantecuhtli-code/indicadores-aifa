@@ -625,9 +625,21 @@ async function ensureAuthInitialized(timeout = 6000) {
  * Redirigir a la página inicial usando el router si está disponible
  */
 function redirectToHome() {
-    if (window.router?.navigateTo) {
-        window.router.navigateTo('/', {}, true);
-    } else {
-        window.location.hash = '#/';
+    const role = appState.profile?.rol_principal
+        || appState.user?.user_metadata?.rol_principal
+        || null;
+
+    const targetPath = role === 'DIRECTOR' ? '/panel-directivos' : '/';
+
+    if (typeof navigateTo === 'function') {
+        navigateTo(targetPath, {}, true);
+        return;
     }
+
+    if (window.router && typeof window.router.navigateTo === 'function') {
+        window.router.navigateTo(targetPath, {}, true);
+        return;
+    }
+
+    window.location.hash = targetPath === '/' ? '#/' : `#${targetPath}`;
 }
