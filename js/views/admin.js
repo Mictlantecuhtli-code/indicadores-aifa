@@ -2158,29 +2158,6 @@ function updatePermissionsTable() {
         }
     }
 }
-
-/**
- * Manejar refresh de permisos
- */
-async function handleRefreshPermissions() {
-    try {
-        const refreshBtn = document.getElementById('refresh-permissions-btn');
-        if (refreshBtn) {
-            const icon = refreshBtn.querySelector('i');
-            icon.classList.add('animate-spin');
-        }
-        
-        await loadPermisos();
-        updatePermissionsTable();
-        updateSystemCounts();
-        
-        showToast('Lista de permisos actualizada', 'success');
-        
-    } catch (error) {
-        console.error('❌ Error al refrescar permisos:', error);
-        showToast('Error al actualizar los permisos', 'error');
-    }
-}
 /**
  * Mostrar modal de agregar permiso
  */
