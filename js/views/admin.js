@@ -1751,21 +1751,6 @@ window.deleteArea = async function(areaId, areaNombre) {
 // =====================================================
 // HANDLERS DE EVENTOS - USUARIOS
 // =====================================================
-
-/**
- * Actualizar tabla de usuarios
- */
-function updateUsersTable() {
-    const tableContainer = document.getElementById('users-table-container');
-    if (tableContainer) {
-        tableContainer.innerHTML = createUsersTableHTML();
-        
-        // Recrear iconos
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-    }
-}
 /**
  * Mostrar modal de invitar usuario
  */
