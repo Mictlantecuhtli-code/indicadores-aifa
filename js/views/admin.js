@@ -4,7 +4,7 @@
 // =====================================================
 import { DEBUG, ROLES, VALIDATION } from '../config.js';
 import { selectData, insertData, updateData, deleteData, appState, getCurrentProfile } from '../lib/supa.js';
-import { showToast, showLoading, hideLoading, showModal, showConfirmModal, validateForm, getFormData, createTable } from '../lib/ui.js';
+import { showToast, showLoading, hideLoading, showModal, showConfirmModal, validateForm, getFormData, createTable, formatDate } from '../lib/ui.js';
 // Estado del panel de administración
 const adminState = {
     userProfile: null,
@@ -2056,47 +2056,347 @@ function showInvitationConfirmation(email, nombreCompleto) {
 }
 
 /**
- * Ver detalles de usuario
+ * Mostrar información detallada del usuario
  */
-window.viewUserDetails = function(usuarioId) {
+function viewUserDetails(usuarioId) {
     const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    showToast(`Detalles de usuario: ${usuario.nombre_completo || usuario.email} en desarrollo`, 'info');
-};
 
-/**
- * Editar usuario
- */
-window.editUser = function(usuarioId) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
     if (!usuario) {
         showToast('Usuario no encontrado', 'error');
         return;
     }
-    
-    showToast(`Editar usuario: ${usuario.nombre_completo || usuario.email} en desarrollo`, 'info');
-};
 
-/**
- * Gestionar permisos de usuario
- */
-window.manageUserPermissions = function(usuarioId) {
-    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
-    if (!usuario) {
-        showToast('Usuario no encontrado', 'error');
-        return;
-    }
-    
-    // Cambiar a sección de permisos y filtrar por usuario
-    switchSection('permissions').then(() => {
-        // Aquí podríamos implementar un filtro específico por usuario
-        showToast(`Gestionando permisos de: ${usuario.nombre_completo || usuario.email}`, 'info');
+    const asignaciones = adminState.permisos.filter(
+        permiso => permiso.usuario_id === usuarioId && permiso.estado === 'ACTIVO'
+    );
+
+    const informacionBasica = [
+        { label: 'Correo electrónico', value: usuario.email },
+        { label: 'Rol principal', value: getRoleName(usuario.rol_principal) },
+        { label: 'Puesto', value: usuario.puesto || 'No especificado' },
+        { label: 'Teléfono', value: usuario.telefono || 'No registrado' },
+        {
+            label: 'Último acceso',
+            value: usuario.ultimo_acceso ? formatDate(usuario.ultimo_acceso, 'long') : 'Nunca'
+        },
+        {
+            label: 'Fecha de registro',
+            value: usuario.fecha_creacion ? formatDate(usuario.fecha_creacion, 'long') : 'Sin registro'
+        }
+    ];
+
+    showModal({
+        title: `Detalles del usuario`,
+        content: `
+            <div class="space-y-6">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-start space-x-4">
+                        <div class="h-12 w-12 rounded-full bg-aifa-blue flex items-center justify-center text-white text-lg font-medium">
+                            ${(usuario.nombre_completo || usuario.email).substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                ${usuario.nombre_completo || usuario.email}
+                            </h3>
+                            <div class="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(usuario.rol_principal)}">
+                                ${getRoleName(usuario.rol_principal)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${informacionBasica.map(info => `
+                        <div class="bg-white border rounded-lg p-3">
+                            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                ${info.label}
+                            </div>
+                            <div class="text-sm text-gray-900">${info.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="border-t pt-4">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <i data-lucide="layers" class="w-4 h-4 mr-2 text-aifa-blue"></i>
+                        Áreas asignadas
+                    </h4>
+                    ${asignaciones.length > 0 ? `
+                        <div class="space-y-3">
+                            ${asignaciones.map(asignacion => `
+                                <div class="border rounded-lg p-3 bg-white">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">
+                                                ${asignacion.areas?.nombre || 'Área sin nombre'}
+                                            </div>
+                                            <div class="text-xs text-gray-500">
+                                                ${asignacion.areas?.clave || ''}
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(asignacion.rol)}">
+                                                ${getRoleName(asignacion.rol)}
+                                            </span>
+                                            <button
+                                                class="text-gray-500 hover:text-gray-700"
+                                                title="Editar permisos"
+                                                onclick="window.editPermission('${asignacion.id}')"
+                                            >
+                                                <i data-lucide="settings" class="w-4 h-4"></i>
+                                            </button>
+                                            <button
+                                                class="text-red-500 hover:text-red-600"
+                                                title="Remover del área"
+                                                onclick="window.removeUserFromArea('${asignacion.id}')"
+                                            >
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 mt-3 text-xs text-gray-600">
+                                        <div class="flex items-center space-x-1">
+                                            <i data-lucide="${asignacion.puede_capturar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_capturar ? 'text-green-600' : 'text-red-500'}"></i>
+                                            <span>Capturar</span>
+                                        </div>
+                                        <div class="flex items-center space-x-1">
+                                            <i data-lucide="${asignacion.puede_editar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_editar ? 'text-green-600' : 'text-red-500'}"></i>
+                                            <span>Editar</span>
+                                        </div>
+                                        <div class="flex items-center space-x-1">
+                                            <i data-lucide="${asignacion.puede_eliminar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_eliminar ? 'text-green-600' : 'text-red-500'}"></i>
+                                            <span>Eliminar</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <p class="text-sm text-gray-500">Este usuario no tiene áreas asignadas actualmente.</p>
+                    `}
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Gestionar permisos',
+                handler: () => {
+                    hideModal();
+                    setTimeout(() => manageUserPermissions(usuarioId), 150);
+                    return true;
+                }
+            },
+            {
+                text: 'Cerrar',
+                primary: true,
+                handler: () => true
+            }
+        ]
     });
-};
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Mostrar modal de gestión de permisos para un usuario
+ */
+function manageUserPermissions(usuarioId) {
+    if (!validateAdminPermission('assign_user_area')) return;
+
+    const usuario = adminState.usuarios.find(u => u.id === usuarioId);
+
+    if (!usuario) {
+        showToast('Usuario no encontrado', 'error');
+        return;
+    }
+
+    const asignaciones = adminState.permisos.filter(
+        permiso => permiso.usuario_id === usuarioId && permiso.estado === 'ACTIVO'
+    );
+
+    const areasAsignadas = new Set(asignaciones.map(permiso => permiso.area_id));
+    const areasDisponibles = adminState.areas.filter(
+        area => area.estado === 'ACTIVO' && !areasAsignadas.has(area.id)
+    );
+
+    showModal({
+        title: `Permisos de ${usuario.nombre_completo || usuario.email}`,
+        content: `
+            <div class="space-y-6">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-600">
+                        Rol principal: <strong>${getRoleName(usuario.rol_principal)}</strong>
+                    </p>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Áreas asignadas: <strong>${asignaciones.length}</strong>
+                    </p>
+                </div>
+
+                <div class="space-y-3">
+                    ${asignaciones.length > 0 ? asignaciones.map(asignacion => `
+                        <div class="border rounded-lg p-3 bg-white">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">
+                                        ${asignacion.areas?.nombre || 'Área sin nombre'}
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        ${asignacion.areas?.clave || ''}
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(asignacion.rol)}">
+                                        ${getRoleName(asignacion.rol)}
+                                    </span>
+                                    <button class="text-gray-500 hover:text-gray-700" title="Editar permisos" onclick="window.editPermission('${asignacion.id}')">
+                                        <i data-lucide="settings" class="w-4 h-4"></i>
+                                    </button>
+                                    <button class="text-red-500 hover:text-red-600" title="Remover del área" onclick="window.removeUserFromArea('${asignacion.id}')">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3 mt-3 text-xs text-gray-600">
+                                <div class="flex items-center space-x-1">
+                                    <i data-lucide="${asignacion.puede_capturar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_capturar ? 'text-green-600' : 'text-red-500'}"></i>
+                                    <span>Capturar</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <i data-lucide="${asignacion.puede_editar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_editar ? 'text-green-600' : 'text-red-500'}"></i>
+                                    <span>Editar</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <i data-lucide="${asignacion.puede_eliminar ? 'check' : 'x'}" class="w-3 h-3 ${asignacion.puede_eliminar ? 'text-green-600' : 'text-red-500'}"></i>
+                                    <span>Eliminar</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <p class="text-sm text-gray-500">No hay asignaciones activas para este usuario.</p>
+                    `}
+                </div>
+
+                <div class="border-t pt-4">
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <i data-lucide="plus" class="w-4 h-4 mr-2 text-green-600"></i>
+                        Asignar nueva área
+                    </h4>
+                    <form id="manage-user-permissions-form" class="space-y-4">
+                        <input type="hidden" name="usuario_id" value="${usuario.id}">
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Área <span class="text-red-500">*</span>
+                            </label>
+                            ${areasDisponibles.length > 0 ? `
+                                <select name="area_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent">
+                                    <option value="">Seleccionar área...</option>
+                                    ${areasDisponibles.map(area => `
+                                        <option value="${area.id}">${area.clave} - ${area.nombre}</option>
+                                    `).join('')}
+                                </select>
+                            ` : `
+                                <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg p-3">
+                                    Este usuario ya está asignado a todas las áreas activas.
+                                </div>
+                            `}
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Rol en el área <span class="text-red-500">*</span>
+                            </label>
+                            <select name="rol" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent">
+                                <option value="CAPTURISTA">Capturista</option>
+                                <option value="JEFE_AREA">Jefe de Área</option>
+                                <option value="SUBDIRECTOR">Subdirector</option>
+                                <option value="DIRECTOR">Director</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Permisos específicos</label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="puede_capturar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue" checked>
+                                <span class="ml-2 text-sm text-gray-700">Puede capturar datos</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="puede_editar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue">
+                                <span class="ml-2 text-sm text-gray-700">Puede editar datos</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="puede_eliminar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue">
+                                <span class="ml-2 text-sm text-gray-700">Puede eliminar datos</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Cerrar',
+                handler: () => true
+            },
+            {
+                text: 'Asignar área',
+                primary: true,
+                disabled: areasDisponibles.length === 0,
+                handler: async () => {
+                    const asignado = await handleManageUserAssignment(usuarioId);
+                    if (asignado) {
+                        setTimeout(() => manageUserPermissions(usuarioId), 200);
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        ]
+    });
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Procesar asignación desde el modal de gestión de permisos
+ */
+async function handleManageUserAssignment(userId) {
+    const form = document.getElementById('manage-user-permissions-form');
+
+    if (!form) {
+        return false;
+    }
+
+    const formData = getFormData(form);
+
+    if (!formData.area_id || !formData.rol) {
+        showToast('Seleccione un área y un rol para continuar', 'error');
+        return false;
+    }
+
+    const assignmentData = {
+        rol: formData.rol,
+        puede_capturar: formData.puede_capturar === 'on',
+        puede_editar: formData.puede_editar === 'on',
+        puede_eliminar: formData.puede_eliminar === 'on'
+    };
+
+    try {
+        await assignUserToArea(userId, formData.area_id, assignmentData);
+        return true;
+    } catch (error) {
+        console.error('❌ Error al asignar área desde gestión de permisos:', error);
+        return false;
+    }
+}
 
 /**
  * Cambiar estado de usuario
@@ -2160,24 +2460,194 @@ function updatePermissionsTable() {
  */
 
 /**
- * Editar permiso
+ * Editar permiso de usuario por área
  */
-window.editPermission = function(permisoId) {
+function editPermission(permisoId) {
+    if (!validateAdminPermission('assign_user_area')) return;
+
     const permiso = adminState.permisos.find(p => p.id === permisoId);
+
     if (!permiso) {
         showToast('Permiso no encontrado', 'error');
         return;
     }
-    
-    showToast(`Editar permiso en desarrollo`, 'info');
-};
+
+    const usuario = adminState.usuarios.find(u => u.id === permiso.usuario_id);
+    const area = adminState.areas.find(a => a.id === permiso.area_id);
+
+    showModal({
+        title: `Editar asignación`,
+        content: `
+            <form id="edit-permission-form" class="space-y-4">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600">
+                    <p><strong>Usuario:</strong> ${usuario?.nombre_completo || usuario?.email || 'Usuario'}</p>
+                    <p class="mt-1"><strong>Área:</strong> ${area?.nombre || 'Área'}</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol en el área <span class="text-red-500">*</span>
+                    </label>
+                    <select
+                        name="rol"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="CAPTURISTA" ${permiso.rol === 'CAPTURISTA' ? 'selected' : ''}>Capturista</option>
+                        <option value="JEFE_AREA" ${permiso.rol === 'JEFE_AREA' ? 'selected' : ''}>Jefe de Área</option>
+                        <option value="SUBDIRECTOR" ${permiso.rol === 'SUBDIRECTOR' ? 'selected' : ''}>Subdirector</option>
+                        <option value="DIRECTOR" ${permiso.rol === 'DIRECTOR' ? 'selected' : ''}>Director</option>
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Permisos específicos</label>
+                    <label class="flex items-center">
+                        <input type="checkbox" name="puede_capturar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue" ${permiso.puede_capturar ? 'checked' : ''}>
+                        <span class="ml-2 text-sm text-gray-700">Puede capturar datos</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" name="puede_editar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue" ${permiso.puede_editar ? 'checked' : ''}>
+                        <span class="ml-2 text-sm text-gray-700">Puede editar datos</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" name="puede_eliminar" class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue" ${permiso.puede_eliminar ? 'checked' : ''}>
+                        <span class="ml-2 text-sm text-gray-700">Puede eliminar datos</span>
+                    </label>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Guardar cambios',
+                primary: true,
+                handler: async () => {
+                    const actualizado = await handlePermissionUpdate(permisoId);
+                    if (actualizado) {
+                        setTimeout(() => manageUserPermissions(permiso.usuario_id), 200);
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        ]
+    });
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Guardar cambios de un permiso existente
+ */
+async function handlePermissionUpdate(permisoId) {
+    const form = document.getElementById('edit-permission-form');
+
+    if (!form) {
+        return false;
+    }
+
+    const formData = getFormData(form);
+    const permisoActual = adminState.permisos.find(p => p.id === permisoId);
+
+    if (!permisoActual) {
+        showToast('Permiso no encontrado', 'error');
+        return false;
+    }
+
+    if (!formData.rol) {
+        showToast('Seleccione un rol válido', 'error');
+        return false;
+    }
+
+    const nuevoPermiso = {
+        rol: formData.rol,
+        puede_capturar: formData.puede_capturar === 'on',
+        puede_editar: formData.puede_editar === 'on',
+        puede_eliminar: formData.puede_eliminar === 'on'
+    };
+
+    const camposModificados = [];
+    Object.entries(nuevoPermiso).forEach(([campo, valor]) => {
+        if (permisoActual[campo] !== valor) {
+            camposModificados.push(campo);
+        }
+    });
+
+    if (camposModificados.length === 0) {
+        showToast('No hay cambios para guardar', 'warning');
+        return false;
+    }
+
+    try {
+        showLoading('Guardando cambios...');
+
+        const { data } = await updateData(
+            'usuario_areas',
+            {
+                ...nuevoPermiso,
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: permisoId },
+            {
+                select: `*, perfiles!usuario_id (nombre_completo, email), areas!area_id (nombre, clave, color_hex)`
+            }
+        );
+
+        if (data && data.length > 0) {
+            const indice = adminState.permisos.findIndex(p => p.id === permisoId);
+            if (indice !== -1) {
+                adminState.permisos[indice] = data[0];
+            }
+
+            await registrarAuditoria({
+                tabla_afectada: 'usuario_areas',
+                registro_id: permisoId,
+                operacion: 'UPDATE',
+                datos_anteriores: permisoActual,
+                datos_nuevos: nuevoPermiso,
+                campos_modificados: camposModificados.join(', '),
+                observaciones: 'Permiso actualizado desde panel de administración'
+            });
+
+            updatePermissionsTable();
+            updateSystemCounts();
+            showToast('Permiso actualizado correctamente', 'success');
+            return true;
+        }
+
+        showToast('No fue posible actualizar el permiso', 'error');
+        return false;
+    } catch (error) {
+        console.error('❌ Error al actualizar permiso:', error);
+        showToast(error.message || 'Error al actualizar el permiso', 'error');
+        return false;
+    } finally {
+        hideLoading();
+    }
+}
 
 /**
  * Eliminar permiso
  */
-window.deletePermission = async function(permisoId, nombreUsuario, nombreArea) {
+async function deletePermission(permisoId, nombreUsuario, nombreArea) {
+    if (!validateAdminPermission('assign_user_area')) return;
+
+    const permiso = adminState.permisos.find(p => p.id === permisoId);
+
+    if (!permiso) {
+        showToast('Permiso no encontrado', 'error');
+        return;
+    }
+
     try {
-        const confirmed = await showConfirmModal(
+        const confirmado = await showConfirmModal(
             `¿Está seguro de eliminar la asignación de "${nombreUsuario}" en el área "${nombreArea}"?`,
             {
                 title: 'Confirmar eliminación',
@@ -2185,23 +2655,41 @@ window.deletePermission = async function(permisoId, nombreUsuario, nombreArea) {
                 type: 'warning'
             }
         );
-        
-        if (!confirmed) return;
-        
-        await deleteData('usuario_areas', { id: permisoId });
-        
-        showToast('Asignación eliminada correctamente', 'success');
-        
-        // Actualizar estado local
+
+        if (!confirmado) return;
+
+        showLoading('Eliminando asignación...');
+
+        await updateData(
+            'usuario_areas',
+            {
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: permisoId }
+        );
+
+        await registrarAuditoria({
+            tabla_afectada: 'usuario_areas',
+            registro_id: permisoId,
+            operacion: 'UPDATE',
+            datos_anteriores: permiso,
+            datos_nuevos: { estado: 'INACTIVO' },
+            campos_modificados: 'estado',
+            observaciones: 'Asignación desactivada desde panel de administración'
+        });
+
         adminState.permisos = adminState.permisos.filter(p => p.id !== permisoId);
         updatePermissionsTable();
         updateSystemCounts();
-        
+        showToast('Asignación eliminada correctamente', 'success');
     } catch (error) {
         console.error('❌ Error al eliminar permiso:', error);
-        showToast('Error al eliminar la asignación', 'error');
+        showToast(error.message || 'Error al eliminar la asignación', 'error');
+    } finally {
+        hideLoading();
     }
-};
+}
 
 // =====================================================
 // FUNCIONES AUXILIARES
@@ -3317,34 +3805,64 @@ async function handleEditUser() {
  */
 async function handleQuickAssign() {
     try {
-        const form = document.getElementById('quick-assign-form');
-        if (!form) return;
-        
-        const formData = getFormData(form);
-        
-        // Validar campos obligatorios
-        if (!formData.usuario_id || !formData.area_id || !formData.rol) {
-            showToast('Complete todos los campos obligatorios', 'error');
+        const modalForm = document.getElementById('quick-assign-form');
+
+        if (modalForm) {
+            const formData = getFormData(modalForm);
+
+            if (!formData.usuario_id || !formData.area_id || !formData.rol) {
+                showToast('Complete todos los campos obligatorios', 'error');
+                return;
+            }
+
+            const assignmentData = {
+                rol: formData.rol,
+                puede_capturar: formData.puede_capturar === 'on',
+                puede_editar: formData.puede_editar === 'on',
+                puede_eliminar: formData.puede_eliminar === 'on'
+            };
+
+            await assignUserToArea(formData.usuario_id, formData.area_id, assignmentData);
+
+            modalForm.reset();
             return;
         }
-        
-        // Preparar datos de asignación
-        const assignmentData = {
-            rol: formData.rol,
-            puede_capturar: formData.puede_capturar === 'on',
-            puede_editar: formData.puede_editar === 'on',
-            puede_eliminar: formData.puede_eliminar === 'on'
-        };
-        
-        // Asignar usuario a área
-        await assignUserToArea(formData.usuario_id, formData.area_id, assignmentData);
-        
-        // Cerrar modal si fue exitoso
-        hideModal();
-        
+
+        const emailInput = document.getElementById('quick-assign-email');
+        const areaSelect = document.getElementById('quick-assign-area');
+        const roleSelect = document.getElementById('quick-assign-role');
+
+        if (!emailInput || !areaSelect || !roleSelect) {
+            return;
+        }
+
+        if (!emailInput.value || !areaSelect.value || !roleSelect.value) {
+            showToast('Complete todos los campos para asignar al usuario', 'error');
+            return;
+        }
+
+        const usuario = await findUserByEmail(emailInput.value);
+
+        if (!usuario) {
+            showToast('No se encontró un usuario con ese correo', 'error');
+            return;
+        }
+
+        const defaultPermissions = getDefaultPermissionsByRole(roleSelect.value);
+
+        await assignUserToArea(usuario.id, areaSelect.value, {
+            rol: roleSelect.value,
+            puede_capturar: defaultPermissions.puede_capturar,
+            puede_editar: defaultPermissions.puede_editar,
+            puede_eliminar: defaultPermissions.puede_eliminar
+        });
+
+        emailInput.value = '';
+        areaSelect.value = '';
+        roleSelect.value = '';
+
     } catch (error) {
         console.error('❌ Error en handleQuickAssign:', error);
-        // No cerrar el modal si hay error
     }
 }
 // =====================================================
@@ -3869,12 +4387,27 @@ function getRoleName(role) {
     const roleNames = {
         'ADMIN': 'Administrador',
         'DIRECTOR': 'Director',
-        'SUBDIRECTOR': 'Subdirector', 
+        'SUBDIRECTOR': 'Subdirector',
         'JEFE_AREA': 'Jefe de Área',
         'CAPTURISTA': 'Capturista'
     };
-    
+
     return roleNames[role] || role;
+}
+
+/**
+ * Obtener permisos por defecto según el rol seleccionado
+ */
+function getDefaultPermissionsByRole(role) {
+    const defaults = {
+        ADMIN: { puede_capturar: true, puede_editar: true, puede_eliminar: true },
+        DIRECTOR: { puede_capturar: false, puede_editar: false, puede_eliminar: false },
+        SUBDIRECTOR: { puede_capturar: true, puede_editar: true, puede_eliminar: true },
+        JEFE_AREA: { puede_capturar: true, puede_editar: true, puede_eliminar: false },
+        CAPTURISTA: { puede_capturar: true, puede_editar: false, puede_eliminar: false }
+    };
+
+    return defaults[role] || { puede_capturar: true, puede_editar: false, puede_eliminar: false };
 }
 /**
  * NUEVA FUNCIÓN - Handler para acciones masivas de usuarios
@@ -5107,8 +5640,9 @@ window.showAddPermissionModal = showAddPermissionModal;
 
 // Funciones que ya estaban expuestas (mantener)
 window.viewUserDetails = viewUserDetails;
-window.editUser = editUser;
+window.editUser = showEditUserModal;
 window.manageUserPermissions = manageUserPermissions;
+window.deleteUser = deleteUser;
 window.toggleUserStatus = toggleUserStatus;
 window.viewAreaDetails = viewAreaDetails;
 window.editArea = editArea;
