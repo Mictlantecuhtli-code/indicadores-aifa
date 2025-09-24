@@ -410,8 +410,8 @@ export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-
-        let { data: profileData, error: profileError } = await supabase
+//        let { data: profileData, error: profileError } = await supabase
+        const { data, error } = await supabase
             .from('perfiles')
             .select(PROFILE_COLUMNS)
             .eq('id', user.id)
@@ -546,6 +546,35 @@ export async function getCurrentProfile() {
             profile.usuario_areas = profile.usuario_areas || [];
         } else {
             profile.usuario_areas = areaAssignments || [];
+        }
+
+
+                )
+            `)
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') {
+            console.error('❌ Error al obtener perfil:', error);
+            return null;
+        }
+
+        let profile = data;
+
+        if (!profile) {
+            profile = {
+                id: user.id,
+                email: user.email,
+                nombre_completo: user.user_metadata?.nombre_completo || user.user_metadata?.full_name || user.email,
+                rol_principal: user.user_metadata?.rol_principal || 'CONSULTOR',
+                telefono: user.user_metadata?.telefono || null,
+                puesto: user.user_metadata?.puesto || null,
+                estado: 'ACTIVO',
+                ultimo_acceso: user.last_sign_in_at || null,
+                fecha_creacion: user.created_at || new Date().toISOString(),
+                fecha_actualizacion: user.updated_at || user.created_at || new Date().toISOString(),
+                usuario_areas: []
+            };
         }
 
         appState.profile = profile;

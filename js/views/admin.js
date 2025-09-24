@@ -2411,6 +2411,7 @@ async function handleManageUserAssignment(userId) {
         return false;
     }
 
+
     const assignmentData = {
         rol: formData.rol,
         puede_capturar: formData.puede_capturar === 'on',
@@ -2625,26 +2626,19 @@ async function handlePermissionUpdate(permisoId) {
             },
             { id: permisoId },
             {
-                select: `
-                    id,
-                    usuario_id,
-                    area_id,
-                    rol,
-                    puede_capturar,
-                    puede_editar,
-                    puede_eliminar,
-                    estado,
-                    asignado_por,
-                    fecha_asignacion,
-                    fecha_actualizacion
-                `
+                // select: ` id, usuario_id, area_id, rol, puede_capturar, puede_editar, puede_eliminar, estado, asignado_por, fecha_asignacion, fecha_actualizacion`
+                select: `*, perfiles!usuario_id (nombre_completo, email), areas!area_id (nombre, clave, color_hex)`
             }
         );
 
         if (data && data.length > 0) {
             const indice = adminState.permisos.findIndex(p => p.id === permisoId);
             if (indice !== -1) {
+
                 adminState.permisos[indice] = mapPermissionRecord(data[0]);
+
+                //adminState.permisos[indice] = data[0];
+
             }
 
             await registrarAuditoria({
