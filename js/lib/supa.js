@@ -393,31 +393,162 @@ export async function getCurrentUser() {
 /**
  * Obtener perfil completo del usuario actual
  */
+const PROFILE_COLUMNS = `
+    id,
+    email,
+    nombre_completo,
+    rol_principal,
+    telefono,
+    puesto,
+    estado,
+    ultimo_acceso,
+    fecha_creacion,
+    fecha_actualizacion
+`;
+
 export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-
+//        let { data: profileData, error: profileError } = await supabase
         const { data, error } = await supabase
             .from('perfiles')
+            .select(PROFILE_COLUMNS)
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (profileError?.code === 'PGRST201') {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ Ambigüedad de relaciones al obtener perfil, usando fallback explícito');
+            }
+
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('perfiles')
+                .select(PROFILE_COLUMNS)
+                .eq('id', user.id)
+                .limit(1);
+
+            profileData = fallbackData?.[0] || null;
+            profileError = fallbackError || null;
+        }
+
+        if (profileError && profileError.code !== 'PGRST116') {
+            console.error('❌ Error al obtener perfil:', {
+                code: profileError.code,
+                message: profileError.message,
+                details: profileError.details
+            });
+            return null;
+        }
+
+        const now = new Date().toISOString();
+        let profile = profileData;
+
+        if (!profile) {
+            const defaultProfile = {
+                id: user.id,
+                email: user.email,
+                nombre_completo: user.user_metadata?.nombre_completo || user.user_metadata?.full_name || user.email,
+                rol_principal: user.user_metadata?.rol_principal || 'CONSULTOR',
+                telefono: user.user_metadata?.telefono || null,
+                puesto: user.user_metadata?.puesto || null,
+                estado: 'ACTIVO',
+                ultimo_acceso: user.last_sign_in_at || null,
+                fecha_creacion: user.created_at || now,
+                fecha_actualizacion: user.updated_at || user.created_at || now
+            };
+
+            const { data: insertedProfile, error: insertError } = await supabase
+                .from('perfiles')
+                .insert(defaultProfile)
+                .select(PROFILE_COLUMNS);
+
+            if (insertError) {
+                console.error('❌ Error al crear perfil:', insertError);
+                profile = defaultProfile;
+            } else if (insertedProfile && insertedProfile.length > 0) {
+                profile = insertedProfile[0];
+            } else {
+                profile = defaultProfile;
+            }
+        } else {
+            const metadataName = user.user_metadata?.nombre_completo || user.user_metadata?.full_name || null;
+            const metadataPhone = user.user_metadata?.telefono || null;
+            const metadataPuesto = user.user_metadata?.puesto || null;
+            const syncData = {};
+
+            const lastAccess = user.last_sign_in_at || now;
+            if (lastAccess && lastAccess !== profile.ultimo_acceso) {
+                syncData.ultimo_acceso = lastAccess;
+            }
+
+            if (profile.fecha_actualizacion !== now) {
+                syncData.fecha_actualizacion = now;
+            }
+
+            if (profile.email !== user.email) {
+                syncData.email = user.email;
+            }
+
+            if (metadataName && metadataName !== profile.nombre_completo) {
+                syncData.nombre_completo = metadataName;
+            }
+
+            if (metadataPhone && metadataPhone !== profile.telefono) {
+                syncData.telefono = metadataPhone;
+            }
+
+            if (metadataPuesto && metadataPuesto !== profile.puesto) {
+                syncData.puesto = metadataPuesto;
+            }
+
+            if (Object.keys(syncData).length > 0) {
+                const { data: updatedProfiles, error: updateError } = await supabase
+                    .from('perfiles')
+                    .update(syncData)
+                    .eq('id', user.id)
+                    .select(PROFILE_COLUMNS);
+
+                if (updateError) {
+                    console.error('❌ Error al sincronizar perfil:', updateError);
+                } else if (updatedProfiles && updatedProfiles.length > 0) {
+                    profile = updatedProfiles[0];
+                } else {
+                    profile = { ...profile, ...syncData };
+                }
+            }
+        }
+
+        const { data: areaAssignments, error: areasError } = await supabase
+            .from('usuario_areas')
             .select(`
-                *,
-                usuario_areas (
+                id,
+                area_id,
+                rol,
+                puede_capturar,
+                puede_editar,
+                puede_eliminar,
+                estado,
+                fecha_asignacion,
+                fecha_actualizacion,
+                areas (
                     id,
-                    area_id,
-                    rol,
-                    puede_capturar,
-                    puede_editar,
-                    puede_eliminar,
-                    estado,
-                    fecha_asignacion,
-                    fecha_actualizacion,
-                    areas:areas!area_id (
-                        id,
-                        clave,
-                        nombre,
-                        color_hex
-                    )
+                    clave,
+                    nombre,
+                    color_hex
+                )
+            `)
+            .eq('usuario_id', user.id)
+            .order('fecha_asignacion', { ascending: false });
+
+        if (areasError) {
+            console.error('❌ Error al obtener áreas asignadas:', areasError);
+            profile.usuario_areas = profile.usuario_areas || [];
+        } else {
+            profile.usuario_areas = areaAssignments || [];
+        }
+
+
                 )
             `)
             .eq('id', user.id)
