@@ -5081,3 +5081,38 @@ async function handleSectionChange(section) {
         hideLoading();
     }
 }
+// =====================================================
+// EXPOSICIÓN DE FUNCIONES AL OBJETO WINDOW
+// =====================================================
+
+// Exponer funciones necesarias para onclick HTML
+window.showUserAreas = showUserAreas;
+window.showEditUserModal = showEditUserModal;
+window.showCreateUserModal = showCreateUserModal;
+window.showQuickAssignModal = showQuickAssignModal;
+window.exportUsersData = exportUsersData;
+window.removeUserFromArea = removeUserFromArea;
+window.handleBulkStatusChange = handleBulkStatusChange;
+window.handleBulkRoleChange = handleBulkRoleChange;
+window.handleBulkExport = handleBulkExport;
+window.handleBulkDelete = handleBulkDelete;
+
+// Funciones de áreas
+window.showAddAreaModal = showAddAreaModal;
+window.viewAreaDetails = viewAreaDetails;
+window.showEditAreaModal = showEditAreaModal;
+
+// Funciones de permisos
+window.showAddPermissionModal = showAddPermissionModal;
+
+// Funciones que ya estaban expuestas (mantener)
+window.viewUserDetails = viewUserDetails;
+window.editUser = editUser;
+window.manageUserPermissions = manageUserPermissions;
+window.toggleUserStatus = toggleUserStatus;
+window.viewAreaDetails = viewAreaDetails;
+window.editArea = editArea;
+window.toggleAreaStatus = toggleAreaStatus;
+window.deleteArea = deleteArea;
+window.editPermission = editPermission;
+window.deletePermission = deletePermission;
