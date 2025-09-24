@@ -2,11 +2,9 @@
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE SISTEMA
 // Estado, renderizado y CRUD de áreas
 // =====================================================
-
 import { DEBUG, ROLES, VALIDATION } from '../config.js';
 import { selectData, insertData, updateData, deleteData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, showModal, showConfirmModal, validateForm, getFormData, createTable } from '../lib/ui.js';
-
 // Estado del panel de administración
 const adminState = {
     userProfile: null,
@@ -18,11 +16,9 @@ const adminState = {
     editingItem: null,
     loading: false
 };
-
 // =====================================================
 // RENDERIZADO DE LA VISTA PRINCIPAL
 // =====================================================
-
 /**
  * Renderizar panel de administración
  */
@@ -34,48 +30,35 @@ export async function render(container, params = {}, query = {}) {
         if (!adminState.userProfile) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
-        
         // Verificar permisos de administrador
         if (adminState.userProfile.rol_principal !== 'ADMIN') {
             throw new Error('No tiene permisos para acceder al panel de administración');
         }
-        
         // Procesar sección desde query
         if (query.section && ['areas', 'users', 'permissions'].includes(query.section)) {
             adminState.currentSection = query.section;
         }
-        
         // Cargar datos iniciales
         await loadInitialData();
-        
         // Renderizar HTML
         container.innerHTML = createAdminHTML();
-        
         // Configurar event listeners
         setupEventListeners();
-        
         // Cargar contenido de la sección actual
         await loadSectionContent();
-        
         hideLoading();
-        
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
         }
-        
         if (DEBUG.enabled) console.log('✅ Panel de administración renderizado correctamente');
-        
-    } catch (error) {
+        } catch (error) {
         console.error('❌ Error al renderizar panel de administración:', error);
         hideLoading();
-        
         let errorMessage = 'Error al cargar el panel de administración';
-        
         if (error.message.includes('permisos')) {
             errorMessage = 'No tiene permisos para acceder al panel de administración';
         }
-        
         container.innerHTML = `
             <div class="text-center py-12">
                 <i data-lucide="shield-x" class="w-16 h-16 text-red-400 mx-auto mb-4"></i>
@@ -96,13 +79,11 @@ export async function render(container, params = {}, query = {}) {
                 </div>
             </div>
         `;
-        
         if (window.lucide) {
             window.lucide.createIcons();
         }
     }
 }
-
 /**
  * Crear HTML principal del panel de administración
  */
@@ -126,14 +107,12 @@ function createAdminHTML() {
                         <button 
                             id="admin-help-btn"
                             class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-colors"
-                            title="Ayuda"
-                        >
+                            title="Ayuda">
                             <i data-lucide="help-circle" class="w-5 h-5"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            
             <!-- Navegación de secciones -->
             <div class="bg-white rounded-lg shadow-sm border">
                 <div class="border-b border-gray-200">
@@ -141,16 +120,14 @@ function createAdminHTML() {
                         <button 
                             id="section-areas"
                             class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('areas')"
-                        >
+                            onclick="switchSection('areas')">
                             <i data-lucide="folder" class="w-4 h-4 inline mr-2"></i>
                             Gestión de Áreas
                         </button>
                         <button 
                             id="section-users"
                             class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('users')"
-                        >
+                            onclick="switchSection('users')">
                             <i data-lucide="users" class="w-4 h-4 inline mr-2"></i>
                             Gestión de Usuarios
                         </button>
@@ -164,7 +141,6 @@ function createAdminHTML() {
                         </button>
                     </nav>
                 </div>
-                
                 <!-- Contenido de la sección -->
                 <div class="p-6">
                     <div id="section-content">
@@ -172,13 +148,11 @@ function createAdminHTML() {
                     </div>
                 </div>
             </div>
-            
             <!-- Información del sistema -->
             ${createSystemInfoHTML()}
         </div>
     `;
 }
-
 /**
  * Crear HTML de información del sistema
  */
@@ -189,7 +163,6 @@ function createSystemInfoHTML() {
                 <i data-lucide="info" class="w-5 h-5 mr-2 text-purple-600"></i>
                 Información del sistema
             </h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div class="text-center">
                     <div class="text-2xl font-bold text-purple-600 mb-1" id="total-areas-count">
@@ -219,11 +192,9 @@ function createSystemInfoHTML() {
         </div>
     `;
 }
-
 // =====================================================
 // GESTIÓN DE ÁREAS
 // =====================================================
-
 /**
  * Crear contenido de la sección de áreas
  */
@@ -238,11 +209,8 @@ function createAreasContentHTML() {
                         Administre las áreas organizacionales del sistema
                     </p>
                 </div>
-                
-                <button 
-                    id="add-area-btn"
-                    class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                >
+                <button id="add-area-btn"
+                    class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Nueva área</span>
                 </button>
@@ -261,32 +229,25 @@ function createAreasContentHTML() {
                             >
                             <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
                         </div>
-                        
-                        <select 
-                            id="areas-status-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        >
+                        <select id="areas-status-filter"
+                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">Todos los estados</option>
                             <option value="ACTIVO">Solo activas</option>
                             <option value="INACTIVO">Solo inactivas</option>
                         </select>
                     </div>
-                    
                     <div class="flex items-center space-x-2">
                         <span class="text-sm text-gray-600">
                             ${adminState.areas.length} área${adminState.areas.length !== 1 ? 's' : ''} total${adminState.areas.length !== 1 ? 'es' : ''}
                         </span>
-                        <button 
-                            id="refresh-areas-btn"
+                        <button id="refresh-areas-btn"
                             class="bg-white border border-gray-300 rounded px-3 py-2 text-sm hover:bg-gray-50"
-                            title="Actualizar lista"
-                        >
+                            title="Actualizar lista">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
-            </div>
-            
+            </div> 
             <!-- Tabla de áreas -->
             <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div id="areas-table-container">
@@ -296,7 +257,6 @@ function createAreasContentHTML() {
         </div>
     `;
 }
-
 /**
  * Crear tabla de áreas
  */
@@ -307,10 +267,8 @@ function createAreasTableHTML() {
                 <i data-lucide="folder-plus" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">No hay áreas configuradas</h3>
                 <p class="text-gray-600 mb-4">Comience creando la primera área del sistema.</p>
-                <button 
-                    onclick="showAddAreaModal()"
-                    class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
-                >
+                <button onclick="showAddAreaModal()"
+                    class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700">
                     Crear primera área
                 </button>
             </div>
@@ -318,7 +276,6 @@ function createAreasTableHTML() {
     }
     
     const filteredAreas = getFilteredAreas();
-    
     return `
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -352,7 +309,6 @@ function createAreasTableHTML() {
                 </tbody>
             </table>
         </div>
-        
         ${filteredAreas.length === 0 && adminState.areas.length > 0 ? `
             <div class="text-center py-8">
                 <i data-lucide="search-x" class="w-8 h-8 text-gray-300 mx-auto mb-2"></i>
@@ -361,14 +317,12 @@ function createAreasTableHTML() {
         ` : ''}
     `;
 }
-
 /**
  * Crear fila de área en la tabla
  */
 function createAreaRowHTML(area, index) {
     const indicadoresCount = area.total_indicadores || 0;
     const usuariosCount = area.usuarios_asignados || 0;
-    
     return `
         <tr class="hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}">
             <td class="px-6 py-4">
