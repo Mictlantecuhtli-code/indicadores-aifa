@@ -437,8 +437,8 @@ export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-
         let { data: profileData, error: profileError } = await supabase
+
             .from('perfiles')
             .select(PROFILE_COLUMNS)
             .eq('id', user.id)
