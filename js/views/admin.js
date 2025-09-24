@@ -594,17 +594,17 @@ function createUsersContentHTML() {
                 <div>
                     <h3 class="text-lg font-semibold text-gray-900">Gestión de Usuarios</h3>
                     <p class="text-sm text-gray-600 mt-1">
-                        Administre los usuarios del sistema y sus roles principales
+                        Administre los usuarios del sistema, sus roles principales y asignaciones de área
                     </p>
                 </div>
                 
                 <div class="flex items-center space-x-3">
                     <button 
-                        id="invite-user-btn"
+                        id="create-user-btn"
                         class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
                     >
                         <i data-lucide="user-plus" class="w-4 h-4"></i>
-                        <span>Invitar usuario</span>
+                        <span>Crear Usuario</span>
                     </button>
                     
                     <button 
@@ -614,6 +614,15 @@ function createUsersContentHTML() {
                         <i data-lucide="settings" class="w-4 h-4"></i>
                         <span>Acciones masivas</span>
                     </button>
+                    
+                    <button 
+                        id="refresh-users-btn"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                        title="Actualizar usuarios"
+                    >
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Actualizar</span>
+                    </button>
                 </div>
             </div>
             
@@ -621,59 +630,183 @@ function createUsersContentHTML() {
             <div class="bg-gray-50 rounded-lg p-4">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                        <!-- Búsqueda -->
                         <div class="relative">
-                            <input 
-                                type="text" 
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+                            </div>
+                            <input
+                                type="text"
                                 id="users-search"
-                                placeholder="Buscar por nombre o email..."
-                                class="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                placeholder="Buscar usuarios..."
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent w-full sm:w-64"
                             >
-                            <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
                         </div>
                         
-                        <select 
+                        <!-- Filtro por rol -->
+                        <select
                             id="users-role-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
                         >
                             <option value="all">Todos los roles</option>
-                            ${Object.entries(ROLES).map(([key, role]) => `
-                                <option value="${key}">${role.name}</option>
-                            `).join('')}
+                            <option value="ADMIN">Administrador</option>
+                            <option value="DIRECTOR">Director</option>
+                            <option value="SUBDIRECTOR">Subdirector</option>
+                            <option value="JEFE_AREA">Jefe de Área</option>
+                            <option value="CAPTURISTA">Capturista</option>
                         </select>
                         
-                        <select 
+                        <!-- Filtro por estado -->
+                        <select
                             id="users-status-filter"
-                            class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
                         >
                             <option value="all">Todos los estados</option>
-                            <option value="ACTIVO">Solo activos</option>
-                            <option value="INACTIVO">Solo inactivos</option>
+                            <option value="ACTIVO">Activos</option>
+                            <option value="INACTIVO">Inactivos</option>
                         </select>
                     </div>
                     
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm text-gray-600">
-                            ${adminState.usuarios.length} usuario${adminState.usuarios.length !== 1 ? 's' : ''}
-                        </span>
-                        <button 
-                            id="refresh-users-btn"
-                            class="bg-white border border-gray-300 rounded px-3 py-2 text-sm hover:bg-gray-50"
-                            title="Actualizar lista"
+                    <!-- Acciones rápidas -->
+                    <div class="flex items-center space-x-3">
+                        <button
+                            onclick="showQuickAssignModal()"
+                            class="text-sm bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center space-x-2"
                         >
-                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            <span>Asignación Rápida</span>
+                        </button>
+                        
+                        <button
+                            onclick="exportUsersData()"
+                            class="text-sm bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                        >
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Exportar</span>
                         </button>
                     </div>
                 </div>
             </div>
             
+            <!-- Estadísticas rápidas -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                                <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Total Usuarios</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="total-users-stat">
+                                ${adminState.usuarios.length}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                                <i data-lucide="user-check" class="w-5 h-5 text-green-600"></i>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Activos</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="active-users-stat">
+                                ${adminState.usuarios.filter(u => u.estado === 'ACTIVO').length}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                                <i data-lucide="shield" class="w-5 h-5 text-purple-600"></i>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Administradores</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="admin-users-stat">
+                                ${adminState.usuarios.filter(u => u.rol_principal === 'ADMIN').length}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
+                                <i data-lucide="folder-open" class="w-5 h-5 text-orange-600"></i>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Con Áreas</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="assigned-users-stat">
+                                ${new Set(adminState.permisos.filter(p => p.estado === 'ACTIVO').map(p => p.usuario_id)).size}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Tabla de usuarios -->
-            <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div class="bg-white rounded-lg border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-lg font-medium text-gray-900">
+                            Lista de Usuarios
+                        </h4>
+                        <div class="flex items-center space-x-2 text-sm text-gray-500">
+                            <span>Última actualización:</span>
+                            <span id="users-last-update">
+                                ${new Date().toLocaleString('es-MX', { 
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div id="users-table-container">
-                    ${createUsersTableHTML()}
+                    <!-- La tabla se renderizará aquí dinámicamente -->
+                    <div class="flex items-center justify-center py-12">
+                        <div class="text-center">
+                            <i data-lucide="loader-2" class="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4"></i>
+                            <p class="text-gray-500">Cargando usuarios...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Panel de ayuda contextual -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                        <i data-lucide="info" class="w-5 h-5 text-blue-600 mt-0.5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1 text-sm text-blue-800">
+                        <h4 class="font-medium mb-1">Gestión de Usuarios</h4>
+                        <div class="space-y-1 text-xs">
+                            <p>• <strong>Crear Usuario:</strong> Agregue nuevos usuarios al sistema con roles específicos</p>
+                            <p>• <strong>Asignación Rápida:</strong> Vincule usuarios existentes a áreas con permisos personalizados</p>
+                            <p>• <strong>Acciones Masivas:</strong> Seleccione múltiples usuarios para cambios simultáneos</p>
+                            <p>• <strong>Auditoría:</strong> Todos los cambios se registran automáticamente para trazabilidad</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    `;
+    `;    
 }
 
 /**
@@ -1260,7 +1393,9 @@ async function loadSectionContent() {
             break;
         case 'users':
             sectionContent.innerHTML = createUsersContentHTML();
-            setupUsersEventListeners();
+            // setupUsersEventListeners(); <- ELIMINAR ESTA LÍNEA
+            updateUsersTable();        // <- AGREGAR ESTA LÍNEA
+            updateUserStats();         // <- AGREGAR ESTA LÍNEA
             break;
         case 'permissions':
             sectionContent.innerHTML = createPermissionsContentHTML();
@@ -1952,6 +2087,7 @@ function updateSystemCounts() {
     if (totalPermissionsElement) {
         totalPermissionsElement.textContent = adminState.permisos.length;
     }
+    updateUserStats();
 }
 
 /**
@@ -4100,4 +4236,79 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+// =====================================================
+// FUNCIÓN PARA ACTUALIZAR ESTADÍSTICAS DE USUARIOS
+// =====================================================
+
+/**
+ * NUEVA FUNCIÓN - Actualizar estadísticas en tiempo real
+ */
+function updateUserStats() {
+    const totalUsersElement = document.getElementById('total-users-stat');
+    const activeUsersElement = document.getElementById('active-users-stat');
+    const adminUsersElement = document.getElementById('admin-users-stat');
+    const assignedUsersElement = document.getElementById('assigned-users-stat');
+    const lastUpdateElement = document.getElementById('users-last-update');
+    
+    if (totalUsersElement) {
+        totalUsersElement.textContent = adminState.usuarios.length;
+    }
+    
+    if (activeUsersElement) {
+        activeUsersElement.textContent = adminState.usuarios.filter(u => u.estado === 'ACTIVO').length;
+    }
+    
+    if (adminUsersElement) {
+        adminUsersElement.textContent = adminState.usuarios.filter(u => u.rol_principal === 'ADMIN').length;
+    }
+    
+    if (assignedUsersElement) {
+        const uniqueAssignedUsers = new Set(
+            adminState.permisos.filter(p => p.estado === 'ACTIVO').map(p => p.usuario_id)
+        );
+        assignedUsersElement.textContent = uniqueAssignedUsers.size;
+    }
+    
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = new Date().toLocaleString('es-MX', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+// =====================================================
+// FUNCIÓN AUXILIAR PARA FORMATEAR FECHAS
+// =====================================================
+
+/**
+ * NUEVA FUNCIÓN - Formatear fecha de forma amigable
+ */
+function formatFriendlyDate(dateString) {
+    if (!dateString) return 'No disponible';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) {
+        return 'Hoy';
+    } else if (diffInDays === 1) {
+        return 'Ayer';
+    } else if (diffInDays < 7) {
+        return `Hace ${diffInDays} días`;
+    } else if (diffInDays < 30) {
+        const weeks = Math.floor(diffInDays / 7);
+        return `Hace ${weeks} semana${weeks > 1 ? 's' : ''}`;
+    } else if (diffInDays < 365) {
+        const months = Math.floor(diffInDays / 30);
+        return `Hace ${months} mes${months > 1 ? 'es' : ''}`;
+    } else {
+        const years = Math.floor(diffInDays / 365);
+        return `Hace ${years} año${years > 1 ? 's' : ''}`;
+    }
 }
