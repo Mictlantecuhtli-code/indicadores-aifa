@@ -120,21 +120,21 @@ function createAdminHTML() {
                         <button 
                             id="section-areas"
                             class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('areas')">
+                            onclick="window.switchSection('areas')">
                             <i data-lucide="folder" class="w-4 h-4 inline mr-2"></i>
                             Gestión de Áreas
                         </button>
                         <button 
                             id="section-users"
                             class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('users')">
+                            onclick="window.switchSection('users')">
                             <i data-lucide="users" class="w-4 h-4 inline mr-2"></i>
                             Gestión de Usuarios
                         </button>
                         <button 
                             id="section-permissions"
                             class="section-tab py-4 px-2 border-b-2 font-medium text-sm transition-colors"
-                            onclick="switchSection('permissions')"
+                            onclick="window.switchSection('permissions')"
                         >
                             <i data-lucide="shield" class="w-4 h-4 inline mr-2"></i>
                             Permisos y Asignaciones
@@ -267,7 +267,7 @@ function createAreasTableHTML() {
                 <i data-lucide="folder-plus" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">No hay áreas configuradas</h3>
                 <p class="text-gray-600 mb-4">Comience creando la primera área del sistema.</p>
-                <button onclick="showAddAreaModal()"
+                <button onclick="window.showAddAreaModal()"
                     class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700">
                     Crear primera área
                 </button>
@@ -363,28 +363,28 @@ function createAreaRowHTML(area, index) {
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div class="flex items-center justify-end space-x-2">
                     <button 
-                        onclick="viewAreaDetails('${area.id}')"
+                        onclick="window.viewAreaDetails('${area.id}')"
                         class="text-purple-600 hover:text-purple-900 transition-colors"
                         title="Ver detalles"
                     >
                         <i data-lucide="eye" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="editArea('${area.id}')"
+                        onclick="window.editArea('${area.id}')"
                         class="text-blue-600 hover:text-blue-900 transition-colors"
                         title="Editar área"
                     >
                         <i data-lucide="edit" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="toggleAreaStatus('${area.id}', '${area.estado}')"
+                        onclick="window.toggleAreaStatus('${area.id}', '${area.estado}')"
                         class="text-yellow-600 hover:text-yellow-900 transition-colors"
                         title="${area.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} área"
                     >
                         <i data-lucide="${area.estado === 'ACTIVO' ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="deleteArea('${area.id}', '${area.nombre}')"
+                        onclick="window.deleteArea('${area.id}', '${area.nombre}')"
                         class="text-red-600 hover:text-red-900 transition-colors"
                         title="Eliminar área"
                     >
@@ -623,8 +623,7 @@ function createUsersContentHTML() {
                     
                     <!-- Acciones rápidas -->
                     <div class="flex items-center space-x-3">
-                        <button
-                            onclick="showQuickAssignModal()"
+                        <button onclick="window.showQuickAssignModal()"
                             class="text-sm bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center space-x-2"
                         >
                             <i data-lucide="plus-circle" class="w-4 h-4"></i>
@@ -632,7 +631,7 @@ function createUsersContentHTML() {
                         </button>
                         
                         <button
-                            onclick="exportUsersData()"
+                            onclick="window.exportUsersData()"
                             class="text-sm bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
                         >
                             <i data-lucide="download" class="w-4 h-4"></i>
@@ -886,28 +885,28 @@ function createUserRowHTML(usuario, index) {
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div class="flex items-center justify-end space-x-2">
                     <button 
-                        onclick="viewUserDetails('${usuario.id}')"
+                        onclick="window.viewUserDetails('${usuario.id}')"
                         class="text-purple-600 hover:text-purple-900 transition-colors"
                         title="Ver detalles"
                     >
                         <i data-lucide="eye" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="editUser('${usuario.id}')"
+                        onclick="window.editUser('${usuario.id}')"
                         class="text-blue-600 hover:text-blue-900 transition-colors"
                         title="Editar usuario"
                     >
                         <i data-lucide="edit" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="manageUserPermissions('${usuario.id}')"
+                        onclick="window.manageUserPermissions('${usuario.id}')"
                         class="text-green-600 hover:text-green-900 transition-colors"
                         title="Gestionar permisos"
                     >
                         <i data-lucide="shield" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="toggleUserStatus('${usuario.id}', '${usuario.estado}')"
+                        onclick="window.toggleUserStatus('${usuario.id}', '${usuario.estado}')"
                         class="text-yellow-600 hover:text-yellow-900 transition-colors"
                         title="${usuario.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} usuario"
                     >
@@ -990,8 +989,7 @@ function createPermissionsContentHTML() {
                 
                 <button 
                     id="add-permission-btn"
-                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                >
+                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Nueva asignación</span>
                 </button>
@@ -1126,8 +1124,7 @@ function createPermissionsTableHTML() {
                 <i data-lucide="shield-off" class="w-12 h-12 text-gray-300 mx-auto mb-3"></i>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">No hay asignaciones configuradas</h3>
                 <p class="text-gray-600 mb-4">Comience asignando usuarios a áreas específicas.</p>
-                <button 
-                    onclick="showAddPermissionModal()"
+                <button onclick="window.showAddPermissionModal()"
                     class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
                 >
                     Crear primera asignación
@@ -1245,14 +1242,14 @@ function createPermissionRowHTML(permiso, index) {
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div class="flex items-center justify-end space-x-2">
                     <button 
-                        onclick="editPermission('${permiso.id}')"
+                        onclick="window.editPermission('${permiso.id}')"
                         class="text-blue-600 hover:text-blue-900 transition-colors"
                         title="Editar asignación"
                     >
                         <i data-lucide="edit" class="w-4 h-4"></i>
                     </button>
                     <button 
-                        onclick="deletePermission('${permiso.id}', '${usuario?.nombre_completo}', '${area?.nombre}')"
+                        onclick="window.deletePermission('${permiso.id}', '${usuario?.nombre_completo}', '${area?.nombre}')"
                         class="text-red-600 hover:text-red-900 transition-colors"
                         title="Eliminar asignación"
                     >
@@ -3440,7 +3437,7 @@ function updateUsersTable() {
                 </div>
                 <div class="flex items-center space-x-4">
                     <button 
-                        onclick="exportUsersData()"
+                        onclick="window.exportUsersData()"
                         class="text-sm text-gray-500 hover:text-gray-700 flex items-center space-x-1"
                     >
                         <i data-lucide="download" class="w-4 h-4"></i>
@@ -3523,8 +3520,7 @@ function createUserTableRow(user) {
                         ${areasCount} área${areasCount !== 1 ? 's' : ''}
                     </span>
                     ${areasCount > 0 ? `
-                        <button 
-                            onclick="showUserAreas('${user.id}')"
+                        <button onclick="window.showUserAreas('${user.id}')"
                             class="text-xs text-blue-600 hover:text-blue-800"
                             title="Ver áreas asignadas"
                         >
@@ -3538,16 +3534,13 @@ function createUserTableRow(user) {
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div class="flex items-center justify-end space-x-2">
-                    <button 
-                        onclick="showEditUserModal('${user.id}')"
+                    <button onclick="window.showEditUserModal('${user.id}')"
                         class="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors"
                         title="Editar usuario"
                     >
                         <i data-lucide="edit" class="w-4 h-4"></i>
                     </button>
-                    
-                    <button 
-                        onclick="showUserAreas('${user.id}')"
+                    <button onclick="window.showUserAreas('${user.id}')"
                         class="text-green-600 hover:text-green-900 p-1 rounded transition-colors"
                         title="Gestionar áreas"
                     >
@@ -3707,7 +3700,7 @@ function showUserAreas(userId) {
                     
                     <div class="mt-2 flex justify-end">
                         <button 
-                            onclick="removeUserFromArea('${permission.id}')"
+                            onclick="window.removeUserFromArea('${permission.id}')"
                             class="text-red-600 hover:text-red-800 text-xs"
                         >
                             <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i>
@@ -3907,7 +3900,7 @@ function handleBulkActions() {
                 
                 <div class="space-y-3">
                     <button 
-                        onclick="handleBulkStatusChange('ACTIVO')" 
+                        onclick="window.handleBulkStatusChange('ACTIVO')"
                         class="w-full text-left px-4 py-3 bg-green-50 text-green-800 rounded-lg hover:bg-green-100 transition-colors"
                     >
                         <div class="flex items-center space-x-3">
@@ -3920,7 +3913,7 @@ function handleBulkActions() {
                     </button>
                     
                     <button 
-                        onclick="handleBulkStatusChange('INACTIVO')" 
+                        onclick="window.handleBulkStatusChange('INACTIVO')"
                         class="w-full text-left px-4 py-3 bg-orange-50 text-orange-800 rounded-lg hover:bg-orange-100 transition-colors"
                     >
                         <div class="flex items-center space-x-3">
@@ -3933,7 +3926,7 @@ function handleBulkActions() {
                     </button>
                     
                     <button 
-                        onclick="handleBulkRoleChange()" 
+                        onclick="window.handleBulkRoleChange()"
                         class="w-full text-left px-4 py-3 bg-blue-50 text-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
                     >
                         <div class="flex items-center space-x-3">
@@ -3946,7 +3939,7 @@ function handleBulkActions() {
                     </button>
                     
                     <button 
-                        onclick="handleBulkExport()" 
+                        onclick="window.handleBulkExport()"
                         class="w-full text-left px-4 py-3 bg-gray-50 text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                         <div class="flex items-center space-x-3">
@@ -3959,7 +3952,7 @@ function handleBulkActions() {
                     </button>
                     
                     <button 
-                        onclick="handleBulkDelete()" 
+                        onclick="window.handleBulkDelete()" 
                         class="w-full text-left px-4 py-3 bg-red-50 text-red-800 rounded-lg hover:bg-red-100 transition-colors"
                     >
                         <div class="flex items-center space-x-3">
