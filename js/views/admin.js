@@ -495,16 +495,27 @@ async function loadAreas() {
  */
 async function loadUsuarios() {
     try {
+        adminState.loading = true;
+        
         const { data } = await selectData('perfiles', {
-           select: '*',
+            select: `
+                id, email, nombre_completo, rol_principal, telefono, puesto,
+                estado, ultimo_acceso, fecha_creacion, fecha_actualizacion
+            `,
             orderBy: { column: 'fecha_creacion', ascending: false }
         });
         
         adminState.usuarios = data || [];
+        adminState.loading = false;
+        
+        if (DEBUG.enabled) {
+            console.log('✅ Usuarios cargados:', adminState.usuarios.length);
+        }
         
     } catch (error) {
         console.error('❌ Error al cargar usuarios:', error);
         adminState.usuarios = [];
+        adminState.loading = false;
     }
 }
 
@@ -1389,17 +1400,72 @@ function setupPermissionsEventListeners() {
  * Configurar event listeners principales
  */
 function setupEventListeners() {
-    // Botón de ayuda
+    // Botón de ayuda (mantener existente)
     const helpBtn = document.getElementById('admin-help-btn');
     if (helpBtn) {
         helpBtn.addEventListener('click', showAdminHelp);
     }
     
-    // Configurar sección inicial
-    const activeTab = document.getElementById(`section-${adminState.currentSection}`);
-    if (activeTab) {
-        activeTab.classList.add('border-purple-500', 'text-purple-600');
+    // Navegación de secciones (mantener existente)
+    const sectionTabs = ['areas', 'users', 'permissions'];
+    sectionTabs.forEach(section => {
+        const tab = document.getElementById(`section-${section}`);
+        if (tab) {
+            tab.addEventListener('click', () => handleSectionChange(section));
+        }
+    });
+    
+    // === NUEVOS EVENT LISTENERS PARA USUARIOS ===
+    
+    // Botón crear usuario
+    const createUserBtn = document.getElementById('create-user-btn');
+    if (createUserBtn) {
+        createUserBtn.addEventListener('click', showCreateUserModal);
     }
+    
+    // Botón invitar usuario  
+    const inviteUserBtn = document.getElementById('invite-user-btn');
+    if (inviteUserBtn) {
+        inviteUserBtn.addEventListener('click', showCreateUserModal);
+    }
+    
+    // Botón acciones masivas
+    const bulkActionsBtn = document.getElementById('bulk-actions-btn');
+    if (bulkActionsBtn) {
+        bulkActionsBtn.addEventListener('click', handleBulkActions);
+    }
+    
+    // Búsqueda de usuarios
+    const usersSearch = document.getElementById('users-search');
+    if (usersSearch) {
+        usersSearch.addEventListener('input', debounce(() => {
+            updateUsersTable();
+        }, 300));
+    }
+    
+    // Filtros de usuarios
+    const usersRoleFilter = document.getElementById('users-role-filter');
+    const usersStatusFilter = document.getElementById('users-status-filter');
+    
+    if (usersRoleFilter) {
+        usersRoleFilter.addEventListener('change', updateUsersTable);
+    }
+    
+    if (usersStatusFilter) {
+        usersStatusFilter.addEventListener('change', updateUsersTable);
+    }
+    
+    // Botón refresh usuarios
+    const refreshUsersBtn = document.getElementById('refresh-users-btn');
+    if (refreshUsersBtn) {
+        refreshUsersBtn.addEventListener('click', handleRefreshUsers);
+    }
+    
+    // === EVENT LISTENERS EXISTENTES DE ÁREAS (mantener) ===
+    setupAreasEventListeners();
+    
+    // === EVENT LISTENERS EXISTENTES DE PERMISOS (mantener) ===
+    setupPermissionsEventListeners();
 }
 
 // =====================================================
@@ -2020,4 +2086,2018 @@ async function exportAdminData(type) {
         console.error('❌ Error al exportar datos:', error);
         showToast('Error al exportar los datos', 'error');
     }
+}
+// =====================================================
+// GESTIÓN DE USUARIOS - FUNCIONES PRINCIPALES
+// =====================================================
+
+/**
+ * Crear un nuevo usuario
+ */
+async function createUser(userData) {
+    if (!validateAdminPermission('create_user')) return;
+    
+    try {
+        showLoading('Creando usuario...');
+        
+        // Validar datos obligatorios
+        if (!userData.email || !userData.nombre_completo || !userData.rol_principal) {
+            throw new Error('Faltan datos obligatorios: email, nombre completo y rol principal');
+        }
+        
+        // Verificar si el email ya existe
+        const existingUser = await findUserByEmail(userData.email);
+        if (existingUser) {
+            throw new Error('Ya existe un usuario con este email');
+        }
+        
+        // Preparar datos para inserción
+        const newUserData = {
+            email: userData.email.trim().toLowerCase(),
+            nombre_completo: userData.nombre_completo.trim(),
+            rol_principal: userData.rol_principal,
+            telefono: userData.telefono?.trim() || null,
+            puesto: userData.puesto?.trim() || null,
+            estado: 'ACTIVO',
+            fecha_creacion: new Date().toISOString(),
+            fecha_actualizacion: new Date().toISOString()
+        };
+        
+        // Insertar en tabla perfiles
+        const { data: newUser } = await insertData('perfiles', newUserData, {
+            select: `
+                id, email, nombre_completo, rol_principal, 
+                telefono, puesto, estado, fecha_creacion
+            `
+        });
+        
+        if (!newUser || newUser.length === 0) {
+            throw new Error('Error al crear el usuario');
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'perfiles',
+            registro_id: newUser[0].id,
+            operacion: 'INSERT',
+            datos_nuevos: newUserData,
+            observaciones: `Usuario creado por administrador`
+        });
+        
+        // Actualizar estado local
+        adminState.usuarios.unshift(newUser[0]);
+        updateUsersTable();
+        updateSystemCounts();
+        
+        showToast('Usuario creado correctamente', 'success');
+        hideLoading();
+        
+        return newUser[0];
+        
+    } catch (error) {
+        console.error('❌ Error al crear usuario:', error);
+        showToast(error.message || 'Error al crear el usuario', 'error');
+        hideLoading();
+        throw error;
+    }
+}
+
+/**
+ * Editar un usuario existente
+ */
+async function editUser(userId, userData) {
+    if (!validateAdminPermission('edit_user')) return;
+    
+    try {
+        showLoading('Actualizando usuario...');
+        
+        // Buscar usuario actual
+        const currentUser = adminState.usuarios.find(u => u.id === userId);
+        if (!currentUser) {
+            throw new Error('Usuario no encontrado');
+        }
+        
+        // Si se está cambiando el email, verificar que no exista
+        if (userData.email && userData.email.toLowerCase() !== currentUser.email.toLowerCase()) {
+            const existingUser = await findUserByEmail(userData.email);
+            if (existingUser && existingUser.id !== userId) {
+                throw new Error('Ya existe otro usuario con este email');
+            }
+        }
+        
+        // Preparar datos de actualización
+        const updateData = {
+            fecha_actualizacion: new Date().toISOString()
+        };
+        
+        // Solo incluir campos que han cambiado
+        const fieldsToUpdate = ['email', 'nombre_completo', 'rol_principal', 'telefono', 'puesto'];
+        const changedFields = [];
+        
+        fieldsToUpdate.forEach(field => {
+            if (userData[field] !== undefined && userData[field] !== currentUser[field]) {
+                if (field === 'email') {
+                    updateData[field] = userData[field].trim().toLowerCase();
+                } else if (['nombre_completo', 'telefono', 'puesto'].includes(field)) {
+                    updateData[field] = userData[field]?.trim() || null;
+                } else {
+                    updateData[field] = userData[field];
+                }
+                changedFields.push(field);
+            }
+        });
+        
+        if (changedFields.length === 0) {
+            showToast('No hay cambios para guardar', 'warning');
+            hideLoading();
+            return;
+        }
+        
+        // Actualizar en base de datos
+        const { data: updatedUsers } = await updateData('perfiles', updateData, 
+            { id: userId }, 
+            { select: `
+                id, email, nombre_completo, rol_principal, 
+                telefono, puesto, estado, ultimo_acceso, 
+                fecha_creacion, fecha_actualizacion
+            ` }
+        );
+        
+        if (!updatedUsers || updatedUsers.length === 0) {
+            throw new Error('Error al actualizar el usuario');
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'perfiles',
+            registro_id: userId,
+            operacion: 'UPDATE',
+            datos_anteriores: currentUser,
+            datos_nuevos: updateData,
+            campos_modificados: changedFields.join(', '),
+            observaciones: `Usuario editado por administrador`
+        });
+        
+        // Actualizar estado local
+        const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+        if (userIndex !== -1) {
+            adminState.usuarios[userIndex] = updatedUsers[0];
+        }
+        
+        updateUsersTable();
+        showToast('Usuario actualizado correctamente', 'success');
+        hideLoading();
+        
+        return updatedUsers[0];
+        
+    } catch (error) {
+        console.error('❌ Error al editar usuario:', error);
+        showToast(error.message || 'Error al actualizar el usuario', 'error');
+        hideLoading();
+        throw error;
+    }
+}
+
+/**
+ * Eliminar un usuario (cambiar estado a INACTIVO)
+ */
+async function deleteUser(userId) {
+    if (!validateAdminPermission('delete_user')) return;
+    
+    try {
+        // Buscar usuario
+        const user = adminState.usuarios.find(u => u.id === userId);
+        if (!user) {
+            throw new Error('Usuario no encontrado');
+        }
+        
+        // Confirmar eliminación
+        const confirmed = await showConfirmModal(
+            `¿Está seguro que desea eliminar al usuario "${user.nombre_completo || user.email}"?\n\nEsta acción desactivará al usuario y eliminará todas sus asignaciones de área.`,
+            {
+                title: 'Confirmar eliminación de usuario',
+                confirmText: 'Eliminar',
+                cancelText: 'Cancelar',
+                type: 'danger'
+            }
+        );
+        
+        if (!confirmed) return;
+        
+        showLoading('Eliminando usuario...');
+        
+        // Actualizar estado del usuario a INACTIVO
+        const { data: updatedUsers } = await updateData('perfiles', 
+            { 
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            }, 
+            { id: userId },
+            { select: 'id, email, nombre_completo, estado' }
+        );
+        
+        if (!updatedUsers || updatedUsers.length === 0) {
+            throw new Error('Error al eliminar el usuario');
+        }
+        
+        // Desactivar todas las asignaciones de área del usuario
+        await updateData('usuario_areas', 
+            { 
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { usuario_id: userId, estado: 'ACTIVO' }
+        );
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'perfiles',
+            registro_id: userId,
+            operacion: 'UPDATE',
+            datos_anteriores: user,
+            datos_nuevos: { estado: 'INACTIVO' },
+            campos_modificados: 'estado',
+            observaciones: `Usuario eliminado por administrador - Se desactivaron todas sus asignaciones de área`
+        });
+        
+        // Actualizar estado local
+        const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+        if (userIndex !== -1) {
+            adminState.usuarios[userIndex].estado = 'INACTIVO';
+        }
+        
+        // Actualizar tabla de permisos también
+        adminState.permisos = adminState.permisos.filter(p => p.usuario_id !== userId);
+        
+        updateUsersTable();
+        updatePermissionsTable();
+        updateSystemCounts();
+        
+        showToast('Usuario eliminado correctamente', 'success');
+        hideLoading();
+        
+    } catch (error) {
+        console.error('❌ Error al eliminar usuario:', error);
+        showToast(error.message || 'Error al eliminar el usuario', 'error');
+        hideLoading();
+    }
+}
+
+/**
+ * Cambiar estado de un usuario (ACTIVO/INACTIVO)
+ */
+async function toggleUserStatus(userId) {
+    if (!validateAdminPermission('toggle_user_status')) return;
+    
+    try {
+        const user = adminState.usuarios.find(u => u.id === userId);
+        if (!user) {
+            throw new Error('Usuario no encontrado');
+        }
+        
+        const newStatus = user.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+        const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar';
+        
+        const confirmed = await showConfirmModal(
+            `¿Está seguro que desea ${action} al usuario "${user.nombre_completo || user.email}"?`,
+            {
+                title: `Confirmar ${action} usuario`,
+                confirmText: action === 'activar' ? 'Activar' : 'Desactivar',
+                type: action === 'activar' ? 'info' : 'warning'
+            }
+        );
+        
+        if (!confirmed) return;
+        
+        showLoading(`${action === 'activar' ? 'Activando' : 'Desactivando'} usuario...`);
+        
+        // Actualizar estado
+        const { data: updatedUsers } = await updateData('perfiles', 
+            { 
+                estado: newStatus,
+                fecha_actualizacion: new Date().toISOString()
+            }, 
+            { id: userId },
+            { select: 'id, email, nombre_completo, estado' }
+        );
+        
+        if (!updatedUsers || updatedUsers.length === 0) {
+            throw new Error(`Error al ${action} el usuario`);
+        }
+        
+        // Si se desactiva, desactivar también sus asignaciones
+        if (newStatus === 'INACTIVO') {
+            await updateData('usuario_areas', 
+                { 
+                    estado: 'INACTIVO',
+                    fecha_actualizacion: new Date().toISOString()
+                },
+                { usuario_id: userId, estado: 'ACTIVO' }
+            );
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'perfiles',
+            registro_id: userId,
+            operacion: 'UPDATE',
+            datos_anteriores: user,
+            datos_nuevos: { estado: newStatus },
+            campos_modificados: 'estado',
+            observaciones: `Usuario ${action === 'activar' ? 'activado' : 'desactivado'} por administrador`
+        });
+        
+        // Actualizar estado local
+        const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+        if (userIndex !== -1) {
+            adminState.usuarios[userIndex].estado = newStatus;
+        }
+        
+        // Si se desactivó, remover de permisos locales
+        if (newStatus === 'INACTIVO') {
+            adminState.permisos = adminState.permisos.filter(p => p.usuario_id !== userId);
+            updatePermissionsTable();
+        }
+        
+        updateUsersTable();
+        updateSystemCounts();
+        
+        showToast(`Usuario ${action === 'activar' ? 'activado' : 'desactivado'} correctamente`, 'success');
+        hideLoading();
+        
+    } catch (error) {
+        console.error(`❌ Error al cambiar estado de usuario:`, error);
+        showToast(error.message || 'Error al cambiar el estado del usuario', 'error');
+        hideLoading();
+    }
+}
+
+/**
+ * Asignar usuario a área con permisos específicos
+ */
+async function assignUserToArea(userId, areaId, assignmentData) {
+    if (!validateAdminPermission('assign_user_area')) return;
+    
+    try {
+        showLoading('Asignando usuario a área...');
+        
+        // Verificar que el usuario existe y está activo
+        const user = adminState.usuarios.find(u => u.id === userId && u.estado === 'ACTIVO');
+        if (!user) {
+            throw new Error('Usuario no encontrado o inactivo');
+        }
+        
+        // Verificar que el área existe y está activa
+        const area = adminState.areas.find(a => a.id === areaId && a.estado === 'ACTIVO');
+        if (!area) {
+            throw new Error('Área no encontrada o inactiva');
+        }
+        
+        // Verificar si ya existe una asignación activa
+        const existingAssignment = adminState.permisos.find(p => 
+            p.usuario_id === userId && p.area_id === areaId && p.estado === 'ACTIVO'
+        );
+        
+        if (existingAssignment) {
+            throw new Error('El usuario ya está asignado a esta área');
+        }
+        
+        // Preparar datos de asignación
+        const assignmentRecord = {
+            usuario_id: userId,
+            area_id: areaId,
+            rol: assignmentData.rol || 'CAPTURISTA',
+            puede_capturar: assignmentData.puede_capturar || false,
+            puede_editar: assignmentData.puede_editar || false,
+            puede_eliminar: assignmentData.puede_eliminar || false,
+            estado: 'ACTIVO',
+            asignado_por: adminState.userProfile.id,
+            fecha_asignacion: new Date().toISOString(),
+            fecha_actualizacion: new Date().toISOString()
+        };
+        
+        // Insertar asignación
+        const { data: newAssignment } = await insertData('usuario_areas', assignmentRecord, {
+            select: `
+                *,
+                perfiles!usuario_id (
+                    nombre_completo,
+                    email,
+                    rol_principal
+                ),
+                areas!area_id (
+                    nombre,
+                    clave,
+                    color_hex
+                )
+            `
+        });
+        
+        if (!newAssignment || newAssignment.length === 0) {
+            throw new Error('Error al crear la asignación');
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'usuario_areas',
+            registro_id: newAssignment[0].id,
+            operacion: 'INSERT',
+            datos_nuevos: assignmentRecord,
+            observaciones: `Usuario ${user.nombre_completo} asignado a área ${area.nombre} con rol ${assignmentRecord.rol}`
+        });
+        
+        // Actualizar estado local
+        adminState.permisos.unshift(newAssignment[0]);
+        updatePermissionsTable();
+        updateSystemCounts();
+        
+        showToast(`Usuario asignado a ${area.nombre} correctamente`, 'success');
+        hideLoading();
+        
+        return newAssignment[0];
+        
+    } catch (error) {
+        console.error('❌ Error al asignar usuario a área:', error);
+        showToast(error.message || 'Error al asignar usuario a área', 'error');
+        hideLoading();
+        throw error;
+    }
+}
+
+/**
+ * Registrar operación en auditoría
+ */
+async function registrarAuditoria(auditoriaData) {
+    try {
+        const auditRecord = {
+            tabla_afectada: auditoriaData.tabla_afectada,
+            registro_id: auditoriaData.registro_id,
+            operacion: auditoriaData.operacion,
+            datos_anteriores: auditoriaData.datos_anteriores ? JSON.stringify(auditoriaData.datos_anteriores) : null,
+            datos_nuevos: auditoriaData.datos_nuevos ? JSON.stringify(auditoriaData.datos_nuevos) : null,
+            campos_modificados: auditoriaData.campos_modificados || null,
+            usuario_id: adminState.userProfile.id,
+            ip_address: '127.0.0.1', // Placeholder - en producción obtener IP real
+            user_agent: navigator.userAgent,
+            fecha_operacion: new Date().toISOString(),
+            sesion_id: crypto.randomUUID(),
+            observaciones: auditoriaData.observaciones,
+            es_automatico: false
+        };
+        
+        await insertData('auditoria_log', auditRecord);
+        
+        if (DEBUG.enabled) {
+            console.log('✅ Operación registrada en auditoría:', auditRecord);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al registrar auditoría:', error);
+        // No lanzar error para no interrumpir la operación principal
+    }
+}
+// =====================================================
+// GESTIÓN DE USUARIOS - INTERFAZ Y MODALES
+// =====================================================
+
+/**
+ * Mostrar modal para crear usuario
+ */
+function showCreateUserModal() {
+    if (!validateAdminPermission('create_user')) return;
+    
+    showModal({
+        title: 'Crear Nuevo Usuario',
+        content: `
+            <form id="create-user-form" class="space-y-4">
+                <div>
+                    <label for="user-email" class="block text-sm font-medium text-gray-700 mb-1">
+                        Email <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="user-email" 
+                        name="email" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="usuario@aifa.gob.mx"
+                    >
+                    <div class="error-message text-red-500 text-sm mt-1 hidden" id="user-email-error"></div>
+                </div>
+                
+                <div>
+                    <label for="user-name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre Completo <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="user-name" 
+                        name="nombre_completo" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Nombre completo del usuario"
+                    >
+                    <div class="error-message text-red-500 text-sm mt-1 hidden" id="user-name-error"></div>
+                </div>
+                
+                <div>
+                    <label for="user-role" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol Principal <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="user-role" 
+                        name="rol_principal" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar rol...</option>
+                        <option value="ADMIN">Administrador</option>
+                        <option value="DIRECTOR">Director</option>
+                        <option value="SUBDIRECTOR">Subdirector</option>
+                        <option value="JEFE_AREA">Jefe de Área</option>
+                        <option value="CAPTURISTA">Capturista</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="user-puesto" class="block text-sm font-medium text-gray-700 mb-1">
+                        Puesto
+                    </label>
+                    <input 
+                        type="text" 
+                        id="user-puesto" 
+                        name="puesto"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Puesto o cargo del usuario"
+                    >
+                </div>
+                
+                <div>
+                    <label for="user-telefono" class="block text-sm font-medium text-gray-700 mb-1">
+                        Teléfono
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="user-telefono" 
+                        name="telefono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Número de teléfono"
+                    >
+                </div>
+                
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <div class="flex items-start space-x-2">
+                        <i data-lucide="info" class="w-5 h-5 text-blue-600 mt-0.5"></i>
+                        <div class="text-sm text-blue-800">
+                            <p class="font-medium">Información importante:</p>
+                            <ul class="mt-1 space-y-1 text-xs">
+                                <li>• El usuario recibirá un email de invitación</li>
+                                <li>• Se creará automáticamente en el sistema de autenticación</li>
+                                <li>• Podrá asignar áreas específicas después de crear el usuario</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Crear Usuario',
+                primary: true,
+                handler: async () => {
+                    await handleCreateUser();
+                    return false; // No cerrar modal automáticamente
+                }
+            }
+        ]
+    });
+    
+    // Recrear iconos
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Mostrar modal para editar usuario
+ */
+function showEditUserModal(userId) {
+    if (!validateAdminPermission('edit_user')) return;
+    
+    const user = adminState.usuarios.find(u => u.id === userId);
+    if (!user) {
+        showToast('Usuario no encontrado', 'error');
+        return;
+    }
+    
+    showModal({
+        title: `Editar Usuario: ${user.nombre_completo || user.email}`,
+        content: `
+            <form id="edit-user-form" class="space-y-4">
+                <input type="hidden" name="user_id" value="${user.id}">
+                
+                <div>
+                    <label for="edit-user-email" class="block text-sm font-medium text-gray-700 mb-1">
+                        Email <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="edit-user-email" 
+                        name="email" 
+                        required
+                        value="${user.email || ''}"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div>
+                    <label for="edit-user-name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre Completo <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="edit-user-name" 
+                        name="nombre_completo" 
+                        required
+                        value="${user.nombre_completo || ''}"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div>
+                    <label for="edit-user-role" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol Principal <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="edit-user-role" 
+                        name="rol_principal" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="ADMIN" ${user.rol_principal === 'ADMIN' ? 'selected' : ''}>Administrador</option>
+                        <option value="DIRECTOR" ${user.rol_principal === 'DIRECTOR' ? 'selected' : ''}>Director</option>
+                        <option value="SUBDIRECTOR" ${user.rol_principal === 'SUBDIRECTOR' ? 'selected' : ''}>Subdirector</option>
+                        <option value="JEFE_AREA" ${user.rol_principal === 'JEFE_AREA' ? 'selected' : ''}>Jefe de Área</option>
+                        <option value="CAPTURISTA" ${user.rol_principal === 'CAPTURISTA' ? 'selected' : ''}>Capturista</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="edit-user-puesto" class="block text-sm font-medium text-gray-700 mb-1">
+                        Puesto
+                    </label>
+                    <input 
+                        type="text" 
+                        id="edit-user-puesto" 
+                        name="puesto"
+                        value="${user.puesto || ''}"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div>
+                    <label for="edit-user-telefono" class="block text-sm font-medium text-gray-700 mb-1">
+                        Teléfono
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="edit-user-telefono" 
+                        name="telefono"
+                        value="${user.telefono || ''}"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600">Estado actual:</span>
+                        <span class="px-2 py-1 rounded text-xs font-medium ${user.estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${user.estado}
+                        </span>
+                    </div>
+                    ${user.fecha_creacion ? `
+                        <div class="flex items-center justify-between text-sm mt-2">
+                            <span class="text-gray-600">Registrado:</span>
+                            <span class="text-gray-800">${formatDate(user.fecha_creacion, 'short')}</span>
+                        </div>
+                    ` : ''}
+                    ${user.ultimo_acceso ? `
+                        <div class="flex items-center justify-between text-sm mt-2">
+                            <span class="text-gray-600">Último acceso:</span>
+                            <span class="text-gray-800">${formatDate(user.ultimo_acceso, 'short')}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Guardar Cambios',
+                primary: true,
+                handler: async () => {
+                    await handleEditUser();
+                    return false; // No cerrar modal automáticamente
+                }
+            }
+        ]
+    });
+}
+
+/**
+ * Mostrar modal de asignación rápida de usuario a área
+ */
+function showQuickAssignModal() {
+    if (!validateAdminPermission('assign_user_area')) return;
+    
+    // Filtrar usuarios y áreas activos
+    const activeUsers = adminState.usuarios.filter(u => u.estado === 'ACTIVO');
+    const activeAreas = adminState.areas.filter(a => a.estado === 'ACTIVO');
+    
+    if (activeUsers.length === 0) {
+        showToast('No hay usuarios activos para asignar', 'warning');
+        return;
+    }
+    
+    if (activeAreas.length === 0) {
+        showToast('No hay áreas activas para asignar', 'warning');
+        return;
+    }
+    
+    showModal({
+        title: 'Asignación Rápida de Usuario a Área',
+        content: `
+            <form id="quick-assign-form" class="space-y-4">
+                <div>
+                    <label for="assign-user" class="block text-sm font-medium text-gray-700 mb-1">
+                        Usuario <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="assign-user" 
+                        name="usuario_id" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar usuario...</option>
+                        ${activeUsers.map(user => `
+                            <option value="${user.id}">
+                                ${user.nombre_completo || user.email} (${user.rol_principal})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="assign-area" class="block text-sm font-medium text-gray-700 mb-1">
+                        Área <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="assign-area" 
+                        name="area_id" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar área...</option>
+                        ${activeAreas.map(area => `
+                            <option value="${area.id}">
+                                ${area.clave} - ${area.nombre}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="assign-role" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol en el Área <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="assign-role" 
+                        name="rol" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="CAPTURISTA">Capturista</option>
+                        <option value="JEFE_AREA">Jefe de Área</option>
+                        <option value="SUBDIRECTOR">Subdirector</option>
+                        <option value="DIRECTOR">Director</option>
+                    </select>
+                </div>
+                
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-700">
+                        Permisos Específicos
+                    </label>
+                    
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_capturar" 
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede capturar datos</span>
+                        </label>
+                        
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_editar" 
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede editar datos</span>
+                        </label>
+                        
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_eliminar" 
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede eliminar datos</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-50 p-3 rounded-lg">
+                    <div class="flex items-start space-x-2">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-600 mt-0.5"></i>
+                        <div class="text-sm text-yellow-800">
+                            <p class="font-medium">Verificar antes de asignar:</p>
+                            <p class="mt-1 text-xs">Asegúrese de que el usuario no esté ya asignado a esta área.</p>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Asignar',
+                primary: true,
+                handler: async () => {
+                    await handleQuickAssign();
+                    return false; // No cerrar modal automáticamente
+                }
+            }
+        ]
+    });
+    
+    // Recrear iconos
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Handler para crear usuario
+ */
+async function handleCreateUser() {
+    try {
+        const form = document.getElementById('create-user-form');
+        if (!form) return;
+        
+        // Validar formulario
+        const formData = getFormData(form);
+        
+        // Validaciones básicas
+        if (!formData.email || !formData.nombre_completo || !formData.rol_principal) {
+            showToast('Complete todos los campos obligatorios', 'error');
+            return;
+        }
+        
+        // Validar formato de email
+        if (!VALIDATION.email.pattern.test(formData.email)) {
+            showToast('Formato de email no válido', 'error');
+            return;
+        }
+        
+        // Crear usuario
+        await createUser(formData);
+        
+        // Cerrar modal si fue exitoso
+        hideModal();
+        
+    } catch (error) {
+        console.error('❌ Error en handleCreateUser:', error);
+        // No cerrar el modal si hay error para que el usuario pueda corregir
+    }
+}
+
+/**
+ * Handler para editar usuario
+ */
+async function handleEditUser() {
+    try {
+        const form = document.getElementById('edit-user-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        const userId = formData.user_id;
+        
+        if (!userId) {
+            showToast('ID de usuario no válido', 'error');
+            return;
+        }
+        
+        // Validaciones básicas
+        if (!formData.email || !formData.nombre_completo || !formData.rol_principal) {
+            showToast('Complete todos los campos obligatorios', 'error');
+            return;
+        }
+        
+        // Validar formato de email
+        if (!VALIDATION.email.pattern.test(formData.email)) {
+            showToast('Formato de email no válido', 'error');
+            return;
+        }
+        
+        // Editar usuario
+        await editUser(userId, formData);
+        
+        // Cerrar modal si fue exitoso
+        hideModal();
+        
+    } catch (error) {
+        console.error('❌ Error en handleEditUser:', error);
+        // No cerrar el modal si hay error
+    }
+}
+
+/**
+ * Handler para asignación rápida
+ */
+async function handleQuickAssign() {
+    try {
+        const form = document.getElementById('quick-assign-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        
+        // Validar campos obligatorios
+        if (!formData.usuario_id || !formData.area_id || !formData.rol) {
+            showToast('Complete todos los campos obligatorios', 'error');
+            return;
+        }
+        
+        // Preparar datos de asignación
+        const assignmentData = {
+            rol: formData.rol,
+            puede_capturar: formData.puede_capturar === 'on',
+            puede_editar: formData.puede_editar === 'on',
+            puede_eliminar: formData.puede_eliminar === 'on'
+        };
+        
+        // Asignar usuario a área
+        await assignUserToArea(formData.usuario_id, formData.area_id, assignmentData);
+        
+        // Cerrar modal si fue exitoso
+        hideModal();
+        
+    } catch (error) {
+        console.error('❌ Error en handleQuickAssign:', error);
+        // No cerrar el modal si hay error
+    }
+}
+// =====================================================
+// GESTIÓN DE USUARIOS - TABLA Y HANDLERS
+// =====================================================
+
+/**
+ * Actualizar tabla de usuarios con datos completos
+ */
+function updateUsersTable() {
+    const tableContainer = document.getElementById('users-table-container');
+    if (!tableContainer) return;
+    
+    const filteredUsers = getFilteredUsers();
+    
+    if (filteredUsers.length === 0) {
+        tableContainer.innerHTML = `
+            <div class="text-center py-8">
+                <div class="flex flex-col items-center">
+                    <i data-lucide="users" class="w-12 h-12 text-gray-400 mb-4"></i>
+                    <p class="text-gray-500 mb-2">No se encontraron usuarios</p>
+                    <p class="text-sm text-gray-400">
+                        ${adminState.searchTerm ? 'Intente con otros criterios de búsqueda' : 'Agregue el primer usuario al sistema'}
+                    </p>
+                </div>
+            </div>
+        `;
+        
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+        return;
+    }
+    
+    const tableHTML = `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input 
+                                type="checkbox" 
+                                id="select-all-users"
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                title="Seleccionar todos"
+                            >
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Usuario
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Rol Principal
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Puesto
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Estado
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Áreas
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Último Acceso
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Acciones
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${filteredUsers.map(user => createUserTableRow(user)).join('')}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Información de paginación -->
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                <span class="text-sm text-gray-700">
+                    Mostrando ${filteredUsers.length} usuario${filteredUsers.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Mostrando <span class="font-medium">${filteredUsers.length}</span> 
+                        de <span class="font-medium">${adminState.usuarios.length}</span> usuario${adminState.usuarios.length !== 1 ? 's' : ''}
+                    </p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button 
+                        onclick="exportUsersData()"
+                        class="text-sm text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+                    >
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Exportar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    tableContainer.innerHTML = tableHTML;
+    
+    // Configurar event listeners para checkboxes y botones
+    setupUserTableEventListeners();
+    
+    // Recrear iconos
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}
+
+/**
+ * Crear fila de usuario para la tabla
+ */
+function createUserTableRow(user) {
+    const userAreas = adminState.permisos.filter(p => p.usuario_id === user.id && p.estado === 'ACTIVO');
+    const areasCount = userAreas.length;
+    
+    return `
+        <tr class="hover:bg-gray-50" data-user-id="${user.id}">
+            <td class="px-3 py-4 whitespace-nowrap">
+                <input 
+                    type="checkbox" 
+                    class="user-checkbox rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                    value="${user.id}"
+                >
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 h-10 w-10">
+                        <div class="h-10 w-10 rounded-full bg-aifa-blue flex items-center justify-center">
+                            <span class="text-sm font-medium text-white">
+                                ${(user.nombre_completo || user.email).charAt(0).toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="text-sm font-medium text-gray-900">
+                            ${user.nombre_completo || 'Sin nombre'}
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            ${user.email}
+                        </div>
+                        ${user.telefono ? `
+                            <div class="text-xs text-gray-400">
+                                ${user.telefono}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(user.rol_principal)}">
+                    ${getRoleName(user.rol_principal)}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                ${user.puesto || 'No especificado'}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    user.estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }">
+                    ${user.estado}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <div class="flex items-center space-x-1">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        ${areasCount} área${areasCount !== 1 ? 's' : ''}
+                    </span>
+                    ${areasCount > 0 ? `
+                        <button 
+                            onclick="showUserAreas('${user.id}')"
+                            class="text-xs text-blue-600 hover:text-blue-800"
+                            title="Ver áreas asignadas"
+                        >
+                            <i data-lucide="eye" class="w-3 h-3"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                ${user.ultimo_acceso ? formatDate(user.ultimo_acceso, 'short') : 'Nunca'}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <div class="flex items-center justify-end space-x-2">
+                    <button 
+                        onclick="showEditUserModal('${user.id}')"
+                        class="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors"
+                        title="Editar usuario"
+                    >
+                        <i data-lucide="edit" class="w-4 h-4"></i>
+                    </button>
+                    
+                    <button 
+                        onclick="showUserAreas('${user.id}')"
+                        class="text-green-600 hover:text-green-900 p-1 rounded transition-colors"
+                        title="Gestionar áreas"
+                    >
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </button>
+                    
+                    <button 
+                        onclick="toggleUserStatus('${user.id}')"
+                        class="p-1 rounded transition-colors ${user.estado === 'ACTIVO' ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}"
+                        title="${user.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} usuario"
+                    >
+                        <i data-lucide="${user.estado === 'ACTIVO' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
+                    </button>
+                    
+                    <button 
+                        onclick="deleteUser('${user.id}')"
+                        class="text-red-600 hover:text-red-900 p-1 rounded transition-colors"
+                        title="Eliminar usuario"
+                    >
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+/**
+ * Configurar event listeners específicos de la tabla de usuarios
+ */
+function setupUserTableEventListeners() {
+    // Checkbox "Seleccionar todos"
+    const selectAllCheckbox = document.getElementById('select-all-users');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', handleSelectAllUsers);
+    }
+    
+    // Checkboxes individuales
+    const userCheckboxes = document.querySelectorAll('.user-checkbox');
+    userCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', handleUserCheckboxChange);
+    });
+}
+
+/**
+ * Handler para seleccionar todos los usuarios
+ */
+function handleSelectAllUsers(event) {
+    const isChecked = event.target.checked;
+    const userCheckboxes = document.querySelectorAll('.user-checkbox');
+    
+    userCheckboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+    
+    // Actualizar UI de acciones masivas si es necesario
+    updateBulkActionsUI();
+}
+
+/**
+ * Handler para cambios en checkboxes individuales
+ */
+function handleUserCheckboxChange() {
+    const userCheckboxes = document.querySelectorAll('.user-checkbox');
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectAllCheckbox = document.getElementById('select-all-users');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = checkedBoxes.length === userCheckboxes.length;
+        selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < userCheckboxes.length;
+    }
+    
+    // Actualizar UI de acciones masivas
+    updateBulkActionsUI();
+}
+
+/**
+ * Actualizar UI de acciones masivas
+ */
+function updateBulkActionsUI() {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const bulkActionsBtn = document.getElementById('bulk-actions-btn');
+    
+    if (bulkActionsBtn) {
+        if (checkedBoxes.length > 0) {
+            bulkActionsBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+            bulkActionsBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            bulkActionsBtn.innerHTML = `
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span>Acciones (${checkedBoxes.length})</span>
+            `;
+        } else {
+            bulkActionsBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            bulkActionsBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+            bulkActionsBtn.innerHTML = `
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span>Acciones masivas</span>
+            `;
+        }
+    }
+    
+    // Recrear iconos
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}
+
+/**
+ * Mostrar áreas asignadas de un usuario
+ */
+function showUserAreas(userId) {
+    const user = adminState.usuarios.find(u => u.id === userId);
+    if (!user) {
+        showToast('Usuario no encontrado', 'error');
+        return;
+    }
+    
+    const userAreas = adminState.permisos.filter(p => 
+        p.usuario_id === userId && p.estado === 'ACTIVO'
+    );
+    
+    const areasContent = userAreas.length > 0 ? `
+        <div class="space-y-3">
+            ${userAreas.map(permission => `
+                <div class="border rounded-lg p-3 bg-gray-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-3 h-3 rounded-full" style="background-color: ${permission.areas?.color_hex || '#6B7280'}"></div>
+                            <div>
+                                <h4 class="font-medium text-gray-900">${permission.areas?.nombre || 'Área desconocida'}</h4>
+                                <p class="text-sm text-gray-500">${permission.areas?.clave || ''}</p>
+                            </div>
+                        </div>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColorClass(permission.rol)}">
+                            ${getRoleName(permission.rol)}
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 text-xs text-gray-600">
+                        <div class="flex items-center space-x-1">
+                            <i data-lucide="${permission.puede_capturar ? 'check' : 'x'}" class="w-3 h-3 ${permission.puede_capturar ? 'text-green-600' : 'text-red-600'}"></i>
+                            <span>Capturar</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <i data-lucide="${permission.puede_editar ? 'check' : 'x'}" class="w-3 h-3 ${permission.puede_editar ? 'text-green-600' : 'text-red-600'}"></i>
+                            <span>Editar</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <i data-lucide="${permission.puede_eliminar ? 'check' : 'x'}" class="w-3 h-3 ${permission.puede_eliminar ? 'text-green-600' : 'text-red-600'}"></i>
+                            <span>Eliminar</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-2 text-xs text-gray-400">
+                        Asignado: ${formatDate(permission.fecha_asignacion, 'short')}
+                    </div>
+                    
+                    <div class="mt-2 flex justify-end">
+                        <button 
+                            onclick="removeUserFromArea('${permission.id}')"
+                            class="text-red-600 hover:text-red-800 text-xs"
+                        >
+                            <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i>
+                            Remover
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    ` : `
+        <div class="text-center py-8">
+            <i data-lucide="folder-x" class="w-12 h-12 text-gray-400 mx-auto mb-4"></i>
+            <p class="text-gray-500 mb-2">Sin áreas asignadas</p>
+            <p class="text-sm text-gray-400">Este usuario no tiene áreas asignadas actualmente</p>
+        </div>
+    `;
+    
+    showModal({
+        title: `Áreas de ${user.nombre_completo || user.email}`,
+        content: `
+            <div class="space-y-4">
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-blue-800">Total de áreas:</span>
+                        <span class="font-medium text-blue-900">${userAreas.length}</span>
+                    </div>
+                </div>
+                
+                ${areasContent}
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Asignar Nueva Área',
+                handler: () => {
+                    hideModal();
+                    setTimeout(() => showQuickAssignModal(), 100);
+                    return true;
+                }
+            },
+            {
+                text: 'Cerrar',
+                primary: true,
+                handler: () => true
+            }
+        ]
+    });
+    
+    // Recrear iconos
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * Remover usuario de un área específica
+ */
+async function removeUserFromArea(assignmentId) {
+    if (!validateAdminPermission('remove_user_area')) return;
+    
+    try {
+        const assignment = adminState.permisos.find(p => p.id === assignmentId);
+        if (!assignment) {
+            throw new Error('Asignación no encontrada');
+        }
+        
+        const user = adminState.usuarios.find(u => u.id === assignment.usuario_id);
+        const area = adminState.areas.find(a => a.id === assignment.area_id);
+        
+        const confirmed = await showConfirmModal(
+            `¿Está seguro que desea remover a "${user?.nombre_completo || 'Usuario'}" del área "${area?.nombre || 'Área'}"?`,
+            {
+                title: 'Confirmar remoción',
+                confirmText: 'Remover',
+                type: 'warning'
+            }
+        );
+        
+        if (!confirmed) return;
+        
+        showLoading('Removiendo asignación...');
+        
+        // Actualizar estado de la asignación
+        await updateData('usuario_areas', 
+            { 
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: assignmentId }
+        );
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'usuario_areas',
+            registro_id: assignmentId,
+            operacion: 'UPDATE',
+            datos_anteriores: assignment,
+            datos_nuevos: { estado: 'INACTIVO' },
+            campos_modificados: 'estado',
+            observaciones: `Usuario ${user?.nombre_completo} removido del área ${area?.nombre} por administrador`
+        });
+        
+        // Actualizar estado local
+        adminState.permisos = adminState.permisos.filter(p => p.id !== assignmentId);
+        
+        updatePermissionsTable();
+        updateSystemCounts();
+        
+        // Cerrar modal actual y mostrar mensaje
+        hideModal();
+        showToast('Asignación removida correctamente', 'success');
+        hideLoading();
+        
+    } catch (error) {
+        console.error('❌ Error al remover asignación:', error);
+        showToast(error.message || 'Error al remover la asignación', 'error');
+        hideLoading();
+    }
+}
+
+/**
+ * Exportar datos de usuarios
+ */
+function exportUsersData() {
+    if (!validateAdminPermission('export_users')) return;
+    
+    try {
+        const filteredUsers = getFilteredUsers();
+        
+        const exportData = filteredUsers.map(user => {
+            const userAreas = adminState.permisos.filter(p => 
+                p.usuario_id === user.id && p.estado === 'ACTIVO'
+            );
+            
+            return {
+                'Email': user.email,
+                'Nombre Completo': user.nombre_completo || '',
+                'Rol Principal': getRoleName(user.rol_principal),
+                'Puesto': user.puesto || '',
+                'Teléfono': user.telefono || '',
+                'Estado': user.estado,
+                'Áreas Asignadas': userAreas.length,
+                'Áreas': userAreas.map(p => p.areas?.nombre || '').join(', '),
+                'Último Acceso': user.ultimo_acceso ? formatDate(user.ultimo_acceso, 'long') : 'Nunca',
+                'Fecha Registro': user.fecha_creacion ? formatDate(user.fecha_creacion, 'long') : ''
+            };
+        });
+        
+        const filename = `AIFA_usuarios_${new Date().toISOString().slice(0, 10)}.csv`;
+        exportToCSV(exportData, filename);
+        
+        showToast('Datos de usuarios exportados correctamente', 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al exportar usuarios:', error);
+        showToast('Error al exportar los datos', 'error');
+    }
+}
+
+/**
+ * Obtener nombre legible del rol
+ */
+function getRoleName(role) {
+    const roleNames = {
+        'ADMIN': 'Administrador',
+        'DIRECTOR': 'Director',
+        'SUBDIRECTOR': 'Subdirector', 
+        'JEFE_AREA': 'Jefe de Área',
+        'CAPTURISTA': 'Capturista'
+    };
+    
+    return roleNames[role] || role;
+}
+/**
+ * NUEVA FUNCIÓN - Handler para acciones masivas de usuarios
+ */
+function handleBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) {
+        showToast('Seleccione al menos un usuario', 'warning');
+        return;
+    }
+    
+    showModal({
+        title: `Acciones Masivas (${selectedIds.length} usuarios)`,
+        content: `
+            <div class="space-y-4">
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <p class="text-sm text-blue-800">
+                        Usuarios seleccionados: <strong>${selectedIds.length}</strong>
+                    </p>
+                </div>
+                
+                <div class="space-y-3">
+                    <button 
+                        onclick="handleBulkStatusChange('ACTIVO')" 
+                        class="w-full text-left px-4 py-3 bg-green-50 text-green-800 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="user-check" class="w-5 h-5"></i>
+                            <div>
+                                <div class="font-medium">Activar usuarios</div>
+                                <div class="text-sm opacity-75">Cambiar estado a ACTIVO</div>
+                            </div>
+                        </div>
+                    </button>
+                    
+                    <button 
+                        onclick="handleBulkStatusChange('INACTIVO')" 
+                        class="w-full text-left px-4 py-3 bg-orange-50 text-orange-800 rounded-lg hover:bg-orange-100 transition-colors"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="user-x" class="w-5 h-5"></i>
+                            <div>
+                                <div class="font-medium">Desactivar usuarios</div>
+                                <div class="text-sm opacity-75">Cambiar estado a INACTIVO</div>
+                            </div>
+                        </div>
+                    </button>
+                    
+                    <button 
+                        onclick="handleBulkRoleChange()" 
+                        class="w-full text-left px-4 py-3 bg-blue-50 text-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="shield" class="w-5 h-5"></i>
+                            <div>
+                                <div class="font-medium">Cambiar rol principal</div>
+                                <div class="text-sm opacity-75">Asignar nuevo rol a usuarios seleccionados</div>
+                            </div>
+                        </div>
+                    </button>
+                    
+                    <button 
+                        onclick="handleBulkExport()" 
+                        class="w-full text-left px-4 py-3 bg-gray-50 text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                            <div>
+                                <div class="font-medium">Exportar seleccionados</div>
+                                <div class="text-sm opacity-75">Descargar datos de usuarios seleccionados</div>
+                            </div>
+                        </div>
+                    </button>
+                    
+                    <button 
+                        onclick="handleBulkDelete()" 
+                        class="w-full text-left px-4 py-3 bg-red-50 text-red-800 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            <div>
+                                <div class="font-medium">Eliminar usuarios</div>
+                                <div class="text-sm opacity-75">Desactivar permanentemente</div>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Cerrar',
+                primary: true,
+                handler: () => true
+            }
+        ]
+    });
+    
+    // Recrear iconos
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ * NUEVA FUNCIÓN - Handler para refresh de usuarios
+ */
+async function handleRefreshUsers() {
+    try {
+        showLoading('Actualizando usuarios...');
+        await loadUsuarios();
+        await loadPermisos(); // También actualizar permisos
+        updateUsersTable();
+        updateSystemCounts();
+        showToast('Usuarios actualizados correctamente', 'success');
+    } catch (error) {
+        console.error('❌ Error al actualizar usuarios:', error);
+        showToast('Error al actualizar usuarios', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ * NUEVA FUNCIÓN - Cambio masivo de estado
+ */
+async function handleBulkStatusChange(newStatus) {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) return;
+    
+    const action = newStatus === 'ACTIVO' ? 'activar' : 'desactivar';
+    const confirmed = await showConfirmModal(
+        `¿Está seguro que desea ${action} ${selectedIds.length} usuarios?`,
+        {
+            title: `Confirmar ${action} usuarios`,
+            confirmText: action === 'activar' ? 'Activar' : 'Desactivar',
+            type: newStatus === 'ACTIVO' ? 'info' : 'warning'
+        }
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        showLoading(`${action === 'activar' ? 'Activando' : 'Desactivando'} usuarios...`);
+        
+        // Actualizar todos los usuarios seleccionados
+        await updateData('perfiles', 
+            { 
+                estado: newStatus,
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: selectedIds }
+        );
+        
+        // Si se desactivan, también desactivar sus asignaciones
+        if (newStatus === 'INACTIVO') {
+            await updateData('usuario_areas', 
+                { 
+                    estado: 'INACTIVO',
+                    fecha_actualizacion: new Date().toISOString()
+                },
+                { usuario_id: selectedIds, estado: 'ACTIVO' }
+            );
+        }
+        
+        // Registrar en auditoría para cada usuario
+        for (const userId of selectedIds) {
+            const user = adminState.usuarios.find(u => u.id === userId);
+            await registrarAuditoria({
+                tabla_afectada: 'perfiles',
+                registro_id: userId,
+                operacion: 'UPDATE',
+                datos_anteriores: user,
+                datos_nuevos: { estado: newStatus },
+                campos_modificados: 'estado',
+                observaciones: `Usuario ${action} masivamente por administrador`
+            });
+        }
+        
+        // Actualizar estado local
+        selectedIds.forEach(userId => {
+            const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+            if (userIndex !== -1) {
+                adminState.usuarios[userIndex].estado = newStatus;
+            }
+        });
+        
+        // Si se desactivaron, remover de permisos locales
+        if (newStatus === 'INACTIVO') {
+            adminState.permisos = adminState.permisos.filter(p => !selectedIds.includes(p.usuario_id));
+            updatePermissionsTable();
+        }
+        
+        updateUsersTable();
+        updateSystemCounts();
+        
+        // Limpiar selecciones
+        const selectAllCheckbox = document.getElementById('select-all-users');
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        
+        hideModal();
+        showToast(`${selectedIds.length} usuarios ${action === 'activar' ? 'activados' : 'desactivados'} correctamente`, 'success');
+        
+    } catch (error) {
+        console.error(`❌ Error en cambio masivo de estado:`, error);
+        showToast(`Error al ${action} usuarios`, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ * NUEVA FUNCIÓN - Cambio masivo de rol
+ */
+function handleBulkRoleChange() {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) return;
+    
+    hideModal(); // Cerrar modal actual
+    
+    setTimeout(() => {
+        showModal({
+            title: `Cambiar Rol - ${selectedIds.length} usuarios`,
+            content: `
+                <form id="bulk-role-form" class="space-y-4">
+                    <div>
+                        <label for="bulk-new-role" class="block text-sm font-medium text-gray-700 mb-1">
+                            Nuevo Rol Principal <span class="text-red-500">*</span>
+                        </label>
+                        <select 
+                            id="bulk-new-role" 
+                            name="rol_principal" 
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        >
+                            <option value="">Seleccionar nuevo rol...</option>
+                            <option value="ADMIN">Administrador</option>
+                            <option value="DIRECTOR">Director</option>
+                            <option value="SUBDIRECTOR">Subdirector</option>
+                            <option value="JEFE_AREA">Jefe de Área</option>
+                            <option value="CAPTURISTA">Capturista</option>
+                        </select>
+                    </div>
+                    
+                    <div class="bg-yellow-50 p-3 rounded-lg">
+                        <div class="flex items-start space-x-2">
+                            <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-600 mt-0.5"></i>
+                            <div class="text-sm text-yellow-800">
+                                <p class="font-medium">Advertencia:</p>
+                                <p>El cambio de rol afectará los permisos de acceso de los usuarios seleccionados.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="selected_ids" value="${selectedIds.join(',')}">
+                </form>
+            `,
+            actions: [
+                {
+                    text: 'Cancelar',
+                    handler: () => true
+                },
+                {
+                    text: 'Cambiar Rol',
+                    primary: true,
+                    handler: async () => {
+                        await processBulkRoleChange();
+                        return false;
+                    }
+                }
+            ]
+        });
+        
+        // Recrear iconos
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 100);
+}
+
+/**
+ * NUEVA FUNCIÓN - Procesar cambio masivo de rol
+ */
+async function processBulkRoleChange() {
+    try {
+        const form = document.getElementById('bulk-role-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        const selectedIds = formData.selected_ids.split(',');
+        const newRole = formData.rol_principal;
+        
+        if (!newRole) {
+            showToast('Seleccione el nuevo rol', 'error');
+            return;
+        }
+        
+        showLoading('Actualizando roles...');
+        
+        // Actualizar roles
+        await updateData('perfiles', 
+            { 
+                rol_principal: newRole,
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: selectedIds }
+        );
+        
+        // Registrar en auditoría
+        for (const userId of selectedIds) {
+            const user = adminState.usuarios.find(u => u.id === userId);
+            await registrarAuditoria({
+                tabla_afectada: 'perfiles',
+                registro_id: userId,
+                operacion: 'UPDATE',
+                datos_anteriores: user,
+                datos_nuevos: { rol_principal: newRole },
+                campos_modificados: 'rol_principal',
+                observaciones: `Rol cambiado masivamente a ${getRoleName(newRole)} por administrador`
+            });
+        }
+        
+        // Actualizar estado local
+        selectedIds.forEach(userId => {
+            const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+            if (userIndex !== -1) {
+                adminState.usuarios[userIndex].rol_principal = newRole;
+            }
+        });
+        
+        updateUsersTable();
+        
+        // Limpiar selecciones
+        const selectAllCheckbox = document.getElementById('select-all-users');
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        
+        hideModal();
+        showToast(`Rol actualizado para ${selectedIds.length} usuarios`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al cambiar roles:', error);
+        showToast('Error al cambiar los roles', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ * NUEVA FUNCIÓN - Exportar usuarios seleccionados
+ */
+function handleBulkExport() {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) return;
+    
+    try {
+        const selectedUsers = adminState.usuarios.filter(u => selectedIds.includes(u.id));
+        
+        const exportData = selectedUsers.map(user => {
+            const userAreas = adminState.permisos.filter(p => 
+                p.usuario_id === user.id && p.estado === 'ACTIVO'
+            );
+            
+            return {
+                'Email': user.email,
+                'Nombre Completo': user.nombre_completo || '',
+                'Rol Principal': getRoleName(user.rol_principal),
+                'Puesto': user.puesto || '',
+                'Teléfono': user.telefono || '',
+                'Estado': user.estado,
+                'Áreas Asignadas': userAreas.length,
+                'Áreas': userAreas.map(p => p.areas?.nombre || '').join(', '),
+                'Último Acceso': user.ultimo_acceso ? formatDate(user.ultimo_acceso, 'long') : 'Nunca',
+                'Fecha Registro': user.fecha_creacion ? formatDate(user.fecha_creacion, 'long') : ''
+            };
+        });
+        
+        const filename = `AIFA_usuarios_seleccionados_${new Date().toISOString().slice(0, 10)}.csv`;
+        exportToCSV(exportData, filename);
+        
+        hideModal();
+        showToast(`${selectedIds.length} usuarios exportados correctamente`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al exportar usuarios:', error);
+        showToast('Error al exportar usuarios', 'error');
+    }
+}
+
+/**
+ * NUEVA FUNCIÓN - Eliminar usuarios masivamente
+ */
+async function handleBulkDelete() {
+    const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+    const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) return;
+    
+    const confirmed = await showConfirmModal(
+        `¿Está seguro que desea ELIMINAR ${selectedIds.length} usuarios?\n\nEsta acción desactivará permanentemente a los usuarios y eliminará todas sus asignaciones de área.`,
+        {
+            title: 'Confirmar eliminación masiva',
+            confirmText: 'Eliminar',
+            type: 'danger'
+        }
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        showLoading('Eliminando usuarios...');
+        
+        // Desactivar usuarios
+        await updateData('perfiles', 
+            { 
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { id: selectedIds }
+        );
+        
+        // Desactivar todas sus asignaciones
+        await updateData('usuario_areas', 
+            { 
+                estado: 'INACTIVO',
+                fecha_actualizacion: new Date().toISOString()
+            },
+            { usuario_id: selectedIds, estado: 'ACTIVO' }
+        );
+        
+        // Registrar en auditoría
+        for (const userId of selectedIds) {
+            const user = adminState.usuarios.find(u => u.id === userId);
+            await registrarAuditoria({
+                tabla_afectada: 'perfiles',
+                registro_id: userId,
+                operacion: 'UPDATE',
+                datos_anteriores: user,
+                datos_nuevos: { estado: 'INACTIVO' },
+                campos_modificados: 'estado',
+                observaciones: `Usuario eliminado masivamente por administrador - Se desactivaron todas sus asignaciones`
+            });
+        }
+        
+        // Actualizar estado local
+        selectedIds.forEach(userId => {
+            const userIndex = adminState.usuarios.findIndex(u => u.id === userId);
+            if (userIndex !== -1) {
+                adminState.usuarios[userIndex].estado = 'INACTIVO';
+            }
+        });
+        
+        // Remover de permisos locales
+        adminState.permisos = adminState.permisos.filter(p => !selectedIds.includes(p.usuario_id));
+        
+        updateUsersTable();
+        updatePermissionsTable();
+        updateSystemCounts();
+        
+        // Limpiar selecciones
+        const selectAllCheckbox = document.getElementById('select-all-users');
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        
+        hideModal();
+        showToast(`${selectedIds.length} usuarios eliminados correctamente`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Error en eliminación masiva:', error);
+        showToast('Error al eliminar usuarios', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ * NUEVA FUNCIÓN - Función utilitaria para debounce
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
