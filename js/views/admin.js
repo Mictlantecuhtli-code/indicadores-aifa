@@ -3555,7 +3555,7 @@ function createUserTableRow(user) {
                     </button>
                     
                     <button 
-                        onclick="toggleUserStatus('${user.id}')"
+                        onclick="window.toggleUserStatus('${user.id}', '${user.estado}')"
                         class="p-1 rounded transition-colors ${user.estado === 'ACTIVO' ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}"
                         title="${user.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'} usuario"
                     >
@@ -3563,7 +3563,7 @@ function createUserTableRow(user) {
                     </button>
                     
                     <button 
-                        onclick="deleteUser('${user.id}')"
+                        onclick="window.deleteUser('${user.id}')"
                         class="text-red-600 hover:text-red-900 p-1 rounded transition-colors"
                         title="Eliminar usuario"
                     >
