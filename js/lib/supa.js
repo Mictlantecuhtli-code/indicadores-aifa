@@ -397,8 +397,8 @@ export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-        
-      /*  const { data, error } = await supabase
+
+        const { data, error } = await supabase
             .from('perfiles')
             .select(`
                 *,
@@ -409,7 +409,10 @@ export async function getCurrentProfile() {
                     puede_capturar,
                     puede_editar,
                     puede_eliminar,
-                    areas (
+                    estado,
+                    fecha_asignacion,
+                    fecha_actualizacion,
+                    areas:areas!area_id (
                         id,
                         clave,
                         nombre,
@@ -418,25 +421,33 @@ export async function getCurrentProfile() {
                 )
             `)
             .eq('id', user.id)
-            .eq('estado', 'ACTIVO')
-            .single();*/
+            .maybeSingle();
 
-        const data = {
-            id: user.id,
-            email: user.email,
-            rol_principal: 'ADMIN', // Por ahora hardcodeado
-            estado: 'ACTIVO',
-            usuario_areas: [] // Array vacío por ahora
-        };
-        const error = null;
-        
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
             console.error('❌ Error al obtener perfil:', error);
             return null;
         }
-        
-        appState.profile = data;
-        return data;
+
+        let profile = data;
+
+        if (!profile) {
+            profile = {
+                id: user.id,
+                email: user.email,
+                nombre_completo: user.user_metadata?.nombre_completo || user.user_metadata?.full_name || user.email,
+                rol_principal: user.user_metadata?.rol_principal || 'CONSULTOR',
+                telefono: user.user_metadata?.telefono || null,
+                puesto: user.user_metadata?.puesto || null,
+                estado: 'ACTIVO',
+                ultimo_acceso: user.last_sign_in_at || null,
+                fecha_creacion: user.created_at || new Date().toISOString(),
+                fecha_actualizacion: user.updated_at || user.created_at || new Date().toISOString(),
+                usuario_areas: []
+            };
+        }
+
+        appState.profile = profile;
+        return profile;
     } catch (error) {
         console.error('❌ Error al cargar perfil:', error);
         return null;
