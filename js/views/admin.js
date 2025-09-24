@@ -16,6 +16,37 @@ const adminState = {
     editingItem: null,
     loading: false
 };
+
+function mapPermissionRecord(record) {
+    if (!record) return record;
+
+    const userFromState = adminState.usuarios.find(u => u.id === record.usuario_id) || null;
+    const areaFromState = adminState.areas.find(a => a.id === record.area_id) || null;
+
+    const perfiles = userFromState
+        ? {
+            id: userFromState.id,
+            email: userFromState.email,
+            nombre_completo: userFromState.nombre_completo,
+            rol_principal: userFromState.rol_principal
+        }
+        : record.perfiles ?? null;
+
+    const areas = areaFromState
+        ? {
+            id: areaFromState.id,
+            nombre: areaFromState.nombre,
+            clave: areaFromState.clave,
+            color_hex: areaFromState.color_hex
+        }
+        : record.areas ?? null;
+
+    return {
+        ...record,
+        perfiles,
+        areas
+    };
+}
 // =====================================================
 // RENDERIZADO DE LA VISTA PRINCIPAL
 // =====================================================
@@ -405,11 +436,9 @@ function createAreaRowHTML(area, index) {
  */
 async function loadInitialData() {
     try {
-        await Promise.all([
-            loadAreas(),
-            loadUsuarios(),
-            loadPermisos()
-        ]);
+        await loadAreas();
+        await loadUsuarios();
+        await loadPermisos();
         
         if (DEBUG.enabled) {
             console.log('📊 Datos del panel cargados:', {
@@ -480,23 +509,23 @@ async function loadPermisos() {
     try {
         const { data } = await selectData('usuario_areas', {
             select: `
-                *,
-                perfiles!usuario_id (
-                    nombre_completo,
-                    email,
-                    rol_principal
-                ),
-                areas!area_id (
-                    nombre,
-                    clave,
-                    color_hex
-                )
+                id,
+                usuario_id,
+                area_id,
+                rol,
+                puede_capturar,
+                puede_editar,
+                puede_eliminar,
+                estado,
+                asignado_por,
+                fecha_asignacion,
+                fecha_actualizacion
             `,
             filters: { estado: 'ACTIVO' },
             orderBy: { column: 'fecha_asignacion', ascending: false }
         });
-        
-        adminState.permisos = data || [];
+
+        adminState.permisos = (data || []).map(mapPermissionRecord);
         
     } catch (error) {
         console.error('❌ Error al cargar permisos:', error);
@@ -2596,14 +2625,26 @@ async function handlePermissionUpdate(permisoId) {
             },
             { id: permisoId },
             {
-                select: `*, perfiles!usuario_id (nombre_completo, email), areas!area_id (nombre, clave, color_hex)`
+                select: `
+                    id,
+                    usuario_id,
+                    area_id,
+                    rol,
+                    puede_capturar,
+                    puede_editar,
+                    puede_eliminar,
+                    estado,
+                    asignado_por,
+                    fecha_asignacion,
+                    fecha_actualizacion
+                `
             }
         );
 
         if (data && data.length > 0) {
             const indice = adminState.permisos.findIndex(p => p.id === permisoId);
             if (indice !== -1) {
-                adminState.permisos[indice] = data[0];
+                adminState.permisos[indice] = mapPermissionRecord(data[0]);
             }
 
             await registrarAuditoria({
@@ -2960,7 +3001,7 @@ async function editUser(userId, userData) {
         }
         
         // Preparar datos de actualización
-        const updateData = {
+        const updatePayload = {
             fecha_actualizacion: new Date().toISOString()
         };
         
@@ -2971,11 +3012,11 @@ async function editUser(userId, userData) {
         fieldsToUpdate.forEach(field => {
             if (userData[field] !== undefined && userData[field] !== currentUser[field]) {
                 if (field === 'email') {
-                    updateData[field] = userData[field].trim().toLowerCase();
+                    updatePayload[field] = userData[field].trim().toLowerCase();
                 } else if (['nombre_completo', 'telefono', 'puesto'].includes(field)) {
-                    updateData[field] = userData[field]?.trim() || null;
+                    updatePayload[field] = userData[field]?.trim() || null;
                 } else {
-                    updateData[field] = userData[field];
+                    updatePayload[field] = userData[field];
                 }
                 changedFields.push(field);
             }
@@ -2988,10 +3029,10 @@ async function editUser(userId, userData) {
         }
         
         // Actualizar en base de datos
-        const { data: updatedUsers } = await updateData('perfiles', updateData, 
-            { id: userId }, 
+        const { data: updatedUsers } = await updateData('perfiles', updatePayload,
+            { id: userId },
             { select: `
-                id, email, nombre_completo, rol_principal, 
+                id, email, nombre_completo, rol_principal,
                 telefono, puesto, estado, ultimo_acceso, 
                 fecha_creacion, fecha_actualizacion
             ` }
@@ -3007,7 +3048,7 @@ async function editUser(userId, userData) {
             registro_id: userId,
             operacion: 'UPDATE',
             datos_anteriores: currentUser,
-            datos_nuevos: updateData,
+            datos_nuevos: updatePayload,
             campos_modificados: changedFields.join(', '),
             observaciones: `Usuario editado por administrador`
         });
@@ -3253,42 +3294,44 @@ async function assignUserToArea(userId, areaId, assignmentData) {
         // Insertar asignación
         const { data: newAssignment } = await insertData('usuario_areas', assignmentRecord, {
             select: `
-                *,
-                perfiles!usuario_id (
-                    nombre_completo,
-                    email,
-                    rol_principal
-                ),
-                areas!area_id (
-                    nombre,
-                    clave,
-                    color_hex
-                )
+                id,
+                usuario_id,
+                area_id,
+                rol,
+                puede_capturar,
+                puede_editar,
+                puede_eliminar,
+                estado,
+                asignado_por,
+                fecha_asignacion,
+                fecha_actualizacion
             `
         });
-        
+
         if (!newAssignment || newAssignment.length === 0) {
             throw new Error('Error al crear la asignación');
         }
-        
+
+        const enrichedAssignment = mapPermissionRecord(newAssignment[0]);
+
         // Registrar en auditoría
         await registrarAuditoria({
             tabla_afectada: 'usuario_areas',
-            registro_id: newAssignment[0].id,
+            registro_id: enrichedAssignment.id,
             operacion: 'INSERT',
             datos_nuevos: assignmentRecord,
             observaciones: `Usuario ${user.nombre_completo} asignado a área ${area.nombre} con rol ${assignmentRecord.rol}`
         });
-        
+
         // Actualizar estado local
-        adminState.permisos.unshift(newAssignment[0]);
+        adminState.permisos.unshift(enrichedAssignment);
         updatePermissionsTable();
         updateSystemCounts();
-        
+
         showToast(`Usuario asignado a ${area.nombre} correctamente`, 'success');
         hideLoading();
-        
-        return newAssignment[0];
+
+        return enrichedAssignment;
         
     } catch (error) {
         console.error('❌ Error al asignar usuario a área:', error);
@@ -5336,15 +5379,27 @@ async function handleEditArea() {
             }
         }
         
-        const updateData = {
+        const updatePayload = {
             clave: formData.clave.trim().toUpperCase(),
             nombre: formData.nombre.trim(),
             descripcion: formData.descripcion?.trim() || null,
             color_hex: formData.color_hex,
             fecha_actualizacion: new Date().toISOString()
         };
-        
-        const { data: updatedArea } = await updateData('areas', updateData, { id: areaId }, {
+
+        const changedFields = ['clave', 'nombre', 'descripcion', 'color_hex'].filter(field => {
+            const currentValue = currentArea?.[field] ?? null;
+            return currentValue !== updatePayload[field];
+        });
+
+        if (changedFields.length === 0) {
+            showToast('No hay cambios para guardar', 'warning');
+            return;
+        }
+
+        changedFields.push('fecha_actualizacion');
+
+        const { data: updatedArea } = await updateData('areas', updatePayload, { id: areaId }, {
             select: 'id, clave, nombre, descripcion, color_hex, estado, fecha_creacion, fecha_actualizacion'
         });
         
@@ -5358,8 +5413,8 @@ async function handleEditArea() {
             registro_id: areaId,
             operacion: 'UPDATE',
             datos_anteriores: currentArea,
-            datos_nuevos: updateData,
-            campos_modificados: Object.keys(updateData).join(', '),
+            datos_nuevos: updatePayload,
+            campos_modificados: changedFields.join(', '),
             observaciones: `Área editada por administrador`
         });
         

@@ -411,14 +411,33 @@ export async function getCurrentProfile() {
         const user = await getCurrentUser();
         if (!user) return null;
 
-        const { data: profileData, error: profileError } = await supabase
+        let { data: profileData, error: profileError } = await supabase
             .from('perfiles')
             .select(PROFILE_COLUMNS)
             .eq('id', user.id)
             .maybeSingle();
 
+        if (profileError?.code === 'PGRST201') {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ Ambigüedad de relaciones al obtener perfil, usando fallback explícito');
+            }
+
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('perfiles')
+                .select(PROFILE_COLUMNS)
+                .eq('id', user.id)
+                .limit(1);
+
+            profileData = fallbackData?.[0] || null;
+            profileError = fallbackError || null;
+        }
+
         if (profileError && profileError.code !== 'PGRST116') {
-            console.error('❌ Error al obtener perfil:', profileError);
+            console.error('❌ Error al obtener perfil:', {
+                code: profileError.code,
+                message: profileError.message,
+                details: profileError.details
+            });
             return null;
         }
 
