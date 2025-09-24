@@ -1,6 +1,7 @@
 // =====================================================
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE USUARIOS
 // =====================================================
+
 import { DEBUG, VALIDATION } from '../config.js';
 import {
     appState,
@@ -44,7 +45,6 @@ const PERMISSION_OPTIONS = [
     { key: 'puede_eliminar', label: 'Eliminar' }
 ];
 
-
 const adminState = {
     areas: [],
     users: [],
@@ -55,6 +55,7 @@ const adminState = {
         rol: 'TODOS'
     }
 };
+
 let adminContainerRef = null;
 
 // =====================================================
@@ -214,8 +215,6 @@ function setupStaticListeners(container) {
 // =====================================================
 // CARGA DE DATOS
 // =====================================================
-
-
 async function ensureAdminProfile() {
     if (!appState.profile) {
         await getCurrentProfile();
@@ -229,6 +228,7 @@ async function ensureAdminProfile() {
     if (DEBUG.enabled) {
         console.warn('⚠️ Usuario sin privilegios de administrador');
     }
+
 
     return false;
 }
@@ -274,7 +274,6 @@ function renderUsersTable() {
             </tr>
         `;
         return;
-
     }
 
     const filteredUsers = getFilteredUsers();
@@ -974,7 +973,6 @@ function getUserValidationRules(requirePassword) {
             message: VALIDATION.password?.message || 'Contraseña no válida'
         };
     }
-
     return rules;
 }
 
@@ -1086,7 +1084,6 @@ function renderStatusBadge(status) {
         : 'bg-red-100 text-red-700';
     const label = status === 'ACTIVO' ? 'Activo' : 'Inactivo';
     return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${classes}">${label}</span>`;
-
 }
 
 function renderPermissionChip(option, active) {
@@ -1139,7 +1136,6 @@ function refreshIcons() {
     }
 }
 
-
 function renderAccessDenied() {
     if (!adminContainerRef) return;
     adminContainerRef.innerHTML = `
@@ -1161,3 +1157,4 @@ function renderErrorState(error) {
         </div>
     `;
 }
+
