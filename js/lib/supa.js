@@ -398,12 +398,67 @@ export async function getCurrentProfile() {
         const user = await getCurrentUser();
         if (!user) return null;
 
+
+        const { data: profileData, error: profileError } = await supabase
         const { data, error } = await supabase
             .from('perfiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (profileError && profileError.code !== 'PGRST116') {
+            console.error('❌ Error al obtener perfil:', profileError);
+            return null;
+        }
+
+        let profile = profileData;
+
+        if (!profile) {
+            profile = {
+                id: user.id,
+                email: user.email,
+                nombre_completo: user.user_metadata?.nombre_completo || user.user_metadata?.full_name || user.email,
+                rol_principal: user.user_metadata?.rol_principal || 'CONSULTOR',
+                telefono: user.user_metadata?.telefono || null,
+                puesto: user.user_metadata?.puesto || null,
+                estado: 'ACTIVO',
+                ultimo_acceso: user.last_sign_in_at || null,
+                fecha_creacion: user.created_at || new Date().toISOString(),
+                fecha_actualizacion: user.updated_at || user.created_at || new Date().toISOString(),
+                usuario_areas: []
+            };
+        }
+
+        const { data: areaAssignments, error: areasError } = await supabase
+            .from('usuario_areas')
             .select(`
-                *,
-                usuario_areas (
+                id,
+                area_id,
+                rol,
+                puede_capturar,
+                puede_editar,
+                puede_eliminar,
+                estado,
+                fecha_asignacion,
+                fecha_actualizacion,
+                areas (
                     id,
+                    clave,
+                    nombre,
+                    color_hex
+                )
+            `)
+            .eq('usuario_id', user.id)
+            .order('fecha_asignacion', { ascending: false });
+
+        if (areasError) {
+            console.error('❌ Error al obtener áreas asignadas:', areasError);
+            profile.usuario_areas = profile.usuario_areas || [];
+        } else {
+            profile.usuario_areas = areaAssignments || [];
+        }
+
+
                     area_id,
                     rol,
                     puede_capturar,
