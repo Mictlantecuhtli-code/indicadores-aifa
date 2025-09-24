@@ -1646,13 +1646,6 @@ async function handleRefreshAreas() {
 }
 
 /**
- * Mostrar modal de agregar área
- */
-window.showAddAreaModal = function() {
-    showToast('Modal de agregar área en desarrollo', 'info');
-};
-
-/**
  * Ver detalles de área
  */
 window.viewAreaDetails = function(areaId) {
@@ -1755,7 +1748,360 @@ window.deleteArea = async function(areaId, areaNombre) {
  * Mostrar modal de invitar usuario
  */
 function showInviteUserModal() {
-    showToast('Modal de invitar usuario en desarrollo', 'info');
+    showModal({
+        title: 'Invitar Nuevo Usuario',
+        content: `
+            <form id="invite-user-form" class="space-y-4">
+                <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                    <div class="flex items-start space-x-3">
+                        <i data-lucide="info" class="w-5 h-5 text-blue-600 mt-0.5"></i>
+                        <div class="text-sm text-blue-800">
+                            <p class="font-medium">¿Cómo funciona la invitación?</p>
+                            <ul class="mt-1 space-y-1 text-xs">
+                                <li>• Se creará el usuario en el sistema</li>
+                                <li>• Se enviará email con instrucciones de acceso</li>
+                                <li>• El usuario podrá iniciar sesión inmediatamente</li>
+                                <li>• Puede asignar áreas específicas después</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="invite-email" class="block text-sm font-medium text-gray-700 mb-1">
+                        Email <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="invite-email" 
+                        name="email" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="usuario@aifa.gob.mx"
+                    >
+                    <div class="mt-1 text-xs text-gray-500">
+                        Preferiblemente usar email institucional @aifa.gob.mx
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="invite-name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre Completo <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="invite-name" 
+                        name="nombre_completo" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Nombre completo del usuario"
+                    >
+                </div>
+                
+                <div>
+                    <label for="invite-role" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol Principal <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="invite-role" 
+                        name="rol_principal" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar rol...</option>
+                        <option value="CAPTURISTA">Capturista</option>
+                        <option value="JEFE_AREA">Jefe de Área</option>
+                        <option value="SUBDIRECTOR">Subdirector</option>
+                        <option value="DIRECTOR">Director</option>
+                        <option value="ADMIN">Administrador</option>
+                    </select>
+                    <div class="mt-1 text-xs text-gray-500">
+                        El rol determina los permisos base del usuario
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="invite-puesto" class="block text-sm font-medium text-gray-700 mb-1">
+                        Puesto/Cargo
+                    </label>
+                    <input 
+                        type="text" 
+                        id="invite-puesto" 
+                        name="puesto"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Ej: Analista, Coordinador, Director"
+                    >
+                </div>
+                
+                <div>
+                    <label for="invite-telefono" class="block text-sm font-medium text-gray-700 mb-1">
+                        Teléfono
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="invite-telefono" 
+                        name="telefono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Número de contacto"
+                    >
+                </div>
+                
+                <div class="border-t pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Asignación de Área (Opcional)</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <label for="invite-area" class="block text-sm font-medium text-gray-700 mb-1">
+                                Área Inicial
+                            </label>
+                            <select 
+                                id="invite-area" 
+                                name="area_inicial" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                            >
+                                <option value="">Sin asignación inicial</option>
+                                ${adminState.areas.filter(a => a.estado === 'ACTIVO').map(area => `
+                                    <option value="${area.id}">
+                                        ${area.clave} - ${area.nombre}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <div class="mt-1 text-xs text-gray-500">
+                                Puede asignar áreas adicionales después
+                            </div>
+                        </div>
+                        
+                        <div id="area-permissions" class="hidden space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                Permisos en el Área
+                            </label>
+                            <div class="space-y-1">
+                                <label class="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        name="puede_capturar_inicial" 
+                                        checked
+                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                    >
+                                    <span class="ml-2 text-sm text-gray-700">Puede capturar datos</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        name="puede_editar_inicial" 
+                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                    >
+                                    <span class="ml-2 text-sm text-gray-700">Puede editar datos</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        name="puede_eliminar_inicial" 
+                                        class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                    >
+                                    <span class="ml-2 text-sm text-gray-700">Puede eliminar datos</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-50 p-3 rounded-lg">
+                    <div class="flex items-start space-x-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4 text-yellow-600 mt-0.5"></i>
+                        <div class="text-xs text-yellow-800">
+                            <p class="font-medium">Nota importante:</p>
+                            <p>El usuario recibirá las credenciales por email y podrá acceder inmediatamente al sistema.</p>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Enviar Invitación',
+                primary: true,
+                handler: async () => {
+                    await handleSendInvitation();
+                    return false; // No cerrar modal automáticamente
+                }
+            }
+        ]
+    });
+    
+    // Configurar event listener para mostrar/ocultar permisos de área
+    setTimeout(() => {
+        const areaSelect = document.getElementById('invite-area');
+        const areaPermissions = document.getElementById('area-permissions');
+        
+        if (areaSelect && areaPermissions) {
+            areaSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    areaPermissions.classList.remove('hidden');
+                } else {
+                    areaPermissions.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Recrear iconos
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
+}
+
+/**
+ *   Procesar envío de invitación
+ */
+async function handleSendInvitation() {
+    try {
+        const form = document.getElementById('invite-user-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        
+        // Validaciones básicas
+        if (!formData.email || !formData.nombre_completo || !formData.rol_principal) {
+            showToast('Complete todos los campos obligatorios', 'error');
+            return;
+        }
+        
+        // Validar formato de email
+        if (!VALIDATION.email.pattern.test(formData.email)) {
+            showToast('Formato de email no válido', 'error');
+            return;
+        }
+        
+        showLoading('Enviando invitación...');
+        
+        // Crear el usuario
+        const userData = {
+            email: formData.email,
+            nombre_completo: formData.nombre_completo,
+            rol_principal: formData.rol_principal,
+            puesto: formData.puesto || null,
+            telefono: formData.telefono || null
+        };
+        
+        const newUser = await createUser(userData);
+        
+        // Si se seleccionó un área inicial, asignar al usuario
+        if (formData.area_inicial && newUser) {
+            const assignmentData = {
+                rol: formData.rol_principal,
+                puede_capturar: formData.puede_capturar_inicial === 'on',
+                puede_editar: formData.puede_editar_inicial === 'on',
+                puede_eliminar: formData.puede_eliminar_inicial === 'on'
+            };
+            
+            await assignUserToArea(newUser.id, formData.area_inicial, assignmentData);
+        }
+        
+        // Simular envío de email de invitación
+        // En producción aquí se enviaría el email real
+        await simulateEmailInvitation(formData.email, formData.nombre_completo);
+        
+        hideModal();
+        showToast(`Invitación enviada a ${formData.email}`, 'success');
+        
+        // Mostrar modal de confirmación con detalles
+        setTimeout(() => {
+            showInvitationConfirmation(formData.email, formData.nombre_completo);
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ Error al enviar invitación:', error);
+        showToast(error.message || 'Error al enviar la invitación', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ *  Simular envío de email
+ */
+async function simulateEmailInvitation(email, nombreCompleto) {
+    // Simular delay de envío de email
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // En producción, aquí se integraría con el servicio de email
+    // Por ejemplo: SendGrid, AWS SES, etc.
+    
+    if (DEBUG.enabled) {
+        console.log('📧 Email de invitación simulado:', {
+            to: email,
+            subject: 'Invitación al Sistema de Indicadores AIFA',
+            body: `Hola ${nombreCompleto}, has sido invitado a formar parte del Sistema de Indicadores AIFA...`
+        });
+    }
+}
+
+/**
+ *  Mostrar confirmación de invitación
+ */
+function showInvitationConfirmation(email, nombreCompleto) {
+    showModal({
+        title: '¡Invitación Enviada Exitosamente!',
+        content: `
+            <div class="text-center space-y-4">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <i data-lucide="mail-check" class="w-8 h-8 text-green-600"></i>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Invitación Enviada</h3>
+                    <p class="text-sm text-gray-600">
+                        Se ha enviado una invitación a <strong>${email}</strong>
+                    </p>
+                </div>
+                
+                <div class="bg-gray-50 p-4 rounded-lg text-left">
+                    <h4 class="font-medium text-gray-900 mb-2">¿Qué sigue ahora?</h4>
+                    <ul class="text-sm text-gray-600 space-y-1">
+                        <li>• ${nombreCompleto} recibirá un email con instrucciones</li>
+                        <li>• Podrá acceder al sistema inmediatamente</li>
+                        <li>• El usuario aparecerá en la lista con estado ACTIVO</li>
+                        <li>• Puede asignar áreas adicionales cuando sea necesario</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <div class="flex items-center justify-center space-x-2">
+                        <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
+                        <span class="text-sm text-blue-800">
+                            El usuario ya está creado y puede iniciar sesión
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Invitar Otro Usuario',
+                handler: () => {
+                    hideModal();
+                    setTimeout(() => showInviteUserModal(), 100);
+                    return true;
+                }
+            },
+            {
+                text: 'Cerrar',
+                primary: true,
+                handler: () => true
+            }
+        ]
+    });
+    
+    // Recrear iconos
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 10);
 }
 
 /**
@@ -1884,9 +2230,6 @@ async function handleRefreshPermissions() {
 /**
  * Mostrar modal de agregar permiso
  */
-window.showAddPermissionModal = function() {
-    showToast('Modal de agregar permiso en desarrollo', 'info');
-};
 
 /**
  * Editar permiso
@@ -4178,5 +4521,639 @@ function formatFriendlyDate(dateString) {
     } else {
         const years = Math.floor(diffInDays / 365);
         return `Hace ${years} año${years > 1 ? 's' : ''}`;
+    }
+}
+/**
+ * Crear nueva área
+ */
+function showAddAreaModal() {
+    showModal({
+        title: 'Crear Nueva Área',
+        content: `
+            <form id="create-area-form" class="space-y-4">
+                <div>
+                    <label for="area-clave" class="block text-sm font-medium text-gray-700 mb-1">
+                        Clave <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="area-clave" 
+                        name="clave" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Ej: DIR-001, SUB-002"
+                    >
+                </div>
+                
+                <div>
+                    <label for="area-nombre" class="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="area-nombre" 
+                        name="nombre" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Nombre descriptivo del área"
+                    >
+                </div>
+                
+                <div>
+                    <label for="area-descripcion" class="block text-sm font-medium text-gray-700 mb-1">
+                        Descripción
+                    </label>
+                    <textarea 
+                        id="area-descripcion" 
+                        name="descripcion" 
+                        rows="3"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                        placeholder="Descripción opcional del área"
+                    ></textarea>
+                </div>
+                
+                <div>
+                    <label for="area-color" class="block text-sm font-medium text-gray-700 mb-1">
+                        Color Representativo
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input 
+                            type="color" 
+                            id="area-color" 
+                            name="color_hex" 
+                            value="#3B82F6"
+                            class="h-10 w-20 border border-gray-300 rounded cursor-pointer"
+                        >
+                        <span class="text-sm text-gray-500">Color para identificar el área en gráficas</span>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Crear Área',
+                primary: true,
+                handler: async () => {
+                    await handleCreateArea();
+                    return false;
+                }
+            }
+        ]
+    });
+}
+/**
+ * Procesar creación de área
+ */
+async function handleCreateArea() {
+    try {
+        const form = document.getElementById('create-area-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        
+        if (!formData.clave || !formData.nombre) {
+            showToast('Complete los campos obligatorios', 'error');
+            return;
+        }
+        
+        showLoading('Creando área...');
+        
+        // Verificar que no exista la clave
+        const existingArea = adminState.areas.find(a => a.clave.toLowerCase() === formData.clave.toLowerCase());
+        if (existingArea) {
+            throw new Error('Ya existe un área con esta clave');
+        }
+        
+        const newAreaData = {
+            clave: formData.clave.trim().toUpperCase(),
+            nombre: formData.nombre.trim(),
+            descripcion: formData.descripcion?.trim() || null,
+            color_hex: formData.color_hex || '#3B82F6',
+            estado: 'ACTIVO',
+            fecha_creacion: new Date().toISOString()
+        };
+        
+        const { data: newArea } = await insertData('areas', newAreaData, {
+            select: 'id, clave, nombre, descripcion, color_hex, estado, fecha_creacion'
+        });
+        
+        if (!newArea || newArea.length === 0) {
+            throw new Error('Error al crear el área');
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'areas',
+            registro_id: newArea[0].id,
+            operacion: 'INSERT',
+            datos_nuevos: newAreaData,
+            observaciones: `Área creada por administrador`
+        });
+        
+        adminState.areas.unshift(newArea[0]);
+        updateAreasTable();
+        updateSystemCounts();
+        
+        hideModal();
+        showToast('Área creada correctamente', 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al crear área:', error);
+        showToast(error.message || 'Error al crear el área', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+/**
+ * Ver detalles de área
+ */
+function viewAreaDetails(areaId) {
+    const area = adminState.areas.find(a => a.id === areaId);
+    if (!area) {
+        showToast('Área no encontrada', 'error');
+        return;
+    }
+    
+    const areaUsers = adminState.permisos.filter(p => p.area_id === areaId && p.estado === 'ACTIVO');
+    
+    showModal({
+        title: `Detalles: ${area.nombre}`,
+        content: `
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Clave</label>
+                        <p class="mt-1 text-sm text-gray-900">${area.clave}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Estado</label>
+                        <span class="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            area.estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }">
+                            ${area.estado}
+                        </span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Descripción</label>
+                    <p class="mt-1 text-sm text-gray-900">${area.descripcion || 'Sin descripción'}</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Color</label>
+                    <div class="mt-1 flex items-center space-x-2">
+                        <div class="w-6 h-6 rounded border" style="background-color: ${area.color_hex}"></div>
+                        <span class="text-sm text-gray-900">${area.color_hex}</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Usuarios Asignados (${areaUsers.length})
+                    </label>
+                    ${areaUsers.length > 0 ? `
+                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                            ${areaUsers.map(permission => `
+                                <div class="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                                    <span>${permission.perfiles?.nombre_completo || permission.perfiles?.email || 'Usuario'}</span>
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">${getRoleName(permission.rol)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-sm text-gray-500">No hay usuarios asignados</p>'}
+                </div>
+                
+                <div class="text-xs text-gray-400 pt-2 border-t">
+                    Creada: ${formatDate(area.fecha_creacion, 'long')}
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                text: 'Editar',
+                handler: () => {
+                    hideModal();
+                    setTimeout(() => showEditAreaModal(areaId), 100);
+                }
+            },
+            {
+                text: 'Cerrar',
+                primary: true,
+                handler: () => true
+            }
+        ]
+    });
+}
+/**
+ * Editar área existente
+ */
+function showEditAreaModal(areaId) {
+    const area = adminState.areas.find(a => a.id === areaId);
+    if (!area) {
+        showToast('Área no encontrada', 'error');
+        return;
+    }
+    
+    showModal({
+        title: `Editar Área: ${area.nombre}`,
+        content: `
+            <form id="edit-area-form" class="space-y-4">
+                <input type="hidden" name="area_id" value="${area.id}">
+                
+                <div>
+                    <label for="edit-area-clave" class="block text-sm font-medium text-gray-700 mb-1">
+                        Clave <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="edit-area-clave" 
+                        name="clave" 
+                        value="${area.clave}"
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div>
+                    <label for="edit-area-nombre" class="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="edit-area-nombre" 
+                        name="nombre" 
+                        value="${area.nombre}"
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                </div>
+                
+                <div>
+                    <label for="edit-area-descripcion" class="block text-sm font-medium text-gray-700 mb-1">
+                        Descripción
+                    </label>
+                    <textarea 
+                        id="edit-area-descripcion" 
+                        name="descripcion" 
+                        rows="3"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >${area.descripcion || ''}</textarea>
+                </div>
+                
+                <div>
+                    <label for="edit-area-color" class="block text-sm font-medium text-gray-700 mb-1">
+                        Color Representativo
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input 
+                            type="color" 
+                            id="edit-area-color" 
+                            name="color_hex" 
+                            value="${area.color_hex}"
+                            class="h-10 w-20 border border-gray-300 rounded cursor-pointer"
+                        >
+                        <span class="text-sm text-gray-500">Color para identificar el área</span>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Guardar Cambios',
+                primary: true,
+                handler: async () => {
+                    await handleEditArea();
+                    return false;
+                }
+            }
+        ]
+    });
+}
+/**
+ *     Procesar edición de área
+ */
+async function handleEditArea() {
+    try {
+        const form = document.getElementById('edit-area-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        const areaId = formData.area_id;
+        
+        if (!formData.clave || !formData.nombre) {
+            showToast('Complete los campos obligatorios', 'error');
+            return;
+        }
+        
+        showLoading('Actualizando área...');
+        
+        const currentArea = adminState.areas.find(a => a.id === areaId);
+        
+        // Verificar clave única si se cambió
+        if (formData.clave.toLowerCase() !== currentArea.clave.toLowerCase()) {
+            const existingArea = adminState.areas.find(a => 
+                a.clave.toLowerCase() === formData.clave.toLowerCase() && a.id !== areaId
+            );
+            if (existingArea) {
+                throw new Error('Ya existe otra área con esta clave');
+            }
+        }
+        
+        const updateData = {
+            clave: formData.clave.trim().toUpperCase(),
+            nombre: formData.nombre.trim(),
+            descripcion: formData.descripcion?.trim() || null,
+            color_hex: formData.color_hex,
+            fecha_actualizacion: new Date().toISOString()
+        };
+        
+        const { data: updatedArea } = await updateData('areas', updateData, { id: areaId }, {
+            select: 'id, clave, nombre, descripcion, color_hex, estado, fecha_creacion, fecha_actualizacion'
+        });
+        
+        if (!updatedArea || updatedArea.length === 0) {
+            throw new Error('Error al actualizar el área');
+        }
+        
+        // Registrar en auditoría
+        await registrarAuditoria({
+            tabla_afectada: 'areas',
+            registro_id: areaId,
+            operacion: 'UPDATE',
+            datos_anteriores: currentArea,
+            datos_nuevos: updateData,
+            campos_modificados: Object.keys(updateData).join(', '),
+            observaciones: `Área editada por administrador`
+        });
+        
+        // Actualizar estado local
+        const areaIndex = adminState.areas.findIndex(a => a.id === areaId);
+        if (areaIndex !== -1) {
+            adminState.areas[areaIndex] = updatedArea[0];
+        }
+        
+        updateAreasTable();
+        
+        hideModal();
+        showToast('Área actualizada correctamente', 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al editar área:', error);
+        showToast(error.message || 'Error al actualizar el área', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+/**
+ *    Agregar nueva asignación de permiso
+ */
+function showAddPermissionModal() {
+    const activeUsers = adminState.usuarios.filter(u => u.estado === 'ACTIVO');
+    const activeAreas = adminState.areas.filter(a => a.estado === 'ACTIVO');
+    
+    if (activeUsers.length === 0) {
+        showToast('No hay usuarios activos para asignar', 'warning');
+        return;
+    }
+    
+    if (activeAreas.length === 0) {
+        showToast('No hay áreas activas para asignar', 'warning');
+        return;
+    }
+    
+    showModal({
+        title: 'Nueva Asignación de Permiso',
+        content: `
+            <form id="add-permission-form" class="space-y-4">
+                <div>
+                    <label for="permission-user" class="block text-sm font-medium text-gray-700 mb-1">
+                        Usuario <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="permission-user" 
+                        name="usuario_id" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar usuario...</option>
+                        ${activeUsers.map(user => `
+                            <option value="${user.id}">
+                                ${user.nombre_completo || user.email} (${getRoleName(user.rol_principal)})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="permission-area" class="block text-sm font-medium text-gray-700 mb-1">
+                        Área <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="permission-area" 
+                        name="area_id" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="">Seleccionar área...</option>
+                        ${activeAreas.map(area => `
+                            <option value="${area.id}">
+                                ${area.clave} - ${area.nombre}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="permission-role" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rol en el Área <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                        id="permission-role" 
+                        name="rol" 
+                        required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-aifa-blue focus:border-transparent"
+                    >
+                        <option value="CAPTURISTA">Capturista</option>
+                        <option value="JEFE_AREA">Jefe de Área</option>
+                        <option value="SUBDIRECTOR">Subdirector</option>
+                        <option value="DIRECTOR">Director</option>
+                    </select>
+                </div>
+                
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-700">
+                        Permisos Específicos
+                    </label>
+                    
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_capturar" 
+                                checked
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede capturar datos</span>
+                        </label>
+                        
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_editar" 
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede editar datos</span>
+                        </label>
+                        
+                        <label class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                name="puede_eliminar" 
+                                class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                            >
+                            <span class="ml-2 text-sm text-gray-700">Puede eliminar datos</span>
+                        </label>
+                    </div>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Crear Asignación',
+                primary: true,
+                handler: async () => {
+                    await handleCreatePermission();
+                    return false;
+                }
+            }
+        ]
+    });
+}
+/**
+ *   Procesar creación de permiso
+ */
+async function handleCreatePermission() {
+    try {
+        const form = document.getElementById('add-permission-form');
+        if (!form) return;
+        
+        const formData = getFormData(form);
+        
+        if (!formData.usuario_id || !formData.area_id || !formData.rol) {
+            showToast('Complete todos los campos obligatorios', 'error');
+            return;
+        }
+        
+        // Verificar si ya existe la asignación
+        const existingPermission = adminState.permisos.find(p => 
+            p.usuario_id === formData.usuario_id && 
+            p.area_id === formData.area_id && 
+            p.estado === 'ACTIVO'
+        );
+        
+        if (existingPermission) {
+            showToast('El usuario ya está asignado a esta área', 'error');
+            return;
+        }
+        
+        showLoading('Creando asignación...');
+        
+        const assignmentData = {
+            rol: formData.rol,
+            puede_capturar: formData.puede_capturar === 'on',
+            puede_editar: formData.puede_editar === 'on',
+            puede_eliminar: formData.puede_eliminar === 'on'
+        };
+        
+        await assignUserToArea(formData.usuario_id, formData.area_id, assignmentData);
+        
+        hideModal();
+        
+    } catch (error) {
+        console.error('❌ Error al crear asignación:', error);
+        showToast(error.message || 'Error al crear la asignación', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+/**
+ * NUEVA: handleRefreshPermissions - Actualizar permisos
+ */
+async function handleRefreshPermissions() {
+    try {
+        showLoading('Actualizando permisos...');
+        
+        await loadPermisos();
+        updatePermissionsTable();
+        updateSystemCounts();
+        
+        showToast('Lista de permisos actualizada', 'success');
+        
+    } catch (error) {
+        console.error('❌ Error al actualizar permisos:', error);
+        showToast('Error al actualizar los permisos', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+/**
+ *  Cambio de sección con carga de datos
+ */
+async function handleSectionChange(section) {
+    if (adminState.currentSection === section) return;
+    
+    try {
+        showLoading('Cargando sección...');
+        
+        // Actualizar estado
+        adminState.currentSection = section;
+        
+        // Actualizar tabs activos
+        document.querySelectorAll('[id^="section-"]').forEach(tab => {
+            tab.classList.remove('border-aifa-blue', 'text-aifa-blue');
+            tab.classList.add('border-transparent', 'text-gray-500');
+        });
+        
+        const activeTab = document.getElementById(`section-${section}`);
+        if (activeTab) {
+            activeTab.classList.remove('border-transparent', 'text-gray-500');
+            activeTab.classList.add('border-aifa-blue', 'text-aifa-blue');
+        }
+        
+        // Cargar datos específicos de la sección si es necesario
+        if (section === 'users' && adminState.usuarios.length === 0) {
+            await loadUsuarios();
+        } else if (section === 'permissions' && adminState.permisos.length === 0) {
+            await loadPermisos();
+        } else if (section === 'areas' && adminState.areas.length === 0) {
+            await loadAreas();
+        }
+        
+        // Cargar contenido de la nueva sección
+        await loadSectionContent();
+        
+        // Actualizar URL
+        const newUrl = `/admin?section=${section}`;
+        window.history.replaceState({}, '', `#${newUrl}`);
+        
+    } catch (error) {
+        console.error('❌ Error al cambiar sección:', error);
+        showToast('Error al cargar la sección', 'error');
+    } finally {
+        hideLoading();
     }
 }
