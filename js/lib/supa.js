@@ -1181,8 +1181,8 @@ export async function createUserWithProfile(userData) {
                 telefono: normalizedPhone,
                 puesto: normalizedPuesto
             }
-        };
-
+        //};
+        });
         createdAuthUserId = authUser.id;
         const existingProfile = await fetchProfileSnapshot(authUser.id);
 
