@@ -36,8 +36,6 @@ class NavigationTimeoutError extends Error {
         this.code = 'NAVIGATION_TIMEOUT';
     }
 }
-
-
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -186,6 +184,62 @@ async function executeWithTimeout(task, timeoutMs, context) {
     }
 }
 
+function resolveTimeout(candidate, fallback) {
+    if (candidate === null || candidate === undefined) {
+        return fallback;
+    }
+
+    if (candidate === false) {
+        return 0;
+    }
+
+    if (candidate === true) {
+        return fallback;
+    }
+
+    const numericCandidate = Number(candidate);
+    if (!Number.isFinite(numericCandidate)) {
+        return fallback;
+    }
+
+    if (numericCandidate <= 0) {
+        return 0;
+    }
+
+    return numericCandidate;
+}
+
+function getRenderTimeout(viewModule, route, params, query) {
+    if (!viewModule) {
+        return RENDER_TIMEOUT_MS;
+    }
+
+    let candidate;
+
+    if (typeof viewModule.getRenderTimeout === 'function') {
+        try {
+            candidate = viewModule.getRenderTimeout({ route, params, query });
+        } catch (error) {
+            console.warn('⚠️ Error al obtener tiempo de render personalizado:', error);
+        }
+    }
+
+    if (candidate === undefined && typeof viewModule.renderTimeoutMs !== 'undefined') {
+        candidate = viewModule.renderTimeoutMs;
+    }
+
+    if (candidate === undefined && viewModule.render && typeof viewModule.render.timeoutMs !== 'undefined') {
+        candidate = viewModule.render.timeoutMs;
+    }
+
+    if (candidate === undefined && viewModule.metadata && typeof viewModule.metadata.renderTimeoutMs !== 'undefined') {
+        candidate = viewModule.metadata.renderTimeoutMs;
+    }
+
+    return resolveTimeout(candidate, RENDER_TIMEOUT_MS);
+}
+
+
 function enqueueRoute(route) {
     if (!route) return;
 
@@ -299,10 +353,12 @@ async function renderRoute(route, resolved) {
         }
 
         activeViewModule = viewModule;
+        const renderTimeout = getRenderTimeout(viewModule, route, resolved.params, route.query);
 
         const teardown = await withTimeout(
             Promise.resolve(viewModule.render(container, resolved.params, route.query)),
-            RENDER_TIMEOUT_MS,
+            renderTimeout,
+
             `renderizado de ${route.path}`
         );
 
@@ -424,7 +480,6 @@ async function handleRouteChange(route, options = {}) {
             console.log('⏳ Navegación en cola:', route.fullPath);
         }
 
-
         return;
     }
 
@@ -486,6 +541,25 @@ async function handleRouteChange(route, options = {}) {
 
         processNextRoute();
     }
+}
+
+function processNextRoute() {
+    if (routerState.isNavigating) {
+        return;
+    }
+
+    const nextRoute = dequeueRoute();
+    if (!nextRoute) {
+        return;
+
+    }
+
+    Promise.resolve()
+        .then(() => handleRouteChange(nextRoute, { fromQueue: true }))
+        .catch(error => {
+            console.error('❌ Error al procesar navegación en cola:', error);
+            showToast('No fue posible completar la navegación pendiente.', 'error');
+        });
 }
 
 function processNextRoute() {
