@@ -613,20 +613,20 @@ export async function getCurrentProfile() {
 export async function signInWithPassword(email, password) {
     try {
         if (DEBUG.enabled) console.log('🔐 Intentando login:', email);
-        
+
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password: password
         });
-        
+
         if (error) {
             console.error('❌ Error en login:', error);
             throw new SupabaseError(error.message, error.name);
         }
-        
+
         appState.session = data.session;
         appState.user = data.user;
-        
+
         // Cargar perfil del usuario
         //appState.profile = await getCurrentProfile();
         try {
@@ -639,13 +639,73 @@ export async function signInWithPassword(email, password) {
                 rol_principal: 'ADMIN'
             };
         }
-        
+
         if (DEBUG.enabled) console.log('✅ Login exitoso:', data.user.email);
-        
+
         return { data };
     } catch (error) {
         handleError(error, 'Error al iniciar sesión');
         throw error;
+    }
+}
+
+/**
+ * Cambiar la contraseña del usuario autenticado
+ */
+export async function changePassword(currentPassword, newPassword) {
+    if (!appState.user?.email) {
+        throw new SupabaseError('No hay una sesión activa. Inicia sesión nuevamente.');
+    }
+
+    try {
+        const { data: reauthData, error: reauthError } = await supabase.auth.signInWithPassword({
+            email: appState.user.email,
+            password: currentPassword
+        });
+
+        if (reauthError) {
+            const message = (reauthError.message || '').toLowerCase();
+            if (message.includes('invalid') && message.includes('credentials')) {
+                throw new SupabaseError('La contraseña actual es incorrecta.', reauthError.name || reauthError.code, reauthError);
+            }
+
+            throw reauthError;
+        }
+
+        if (reauthData?.session) {
+            appState.session = reauthData.session;
+        }
+
+        if (reauthData?.user) {
+            appState.user = reauthData.user;
+        }
+
+        const { data, error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        if (data?.user) {
+            appState.user = data.user;
+        }
+
+        if (DEBUG.enabled) {
+            console.log('✅ Contraseña actualizada para', appState.user?.email);
+        }
+
+        notifyAuthListeners('PASSWORD_CHANGED', appState.session);
+
+        return true;
+    } catch (error) {
+        if (error instanceof SupabaseError) {
+            throw error;
+        }
+
+        const message = handleError(error, 'Error al actualizar la contraseña');
+        throw new SupabaseError(message, error?.code || error?.name, error);
     }
 }
 
