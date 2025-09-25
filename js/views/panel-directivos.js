@@ -4,7 +4,7 @@
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
-import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica } from '../lib/charts.js';
+import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica, normalizarSerieTemporal } from '../lib/charts.js';
 // Estado del panel de directivos
 const panelState = {
     userProfile: null,
@@ -505,19 +505,18 @@ async function cargarDatosReales(indicador) {
     try {
         const { data, error } = await selectData('v_mediciones_historico', {
             filters: { indicador_id: indicador.id },
-            orderBy: { column: 'anio', ascending: true }
+            orderBy: [
+                { column: 'anio', ascending: true },
+                { column: 'mes', ascending: true }
+            ]
         });
-        
+
         if (error) throw error;
-        
-        panelState.datosReales = (data || []).map(d => ({
-            ...d,
-            fecha: `${d.anio}-${String(d.mes).padStart(2, '0')}-01`,
-            valor: d.valor
-        }));
-        
+
+        panelState.datosReales = normalizarSerieTemporal(data || []);
+
         if (DEBUG.enabled) console.log('📊 Datos reales cargados:', panelState.datosReales.length);
-        
+
     } catch (error) {
         console.error('❌ Error al cargar datos reales:', error);
         throw error;
@@ -554,9 +553,13 @@ async function cargarDatosMetas(indicador, escenario) {
 
 function obtenerUltimoMesConDatos() {
     if (panelState.datosReales.length === 0) return null;
-    
-    const ultimoRegistro = panelState.datosReales[panelState.datosReales.length - 1];
-    
+
+    const ultimoRegistro = [...panelState.datosReales]
+        .reverse()
+        .find(registro => registro.valor !== null && registro.valor !== undefined);
+
+    if (!ultimoRegistro) return null;
+
     return {
         mes: ultimoRegistro.mes,
         año: ultimoRegistro.anio,
