@@ -20,6 +20,7 @@ export const routerState = {
 let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
+let pendingRoute = null;
 
 // =====================================================
 // CONFIGURACIÓN
@@ -320,6 +321,7 @@ function updateDocumentTitle(definition, params) {
 
 async function handleRouteChange(route) {
     if (routerState.isNavigating) {
+        pendingRoute = route;
         return;
     }
 
@@ -372,6 +374,13 @@ async function handleRouteChange(route) {
         showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
     } finally {
         routerState.isNavigating = false;
+
+        if (pendingRoute) {
+            const nextRoute = pendingRoute;
+            pendingRoute = null;
+            // Ejecutar la navegación pendiente en el siguiente ciclo
+            Promise.resolve().then(() => handleRouteChange(nextRoute));
+        }
     }
 }
 
