@@ -324,7 +324,7 @@ return `
 
                     <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
                         <div class="p-3 border-b border-gray-100">
-                            <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center justify-between">
                                 <span class="text-sm font-medium text-gray-700">Seleccionar indicadores <span class="text-xs text-gray-500">(máx. ${MAX_INDICADORES_SELECTION})</span></span>
                                 <button
                                     id="clear-indicadores-btn"
@@ -333,14 +333,6 @@ return `
                                     Limpiar todo
                                 </button>
                             </div>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    id="select-all-indicadores"
-                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                                >
-                                <span class="text-sm font-medium text-gray-700">Seleccionar todos los indicadores</span>
-                            </label>
                         </div>
                         <div class="max-h-60 overflow-y-auto">
                             <div class="p-3 pb-4 space-y-2 indicadores-options">
@@ -1968,11 +1960,6 @@ function setupFilterCheckboxes() {
         clearIndicadoresBtn.addEventListener('click', (e) => {
             e.preventDefault();
             document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
-            const selectAll = document.getElementById('select-all-indicadores');
-            if (selectAll) {
-                selectAll.checked = false;
-                selectAll.indeterminate = false;
-            }
             updateIndicadoresSelection();
         });
     }
@@ -2398,16 +2385,6 @@ function updateIndicadoresSelection() {
     if (filterText) {
         filterText.textContent = getIndicadoresFilterText();
     }
-
-    // Actualizar estado del checkbox "seleccionar todos"
-    const selectAllCheckbox = document.getElementById('select-all-indicadores');
-    if (selectAllCheckbox) {
-        const enabledCheckboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
-        const selectedEnabled = enabledCheckboxes.filter(cb => cb.checked);
-        selectAllCheckbox.checked = enabledCheckboxes.length > 0 && selectedEnabled.length === enabledCheckboxes.length;
-        selectAllCheckbox.indeterminate = selectedEnabled.length > 0 && selectedEnabled.length < enabledCheckboxes.length;
-    }
-
     updateApplyFiltersButton();
     updateAreaIndicatorCounts();
 }
@@ -2564,7 +2541,6 @@ function refreshIndicadoresDropdown() {
     setTimeout(() => {
         document.querySelectorAll('.indicador-checkbox').forEach(cb => {
             cb.addEventListener('change', handleIndicadorCheckboxChange);
-
         });
 
         updateAvailableIndicadoresFilter();
@@ -2636,20 +2612,6 @@ function setupSelectAllCheckboxes() {
         selectAllAreas.removeEventListener('change', handleSelectAllAreas);
         selectAllAreas.addEventListener('change', handleSelectAllAreas);
     }
-
-    // Select all para indicadores
-    const selectAllIndicadores = document.getElementById('select-all-indicadores');
-    if (selectAllIndicadores) {
-        selectAllIndicadores.removeEventListener('change', handleSelectAllIndicadores);
-        selectAllIndicadores.addEventListener('change', handleSelectAllIndicadores);
-
-        const enabledCheckboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
-        const selectedCheckboxes = enabledCheckboxes.filter(cb => cb.checked);
-        selectAllIndicadores.checked = enabledCheckboxes.length > 0 && selectedCheckboxes.length === enabledCheckboxes.length;
-        selectAllIndicadores.indeterminate = selectedCheckboxes.length > 0 && selectedCheckboxes.length < enabledCheckboxes.length;
-    }
-
-
     // Select all para años
     const selectAllYears = document.getElementById('select-all-years');
     if (selectAllYears) {
@@ -2673,27 +2635,6 @@ function handleSelectAllAreas(e) {
     });
     updateAreasSelection();
 }
-
-function handleSelectAllIndicadores(e) {
-    const checkboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
-
-    if (e.target.checked) {
-        checkboxes.forEach((cb, index) => {
-            cb.checked = index < MAX_INDICADORES_SELECTION;
-        });
-
-        if (checkboxes.length > MAX_INDICADORES_SELECTION) {
-            showToast(`Solo puedes seleccionar hasta ${MAX_INDICADORES_SELECTION} indicadores a la vez`, 'warning');
-        }
-    } else {
-        checkboxes.forEach(cb => {
-            cb.checked = false;
-        });
-    }
-
-    updateIndicadoresSelection();
-}
-
 function handleSelectAllYears(e) {
     const checkboxes = document.querySelectorAll('.year-checkbox');
     checkboxes.forEach(cb => {
