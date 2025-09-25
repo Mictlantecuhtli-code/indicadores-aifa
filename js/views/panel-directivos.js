@@ -505,7 +505,10 @@ async function cargarDatosReales(indicador) {
     try {
         const { data, error } = await selectData('v_mediciones_historico', {
             filters: { indicador_id: indicador.id },
-            orderBy: { column: 'anio', ascending: true }
+            orderBy: [
+                { column: 'anio', ascending: true },
+                { column: 'mes', ascending: true }
+            ]
         });
         
         if (error) throw error;
@@ -514,7 +517,10 @@ async function cargarDatosReales(indicador) {
             ...d,
             fecha: `${d.anio}-${String(d.mes).padStart(2, '0')}-01`,
             valor: d.valor
-        }));
+        })).sort((a, b) => {
+            if (a.anio !== b.anio) return a.anio - b.anio;
+            return a.mes - b.mes;
+        });
         
         if (DEBUG.enabled) console.log('📊 Datos reales cargados:', panelState.datosReales.length);
         
