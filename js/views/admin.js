@@ -2,8 +2,10 @@
 // PANEL DE ADMINISTRACIÓN - GESTIÓN DE USUARIOS
 // =====================================================
 
+
 import { DEBUG } from '../config.js';
 import {
+
     getCurrentProfile,
     fetchAdminAreas,
     fetchAdminUsers,
@@ -55,6 +57,7 @@ const adminState = {
         search: '',
         role: 'ALL',
         estado: 'ALL'
+
     }
 };
 
@@ -70,7 +73,6 @@ export async function render(container) {
     try {
         container.innerHTML = renderLayout();
         setupStaticListeners(container);
-
         showLoading('Cargando panel de administración...');
 
         const isAdmin = await ensureAdminProfile();
@@ -153,6 +155,7 @@ async function reloadUsers() {
 // RENDERIZADO DE LA INTERFAZ
 // =====================================================
 
+
 function renderLayout() {
     const roleOptions = ROLE_OPTIONS.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
     const estadoOptions = ESTADO_OPTIONS.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
@@ -169,6 +172,7 @@ function renderLayout() {
                     class="inline-flex items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-aifa-dark"
                 >
                     <i data-lucide="user-plus" class="h-4 w-4"></i>
+
                     Nuevo usuario
                 </button>
             </header>
@@ -207,7 +211,6 @@ function renderLayout() {
                         </label>
                     </div>
                 </div>
-
                 <div class="grid gap-0 border-t border-gray-200 md:grid-cols-[2fr,1fr]">
                     <div class="border-r border-gray-200">
                         <div class="overflow-x-auto">
@@ -270,7 +273,6 @@ function setupStaticListeners(container) {
     if (createButton) {
         createButton.addEventListener('click', () => openCreateUserModal());
     }
-}
 
 function applyFilters() {
     const searchText = adminState.filters.search.trim().toLowerCase();
@@ -361,7 +363,6 @@ function renderUsersTable() {
 
 function renderUserDetail() {
     if (!adminContainerRef) return;
-
     const detailContainer = adminContainerRef.querySelector('#admin-user-detail');
     if (!detailContainer) return;
 
@@ -450,6 +451,7 @@ function renderUserDetail() {
     `;
 
     attachDetailListeners(user);
+
     refreshIcons();
 }
 
@@ -546,9 +548,11 @@ function renderEmptyAssignments() {
 
 function openCreateUserModal() {
     const modalId = showModal({
+
         title: 'Registrar nuevo usuario',
         content: renderUserForm(true),
         actions: [
+            { text: 'Cancelar' },
             {
                 text: 'Cancelar'
             },
@@ -604,6 +608,7 @@ function openEditUserModal(user) {
         title: 'Editar perfil',
         content: renderUserForm(false, user),
         actions: [
+            { text: 'Cancelar' },
             {
                 text: 'Cancelar'
             },
@@ -1082,7 +1087,6 @@ function getEstadoBadgeClasses(estado) {
         default:
             return 'bg-gray-100 text-gray-600';
     }
-}
 
 function formatEstado(estado) {
     const option = ESTADO_OPTIONS.find(item => item.value === estado);
@@ -1120,6 +1124,73 @@ function refreshIcons() {
     if (window.lucide) {
         window.lucide.createIcons();
     }
+
+    if (estado !== 'TODOS') {
+        users = users.filter(user => user.estado === estado);
+    }
+
+    if (rol !== 'TODOS') {
+        users = users.filter(user => user.rol_principal === rol);
+    }
+
+    return users;
+}
+
+function getSelectedUser() {
+    return adminState.users.find(user => user.id === adminState.selectedUserId) || null;
+}
+
+function updateUserInState(userId, updater) {
+    const index = adminState.users.findIndex(user => user.id === userId);
+    if (index === -1) return;
+
+    const current = adminState.users[index];
+    adminState.users[index] = typeof updater === 'function' ? updater(current) : { ...current, ...updater };
+}
+
+function addAssignmentToState(userId, assignment) {
+    updateUserInState(userId, current => {
+        const assignments = [...(current.assignments || []), assignment];
+        return {
+            ...current,
+            assignments: sortAssignments(assignments)
+        };
+    });
+}
+
+function updateAssignmentInState(userId, assignmentId, updatedAssignment) {
+    updateUserInState(userId, current => {
+        const assignments = (current.assignments || []).map(item =>
+            item.id === assignmentId ? { ...item, ...updatedAssignment } : item
+        );
+        return {
+            ...current,
+            assignments: sortAssignments(assignments)
+        };
+    });
+}
+
+function removeAssignmentFromState(userId, assignmentId) {
+    updateUserInState(userId, current => ({
+        ...current,
+        assignments: (current.assignments || []).filter(item => item.id !== assignmentId)
+    }));
+}
+
+function sortUsers() {
+    adminState.users.sort((a, b) => {
+        const nameA = (a.nombre_completo || a.email || '').toLowerCase();
+        const nameB = (b.nombre_completo || b.email || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
+}
+
+function sortAssignments(assignments) {
+    return [...assignments].sort((a, b) => {
+        const nameA = (a.area?.nombre || a.areas?.nombre || '').toLowerCase();
+        const nameB = (b.area?.nombre || b.areas?.nombre || '').toLowerCase();
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
 }
 
 function renderAccessDenied() {
@@ -1151,3 +1222,4 @@ function renderErrorState(error) {
 if (DEBUG.enabled) {
     window.adminViewState = adminState;
 }
+
