@@ -69,6 +69,7 @@ export async function render(container) {
         container.innerHTML = renderLayout();
         setupStaticListeners(container);
 
+
         showLoading('Cargando panel de administración...');
 
         const isAdmin = await ensureAdminProfile();
@@ -83,11 +84,13 @@ export async function render(container) {
         refreshIcons();
     } catch (error) {
         console.error('❌ Error al renderizar panel de administración:', error);
+
         if (container) {
             container.innerHTML = renderErrorState(error);
         }
         showToast('No se pudo cargar el panel de administración', 'error');
         refreshIcons();
+
     } finally {
         hideLoading();
     }
@@ -219,6 +222,9 @@ function setupStaticListeners(container) {
 // =====================================================
 // CARGA DE DATOS
 // =====================================================
+async function ensureAdminProfile() {
+    if (!appState.profile) {
+        await getCurrentProfile();
 
 async function ensureAdminProfile() {
     if (!appState.profile) {
@@ -267,6 +273,7 @@ async function loadInitialData() {
         showToast('No se pudieron cargar los usuarios', 'error');
     }
 
+
     sortUsers();
 
     if (adminState.users.length > 0) {
@@ -277,12 +284,14 @@ async function loadInitialData() {
         adminState.selectedUserId = null;
     }
 
+
     if (loadErrors.length === 2) {
         throw loadErrors[0] instanceof Error
             ? loadErrors[0]
             : new Error('No se pudieron cargar los datos del panel de administración');
+
     }
-}
+
 
 // =====================================================
 // RENDER DE TABLAS Y DETALLES
@@ -303,6 +312,7 @@ function renderUsersTable() {
         `;
         return;
     }
+
 
     const filteredUsers = getFilteredUsers();
 
