@@ -580,8 +580,6 @@ const ASSIGNMENT_COLUMNS = [
     'fecha_asignacion',
     'fecha_actualizacion'
 ].join(', ');
-
-
 const ASSIGNMENT_SELECT = `${ASSIGNMENT_COLUMNS}, areas:areas(id, nombre, clave, color_hex)`;
 
 export async function getCurrentProfile() {
@@ -1051,15 +1049,11 @@ async function logAuditOperation({
             observaciones: observations || null,
             es_automatico: automatic
         };
-
-
         const { error } = await supabase.from('auditoria_log').insert(auditRecord);
 
         if (error) {
             throw new SupabaseError(error.message, error.code, error.details);
         }
-
-
         if (DEBUG.enabled) {
             console.log('📝 Auditoría registrada:', {
                 tabla: table,
@@ -1086,7 +1080,6 @@ async function fetchProfileSnapshot(userId) {
     }
 
     return mapProfileRecord(data || null);
-
 }
 
 async function fetchAssignmentSnapshot(assignmentId) {
@@ -1104,7 +1097,6 @@ async function fetchAssignmentSnapshot(assignmentId) {
 }
 
 export async function fetchAdminAreas() {
-
     try {
         const { data, error } = await supabase
             .from('areas')
@@ -1160,7 +1152,6 @@ export async function fetchAdminUsers() {
         }
         throw error;
     }
-
 }
 
 export async function createUserWithProfile(userData) {
@@ -1375,7 +1366,6 @@ export async function updateUserProfile(userId, updates = {}) {
             puesto: updatedProfile.puesto
         }
     });
- 
     await logAuditOperation({
         table: 'perfiles',
         recordId: userId,
@@ -1466,13 +1456,9 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
         changedFields: ['estado', 'fecha_actualizacion'],
         observations: `Usuario ${existing.email} marcado como inactivo`
     });
-
-
     await tryUpdateAuthUser(userId, {
         banned_until: new Date().toISOString()
     });
-
-
     if (appState.profile?.id === userId) {
         appState.profile = { ...appState.profile, ...updatedProfile };
     }
