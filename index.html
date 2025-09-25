@@ -234,7 +234,8 @@
         navigateTo: router.navigateTo,
         goBack: router.goBack,
         reloadCurrentRoute: router.reloadCurrentRoute,
-        parseCurrentRoute: router.parseCurrentRoute
+        parseCurrentRoute: router.parseCurrentRoute,
+        getDefaultRouteForUser: router.getDefaultRouteForUser
       };
 
       // Configurar navegación del header
@@ -370,7 +371,11 @@
 
       // Navegación inicial
       if (!location.hash) {
-        router.navigateTo('/', {}, true);
+        const defaultRoute = supa.isAuthenticated()
+          ? (router.getDefaultRouteForUser?.(supa.appState.profile) || '/')
+          : '/';
+
+        router.navigateTo(defaultRoute, {}, true);
       } else {
         router.reloadCurrentRoute();
       }

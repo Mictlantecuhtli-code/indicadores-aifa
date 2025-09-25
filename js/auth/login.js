@@ -625,9 +625,12 @@ async function ensureAuthInitialized(timeout = 6000) {
  * Redirigir a la página inicial usando el router si está disponible
  */
 function redirectToHome() {
+    const role = appState.profile?.rol_principal;
+    const targetRoute = role === 'DIRECTOR' ? '/panel-directivos' : '/';
+
     if (window.router?.navigateTo) {
-        window.router.navigateTo('/', {}, true);
+        window.router.navigateTo(targetRoute, {}, true);
     } else {
-        window.location.hash = '#/';
+        window.location.hash = `#${targetRoute}`;
     }
 }

@@ -63,7 +63,7 @@ export function parseCurrentRoute() {
  */
 export function navigateTo(path, query = {}, replace = false) {
     if (routerState.isNavigating) return;
-    
+
     try {
         routerState.isNavigating = true;
         
@@ -94,6 +94,19 @@ export function navigateTo(path, query = {}, replace = false) {
 }
 
 /**
+ * Obtener la ruta predeterminada para el usuario autenticado
+ */
+export function getDefaultRouteForUser(profile = appState.profile) {
+    const role = profile?.rol_principal;
+
+    if (role === 'DIRECTOR') {
+        return '/panel-directivos';
+    }
+
+    return '/';
+}
+
+/**
  * Manejar cambio de ruta
  */
 async function handleRouteChange(route) {
@@ -117,13 +130,14 @@ async function handleRouteChange(route) {
             navigateTo('/login', {}, true);
             return;
         }
-        
+
         // Si está en login y ya autenticado, redirigir a home
         if (route.path === '/login' && isAuthenticated()) {
             if (DEBUG.enabled) {
                 console.log('👤 Usuario ya autenticado, redirigiendo a home');
             }
-            navigateTo('/', {}, true);
+            const targetRoute = getDefaultRouteForUser();
+            navigateTo(targetRoute, {}, true);
             return;
         }
         

@@ -2385,6 +2385,7 @@ function updateIndicadoresSelection() {
     if (filterText) {
         filterText.textContent = getIndicadoresFilterText();
     }
+
     updateApplyFiltersButton();
     updateAreaIndicatorCounts();
 }
@@ -2612,6 +2613,7 @@ function setupSelectAllCheckboxes() {
         selectAllAreas.removeEventListener('change', handleSelectAllAreas);
         selectAllAreas.addEventListener('change', handleSelectAllAreas);
     }
+
     // Select all para años
     const selectAllYears = document.getElementById('select-all-years');
     if (selectAllYears) {
@@ -2635,6 +2637,7 @@ function handleSelectAllAreas(e) {
     });
     updateAreasSelection();
 }
+
 function handleSelectAllYears(e) {
     const checkboxes = document.querySelectorAll('.year-checkbox');
     checkboxes.forEach(cb => {
