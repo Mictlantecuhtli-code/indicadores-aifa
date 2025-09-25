@@ -37,6 +37,7 @@ class NavigationTimeoutError extends Error {
     }
 }
 
+
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -422,6 +423,7 @@ async function handleRouteChange(route, options = {}) {
         if (DEBUG.enabled) {
             console.log('⏳ Navegación en cola:', route.fullPath);
         }
+
 
         return;
     }
