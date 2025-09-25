@@ -232,7 +232,14 @@ async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
         const datasets = aniosSeleccionados.map(anio => {
             const yearData = crearArrayMeses(null);
             datos.filter(d => new Date(d.fecha).getFullYear() === anio).forEach(d => {
-                yearData[new Date(d.fecha).getMonth()] = d.valor;
+                const mesIndex = new Date(d.fecha).getMonth();
+                const valor = d.valor === null || d.valor === undefined ? null : Number(d.valor);
+
+                if (!Number.isFinite(valor)) {
+                    return;
+                }
+
+                yearData[mesIndex] = valor;
             });
             return { label: anio.toString(), data: yearData, borderColor: obtenerColorPorAnio(anio) };
         });
