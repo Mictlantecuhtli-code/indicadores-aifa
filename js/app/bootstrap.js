@@ -102,40 +102,77 @@ async function openUserMenu() {
     }
 
     const profile = appState.profile || await getCurrentProfile();
+    const escapeHTML = (value) => {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
+    const displayName = escapeHTML(
+        profile?.nombre_completo?.trim() ||
+        appState.user?.user_metadata?.full_name ||
+        appState.user.email ||
+        'Mi cuenta'
+    );
+
+    const infoFields = [
+        {
+            label: 'Correo institucional',
+            value: escapeHTML(appState.user.email)
+        },
+        {
+            label: 'Rol principal',
+            value: escapeHTML(getRoleLabel(profile?.rol_principal))
+        }
+    ];
+
+    if (profile?.puesto) {
+        infoFields.push({
+            label: 'Puesto',
+            value: escapeHTML(profile.puesto)
+        });
+    }
+
+    if (profile?.telefono) {
+        infoFields.push({
+            label: 'Teléfono',
+            value: escapeHTML(profile.telefono)
+        });
+    }
+
+    const renderInfoField = ({ label, value }) => `
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">${label}</p>
+            <p class="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">${value || 'Sin registro'}</p>
+        </div>
+    `;
 
     const modalId = ui.showModal({
-        title: 'Mi Cuenta',
+        title: displayName,
         content: `
-            <div class="space-y-4">
-                <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                            <i data-lucide="user" class="w-6 h-6 text-white"></i>
-                        </div>
-                        <div class="flex-1">
-                            <p class="font-semibold text-gray-900">${profile?.nombre_completo || 'Usuario'}</p>
-                            <p class="text-sm text-gray-600">${appState.user.email}</p>
-                        </div>
-                    </div>
-                    <div class="bg-white/50 rounded px-3 py-2">
-                        <p class="text-xs text-gray-500">Rol actual</p>
-                        <p class="font-medium text-blue-700">${getRoleLabel(profile?.rol_principal)}</p>
-                    </div>
+            <div class="space-y-6">
+                <div class="grid gap-4">
+                    ${infoFields.map(renderInfoField).join('')}
+                </div>
+                <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                    <p class="text-xs leading-snug text-gray-500">Gestiona tu sesión desde esta ventana.</p>
+                    <button id="logout-btn-modal" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        Cerrar sesión
+                    </button>
                 </div>
 
-                <button id="logout-btn-modal" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-3 transition-colors">
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
-                    <span>Cerrar sesión</span>
-                </button>
             </div>
         `,
         actions: [
             {
                 text: 'Cerrar',
-                handler: () => {
-                    ui.hideModal(modalId);
-                    return true;
-                }
+                handler: () => true
+
             }
         ]
     });

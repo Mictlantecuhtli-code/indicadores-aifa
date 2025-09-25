@@ -100,6 +100,7 @@ function getBreadcrumbsForRoute(definition, params) {
                 { label: 'Inicio', path: '/', icon: 'home' }
             ];
         }
+
         // Garantizar que siempre esté Inicio al principio
         const hasHome = crumbs.some(crumb => crumb.path === '/' || crumb.icon === 'home');
         if (hasHome) {
@@ -150,6 +151,7 @@ export function getDefaultRouteForUser(profile = appState.profile) {
     if (!profile) {
         const defaultRoute = routeDefinitions.find(route => route.default);
         return defaultRoute?.path || '/';
+
     }
 
     const role = profile?.rol_principal;
