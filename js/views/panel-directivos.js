@@ -512,15 +512,51 @@ async function cargarDatosReales(indicador) {
         });
         
         if (error) throw error;
-        
-        panelState.datosReales = (data || []).map(d => ({
-            ...d,
-            fecha: `${d.anio}-${String(d.mes).padStart(2, '0')}-01`,
-            valor: d.valor
-        })).sort((a, b) => {
+       
+        const registrosOrdenados = (data || []).map(d => {
+            const valorNormalizado = d.valor === null || d.valor === undefined
+                ? null
+                : Number(d.valor);
+
+            return {
+                ...d,
+                fecha: `${d.anio}-${String(d.mes).padStart(2, '0')}-01`,
+                valor: Number.isFinite(valorNormalizado) ? valorNormalizado : null
+            };
+        }).sort((a, b) => {
             if (a.anio !== b.anio) return a.anio - b.anio;
             return a.mes - b.mes;
         });
+
+        const registrosPorPeriodo = new Map();
+
+        for (const registro of registrosOrdenados) {
+            const clavePeriodo = `${registro.anio}-${String(registro.mes).padStart(2, '0')}`;
+            const existente = registrosPorPeriodo.get(clavePeriodo);
+
+            if (!existente) {
+                registrosPorPeriodo.set(clavePeriodo, registro);
+                continue;
+            }
+
+            // Siempre privilegiar valores numéricos sobre nulos
+            if ((existente.valor === null || existente.valor === undefined) && registro.valor !== null) {
+                registrosPorPeriodo.set(clavePeriodo, registro);
+                continue;
+            }
+
+            // Si ambos tienen valor numérico conservar el más reciente
+            if (registro.valor !== null) {
+                registrosPorPeriodo.set(clavePeriodo, registro);
+            }
+        }
+
+        panelState.datosReales = Array.from(registrosPorPeriodo.values())
+            .filter(registro => registro.valor !== null && registro.valor !== undefined)
+            .sort((a, b) => {
+                if (a.anio !== b.anio) return a.anio - b.anio;
+                return a.mes - b.mes;
+            });
         
         if (DEBUG.enabled) console.log('📊 Datos reales cargados:', panelState.datosReales.length);
         
@@ -560,9 +596,13 @@ async function cargarDatosMetas(indicador, escenario) {
 
 function obtenerUltimoMesConDatos() {
     if (panelState.datosReales.length === 0) return null;
-    
-    const ultimoRegistro = panelState.datosReales[panelState.datosReales.length - 1];
-    
+
+    const ultimoRegistro = [...panelState.datosReales]
+        .reverse()
+        .find(registro => registro.valor !== null && registro.valor !== undefined);
+
+    if (!ultimoRegistro) return null;
+
     return {
         mes: ultimoRegistro.mes,
         año: ultimoRegistro.anio,
