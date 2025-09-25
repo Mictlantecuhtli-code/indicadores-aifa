@@ -588,7 +588,6 @@ export async function getCurrentProfile() {
         const user = await getCurrentUser();
         if (!user) return null;
         let { data: profileData, error: profileError } = await supabase
-
             .from('perfiles')
             .select(PROFILE_COLUMNS)
             .eq('id', user.id)
@@ -620,8 +619,6 @@ export async function getCurrentProfile() {
 
         const now = new Date().toISOString();
         let profile = mapProfileRecord(profileData);
-
-
         if (!profile) {
             const defaultProfile = {
                 id: user.id,
@@ -653,8 +650,8 @@ export async function getCurrentProfile() {
             const metadataName = sanitizeTextValue(user.user_metadata?.nombre_completo || user.user_metadata?.full_name);
             const metadataPhone = sanitizeTextValue(user.user_metadata?.telefono);
             const metadataPuesto = sanitizeTextValue(user.user_metadata?.puesto);
-            const metadataRole = normalizeRole(user.user_metadata?.rol_principal);
-
+            const metadataRoleValue = sanitizeTextValue(user.user_metadata?.rol_principal);
+            const metadataRole = metadataRoleValue ? normalizeRole(metadataRoleValue) : null;
             const syncData = {};
 
             const lastAccess = user.last_sign_in_at || now;
@@ -699,7 +696,6 @@ export async function getCurrentProfile() {
                     profile = mapProfileRecord(updatedProfiles[0]);
                 } else {
                     profile = mapProfileRecord({ ...profile, ...syncData });
-
                 }
             }
         }
@@ -731,7 +727,6 @@ export async function getCurrentProfile() {
             profile.usuario_areas = profile.usuario_areas || [];
         } else {
             profile.usuario_areas = (areaAssignments || []).map(mapAssignmentRecord);
-
         }
 
         appState.profile = profile;
@@ -1039,7 +1034,6 @@ async function logAuditOperation({
             tabla_afectada: table,
             registro_id: recordId,
             operacion: normalizedOperation,
-
             datos_anteriores: sanitizeAuditPayload(previous),
             datos_nuevos: sanitizeAuditPayload(next),
             campos_modificados: Array.isArray(changedFields) && changedFields.length > 0
@@ -1047,7 +1041,6 @@ async function logAuditOperation({
                 : Array.isArray(changedFields) ? null : changedFields,
             usuario_id: appState.profile?.id || appState.user?.id || null,
             ip_address: null,
-
             user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
             fecha_operacion: new Date().toISOString(),
             sesion_id: appState.session?.id || null,
@@ -1058,13 +1051,10 @@ async function logAuditOperation({
         if (error) {
             throw new SupabaseError(error.message, error.code, error.details);
         }
-
-
         if (DEBUG.enabled) {
             console.log('📝 Auditoría registrada:', {
                 tabla: table,
                 operacion: normalizedOperation,
-
                 registro: recordId
             });
         }
@@ -1129,6 +1119,7 @@ export async function fetchAdminUsers() {
     ]);
     const profiles = (profilesResponse.data || []).map(mapProfileRecord);
     const assignments = assignmentsResponse.data || [];
+
     const assignmentsByUser = new Map();
     assignments.forEach(record => {
         const mapped = mapAssignmentRecord(record);
@@ -1142,7 +1133,6 @@ export async function fetchAdminUsers() {
     return profiles.map(profile => ({
         ...profile,
         assignments: (assignmentsByUser.get(profile.id) || []).map(mapAssignmentRecord)
-
     }));
 }
 
@@ -1159,7 +1149,6 @@ export async function createUserWithProfile(userData) {
             telefono = null,
             puesto = null,
             estado = DEFAULT_RECORD_STATE
-
         } = userData;
 
         if (!email || !password || !rol_principal) {
@@ -1181,8 +1170,8 @@ export async function createUserWithProfile(userData) {
                 telefono: normalizedPhone,
                 puesto: normalizedPuesto
             }
-        //};
         });
+
         createdAuthUserId = authUser.id;
         const existingProfile = await fetchProfileSnapshot(authUser.id);
 
@@ -1283,11 +1272,10 @@ export async function createUserWithProfile(userData) {
 
         return { ...profile, assignments: [] };
     } catch (error) {
-
         if (createdAuthUserId && !profilePersisted) {
             await tryDeleteAuthUser(createdAuthUserId);
-
         }
+
         throw error;
     }
 }
@@ -1358,8 +1346,6 @@ export async function updateUserProfile(userId, updates = {}) {
             puesto: updatedProfile.puesto
         }
     });
-
-
     await logAuditOperation({
         table: 'perfiles',
         recordId: userId,
@@ -1412,7 +1398,6 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
         });
         await tryDeleteAuthUser(userId);
 
-
         if (appState.profile?.id === userId) {
             appState.profile = null;
         }
@@ -1440,7 +1425,6 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
     }
     const updatedProfile = mapProfileRecord(updatedRows?.[0] || { ...existing, ...updates });
 
-
     await logAuditOperation({
         table: 'perfiles',
         recordId: userId,
@@ -1450,13 +1434,9 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
         changedFields: ['estado', 'fecha_actualizacion'],
         observations: `Usuario ${existing.email} marcado como inactivo`
     });
-
-
     await tryUpdateAuthUser(userId, {
         banned_until: new Date().toISOString()
     });
-
-
     if (appState.profile?.id === userId) {
         appState.profile = { ...appState.profile, ...updatedProfile };
     }
@@ -1475,7 +1455,6 @@ export async function createAreaAssignment(assignmentData) {
         puede_editar: !!assignmentData.puede_editar,
         puede_eliminar: !!assignmentData.puede_eliminar,
         estado: normalizeRecordState(assignmentData.estado),
-
         asignado_por: assignmentData.asignado_por || appState.profile?.id || null,
         fecha_asignacion: assignmentData.fecha_asignacion || now,
         fecha_actualizacion: now
@@ -1540,7 +1519,6 @@ export async function updateAreaAssignment(assignmentId, updates = {}) {
             default:
                 updatePayload[field] = updates[field];
                 break;
-
         }
     });
 
