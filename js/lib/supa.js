@@ -22,6 +22,30 @@ export const appState = {
     initialized: false
 };
 
+const authListeners = new Set();
+
+export function onAuthStateChange(listener) {
+    if (typeof listener !== 'function') {
+        return () => {};
+    }
+
+    authListeners.add(listener);
+
+    return () => {
+        authListeners.delete(listener);
+    };
+}
+
+function notifyAuthListeners(event, session) {
+    authListeners.forEach(listener => {
+        try {
+            listener({ event, session, user: appState.user, profile: appState.profile });
+        } catch (error) {
+            console.error('⚠️ Error en listener de autenticación:', error);
+        }
+    });
+}
+
 // =====================================================
 // CLASE DE ERROR PERSONALIZADA
 // =====================================================
@@ -1421,6 +1445,8 @@ async function setupSupabase() {
             } else if (event === 'SIGNED_OUT') {
                 appState.profile = null;
             }
+
+            notifyAuthListeners(event, session);
         });
 
         // Verificar sesión inicial
@@ -1428,6 +1454,8 @@ async function setupSupabase() {
         if (appState.session) {
             appState.profile = await getCurrentProfile();
         }
+
+        notifyAuthListeners('INITIAL_SESSION', appState.session);
 
         appState.initialized = true;
 

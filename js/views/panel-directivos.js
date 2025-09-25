@@ -18,6 +18,15 @@ const panelState = {
     expandedDirecciones: new Set(), // Set de IDs de direcciones expandidas
     loading: false
 };
+
+const indicadorVisualConfig = {
+    'Aviación Comercial Pasajeros': { icon: 'users', color: 'blue' },
+    'Aviación Comercial Operaciones': { icon: 'activity', color: 'blue' },
+    'Aviación Carga Operaciones': { icon: 'truck', color: 'amber' },
+    'Aviación Carga Toneladas': { icon: 'package', color: 'amber' },
+    'Aviación General Pasajeros': { icon: 'user-check', color: 'green' },
+    'Aviación General Operaciones': { icon: 'navigation-2', color: 'green' }
+};
 // =====================================================
 // RENDERIZADO PRINCIPAL
 // =====================================================
@@ -141,8 +150,8 @@ function createPanelHTML(direcciones = []) {
                     Indicadores Operativos
                 </h2>
                 <div class="space-y-3" id="indicadores-operativos-container">
-                    ${panelState.indicadoresOperativos.map(ind => 
-                        crearBotonIndicador(ind.id, ind.nombre, ind.area_nombre, 'plane', 'blue')
+                    ${panelState.indicadoresOperativos.map(ind =>
+                        crearBotonIndicador(ind.id, ind.nombre, ind.area_nombre, getIndicadorVisual(ind.nombre, 'blue'))
                     ).join('')}
                 </div>
             </div>
@@ -153,8 +162,8 @@ function createPanelHTML(direcciones = []) {
                     Indicadores FBO (Aviación General)
                 </h2>
                 <div class="space-y-3" id="indicadores-fbo-container">
-                    ${panelState.indicadoresFBO.map(ind => 
-                        crearBotonIndicador(ind.id, ind.nombre, ind.area_nombre, 'plane-takeoff', 'green')
+                    ${panelState.indicadoresFBO.map(ind =>
+                        crearBotonIndicador(ind.id, ind.nombre, ind.area_nombre, getIndicadorVisual(ind.nombre, 'green'))
                     ).join('')}
                 </div>
             </div>
@@ -173,20 +182,35 @@ function createPanelHTML(direcciones = []) {
         </div>
     `;
 }
-function crearBotonIndicador(id, titulo, subtitulo, icono, color) {
+function getIndicadorVisual(nombre, fallbackColor) {
+    const config = indicadorVisualConfig[nombre];
+
+    if (config) {
+        return config;
+    }
+
+    return {
+        icon: fallbackColor === 'green' ? 'plane-takeoff' : 'plane',
+        color: fallbackColor
+    };
+}
+function crearBotonIndicador(id, titulo, subtitulo, visualConfig) {
     const colorClasses = {
         blue: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900',
         amber: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-900',
         green: 'bg-green-50 hover:bg-green-100 border-green-200 text-green-900'
     };
+    const { icon, color } = visualConfig;
     return `
         <div class="border-2 border-gray-200 rounded-lg overflow-hidden transition-all" id="card-${id}">
-            <button 
+            <button
                 onclick="window.panelDirectivos.toggleIndicador('${id}')"
-                class="w-full p-4 ${colorClasses[color]} transition-all text-left flex items-center justify-between"
+                class="w-full p-4 ${colorClasses[color] || colorClasses.blue} transition-all text-left flex items-center justify-between"
             >
                 <div class="flex items-center gap-3">
-                    <i data-lucide="${icono}" class="w-6 h-6"></i>
+                    <span class="flex items-center justify-center w-10 h-10 rounded-full bg-white/60 border border-white/50">
+                        <i data-lucide="${icon}" class="w-5 h-5"></i>
+                    </span>
                     <div>
                         <h3 class="font-bold">${titulo}</h3>
                         <p class="text-sm opacity-75">${subtitulo}</p>

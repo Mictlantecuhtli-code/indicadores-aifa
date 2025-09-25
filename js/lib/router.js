@@ -1,55 +1,52 @@
 // =====================================================
 // SISTEMA DE ENRUTAMIENTO HASH-BASED
+// Gestiona navegación entre vistas con carga diferida.
 // =====================================================
 
 import { DEBUG } from '../config.js';
-import { appState, getCurrentProfile, hasRoleLevel, isAuthenticated } from './supa.js';
-import { showToast, showLoading, hideLoading } from './ui.js';
+import { appState, isAuthenticated } from './supa.js';
+import { showToast, showLoading, hideLoading, resetLoadingState } from './ui.js';
 
-// Estado del router
 export const routerState = {
     currentRoute: null,
     currentParams: {},
     currentQuery: {},
+    currentDefinition: null,
     history: [],
-    isNavigating: false
+    isNavigating: false,
+    initialized: false
 };
 
+let routeDefinitions = [];
+let activeViewModule = null;
+let teardownActiveView = null;
+
 // =====================================================
-// FUNCIONES PRINCIPALES DEL ROUTER
+// CONFIGURACIÓN
 // =====================================================
 
-/**
- * Parsear la URL hash actual
- */
+export function configureRoutes(routes = []) {
+    routeDefinitions = Array.isArray(routes) ? routes : [];
+}
+
+// =====================================================
+// PARSEO DE HASH
+// =====================================================
+
 export function parseCurrentRoute() {
-    const hash = window.location.hash.slice(1) || '/';
+    const hash = window.location.hash.replace(/^#/, '') || '/';
     const [path, queryString] = hash.split('?');
-    
+
     const params = {};
     const query = {};
-    
-    // Parsear query string
+
     if (queryString) {
         const searchParams = new URLSearchParams(queryString);
-        for (const [key, value] of searchParams) {
+        for (const [key, value] of searchParams.entries()) {
             query[key] = value;
         }
     }
-    
-    // Extraer parámetros de rutas dinámicas
-    if (path.startsWith('/area/')) {
-        const segments = path.split('/');
-        if (segments[2]) {
-            params.id = segments[2];
-        }
-    } else if (path.startsWith('/indicador/')) {
-        const segments = path.split('/');
-        if (segments[2]) {
-            params.clave = segments[2];
-        }
-    }
-    
+
     return {
         path,
         params,
@@ -58,365 +55,355 @@ export function parseCurrentRoute() {
     };
 }
 
-/**
- * Navegar a una ruta específica
- */
+function resolveDefinition(path) {
+    for (const definition of routeDefinitions) {
+        if (definition?.path && definition.path === path) {
+            return { definition, params: {} };
+        }
+
+        if (definition?.matcher instanceof RegExp) {
+            const match = path.match(definition.matcher);
+            if (match) {
+                const params = match.groups ? { ...match.groups } : {};
+                return { definition, params };
+            }
+        }
+    }
+
+    return null;
+}
+
+function getTitleForRoute(definition, params) {
+    if (!definition?.title) return 'Sistema de Indicadores AIFA';
+    if (typeof definition.title === 'function') {
+        try {
+            return definition.title(params);
+        } catch (error) {
+            console.error('❌ Error al generar título de la ruta:', error);
+            return 'Sistema de Indicadores AIFA';
+        }
+    }
+    return definition.title;
+}
+
+function getBreadcrumbsForRoute(definition, params) {
+    if (!definition?.breadcrumbs) {
+        return [
+            { label: 'Inicio', path: '/', icon: 'home' }
+        ];
+    }
+
+    try {
+        const crumbs = definition.breadcrumbs(params) || [];
+        if (!Array.isArray(crumbs)) {
+            return [
+                { label: 'Inicio', path: '/', icon: 'home' }
+            ];
+        }
+
+        // Garantizar que siempre esté Inicio al principio
+        const hasHome = crumbs.some(crumb => crumb.path === '/' || crumb.icon === 'home');
+        if (hasHome) {
+            return crumbs;
+        }
+
+        return [
+            { label: 'Inicio', path: '/', icon: 'home' },
+            ...crumbs
+        ];
+    } catch (error) {
+        console.error('❌ Error al generar breadcrumbs:', error);
+        return [
+            { label: 'Inicio', path: '/', icon: 'home' }
+        ];
+    }
+}
+
+// =====================================================
+// NAVEGACIÓN
+// =====================================================
+
 export function navigateTo(path, query = {}, replace = false) {
-    if (routerState.isNavigating) return;
-    
-    try {
-        routerState.isNavigating = true;
-        
-        // Construir URL completa
-        let url = path;
-        const queryString = new URLSearchParams(query).toString();
-        if (queryString) {
-            url += '?' + queryString;
-        }
-        
-        // Actualizar URL
-        if (replace) {
-            window.location.replace('#' + url);
-        } else {
-            window.location.hash = url;
-        }
-        
-        if (DEBUG.enabled) {
-            console.log(`🧭 Navegando a: ${url}`);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al navegar:', error);
-        showToast('Error de navegación', 'error');
-    } finally {
-        routerState.isNavigating = false;
+    if (!path) return;
+
+    const queryString = new URLSearchParams(query).toString();
+    const url = queryString ? `${path}?${queryString}` : path;
+
+    if (replace) {
+        window.location.replace(`#${url}`);
+    } else {
+        window.location.hash = url;
     }
 }
 
-/**
- * Manejar cambio de ruta
- */
-async function handleRouteChange(route) {
-    try {
-        if (DEBUG.enabled) {
-            console.log(`🔄 Cambiando a ruta: ${route.path}`, route);
-        }
-        
-        // Actualizar estado del router
-        routerState.currentRoute = route;
-        routerState.currentParams = route.params;
-        routerState.currentQuery = route.query;
-        
-        // Verificar autenticación
-        const authRequired = await checkAuthRequirement(route.path);
-        
-        if (authRequired && !isAuthenticated()) {
-            if (DEBUG.enabled) {
-                console.log('🚫 Ruta protegida, redirigiendo a login');
-            }
-            navigateTo('/login', {}, true);
-            return;
-        }
-        
-        // Si está en login y ya autenticado, redirigir a home
-        if (route.path === '/login' && isAuthenticated()) {
-            if (DEBUG.enabled) {
-                console.log('👤 Usuario ya autenticado, redirigiendo a home');
-            }
-            navigateTo('/', {}, true);
-            return;
-        }
-        
-        // Renderizar vista
-        await renderRoute(route);
-        
-        // Actualizar navegación activa
-        updateActiveNavigation(route.path);
-        
-        // Actualizar breadcrumb
-        updateBreadcrumb(route);
-        
-    } catch (error) {
-        console.error('❌ Error al cambiar ruta:', error);
-        showErrorPage('Error de navegación', error.message);
+export function goBack() {
+    window.history.back();
+}
+
+export function reloadCurrentRoute() {
+    const route = parseCurrentRoute();
+    handleRouteChange(route).catch(error => {
+        console.error('❌ Error al recargar la ruta:', error);
+    });
+}
+
+export function getDefaultRouteForUser(profile = appState.profile) {
+    if (!profile) {
+        const defaultRoute = routeDefinitions.find(route => route.default);
+        return defaultRoute?.path || '/';
     }
+
+    const role = profile?.rol_principal;
+    if (role) {
+        const roleRoute = routeDefinitions.find(route => Array.isArray(route.defaultForRoles) && route.defaultForRoles.includes(role));
+        if (roleRoute) {
+            return roleRoute.path;
+        }
+    }
+
+    const fallbackRoute = routeDefinitions.find(route => route.default);
+    return fallbackRoute?.path || '/';
 }
 
-/**
- * Verificar si una ruta requiere autenticación
- */
-async function checkAuthRequirement(path) {
-    const publicRoutes = ['/login'];
-    return !publicRoutes.includes(path);
+// =====================================================
+// RENDERIZADO DE VISTAS
+// =====================================================
+
+async function cleanupActiveView() {
+    if (typeof teardownActiveView === 'function') {
+        try {
+            await teardownActiveView();
+        } catch (error) {
+            console.warn('⚠️ Error al ejecutar teardown de la vista previa:', error);
+        }
+    }
+
+    if (activeViewModule && typeof activeViewModule.destroy === 'function') {
+        try {
+            await activeViewModule.destroy();
+        } catch (error) {
+            console.warn('⚠️ Error al destruir la vista previa:', error);
+        }
+    }
+
+    teardownActiveView = null;
+    activeViewModule = null;
 }
 
-/**
- * Renderizar la vista correspondiente a la ruta
- */
-async function renderRoute(route) {
+async function renderRoute(route, resolved) {
     const container = document.getElementById('app-container');
     if (!container) {
         throw new Error('Contenedor de la aplicación no encontrado');
     }
-    
+
     try {
+        resetLoadingState();
         showLoading('Cargando vista...');
-        
-        let viewModule;
-        
-        switch (route.path) {
-            case '/login':
-                viewModule = await import('../auth/login.js');
-                break;
-                
-            case '/':
-                viewModule = await import('../views/home.js');
-                break;
-                
-            case '/visualizacion':
-                viewModule = await import('../views/visualizacion.js');
-                break;
-                
-            case '/admin':
-                viewModule = await import('../views/admin.js');
-                break;
-                
-            case '/captura':
-                // Redirigir a home para mostrar áreas
-                // navigateTo('/', {}, true);
-                viewModule = await import('../views/home.js');
-                break;
 
-            case '/panel-directivos':
-                viewModule = await import('../views/panel-directivos.js');
-                break;
+        await cleanupActiveView();
 
-            case '/panel-directivos/analisis':
-                viewModule = await import('../views/panel-analisis.js');
-                break;
-                
-            default:
-                // Rutas con parámetros
-                if (route.path.startsWith('/area/')) {
-                    viewModule = await import('../views/area.js');
-                } else if (route.path.startsWith('/indicador/')) {
-                    viewModule = await import('../views/indicador.js');
-                } else {
-                    throw new Error(`Ruta no encontrada: ${route.path}`);
-                }
+        const viewModule = await resolved.definition.loader();
+        if (!viewModule || typeof viewModule.render !== 'function') {
+            throw new Error('La vista no expone una función render válida');
         }
-        
-        // Renderizar vista
-        if (viewModule && viewModule.render) {
-            await viewModule.render(container, route.params, route.query);
-        } else {
-            throw new Error('Vista no tiene función render');
-        }
-        
-        hideLoading();
-        
-        if (DEBUG.enabled) {
-            console.log(`✅ Vista renderizada: ${route.path}`);
-        }
-        
-    } catch (error) {
-        hideLoading();
-        console.error(`❌ Error al renderizar vista ${route.path}:`, error);
-        showErrorPage('Error al cargar la vista', error.message);
-    }
-}
 
-/**
- * Mostrar página de error
- */
-function showErrorPage(title, message) {
-    const container = document.getElementById('app-container');
-    if (container) {
-        container.innerHTML = `
-            <div class="text-center py-12">
-                <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">${title}</h2>
-                <p class="text-gray-600 mb-4">${message}</p>
-                <div class="space-x-3">
-                    <button onclick="window.router.goBack()" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
-                        Volver
-                    </button>
-                    <button onclick="window.router.navigateTo('/')" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
-                        Ir al inicio
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        // Recrear iconos
+        activeViewModule = viewModule;
+        const teardown = await viewModule.render(container, resolved.params, route.query);
+        teardownActiveView = typeof teardown === 'function' ? teardown : null;
+
+        // Recrear iconos después de renderizar
         if (window.lucide) {
             window.lucide.createIcons();
         }
+
+        hideLoading();
+
+        if (DEBUG.enabled) {
+            console.log(`✅ Vista renderizada: ${route.path}`);
+        }
+    } catch (error) {
+        hideLoading();
+        console.error(`❌ Error al renderizar la ruta ${route.path}:`, error);
+        showErrorPage('Error al cargar la vista', error.message || 'Ocurrió un problema al renderizar la vista.');
     }
 }
 
-/**
- * Actualizar navegación activa
- */
-function updateActiveNavigation(currentPath) {
-    // Limpiar navegación activa
-    document.querySelectorAll('.nav-button').forEach(btn => {
-        btn.classList.remove('text-aifa-blue', 'bg-blue-50');
-        btn.classList.add('text-gray-600', 'bg-white');
-    });
-    
-    // Marcar botón activo
-    let activeButton = null;
-    
-    if (currentPath === '/') {
-        activeButton = document.getElementById('nav-home');
-    } else if (currentPath === '/visualizacion') {
-        activeButton = document.getElementById('nav-visualizacion');
-    } else if (currentPath === '/captura' || currentPath.startsWith('/area/')) {
-        activeButton = document.getElementById('nav-captura');
-    } else if (currentPath === '/admin') {
-        activeButton = document.getElementById('nav-admin');
-    }
-    
-    if (activeButton) {
-        activeButton.classList.remove('text-gray-600', 'bg-white');
-        activeButton.classList.add('text-aifa-blue', 'bg-blue-50');
-    }
-}
+function showErrorPage(title, message) {
+    const container = document.getElementById('app-container');
+    if (!container) return;
 
-/**
- * Actualizar breadcrumb
- */
-function updateBreadcrumb(route) {
-    const breadcrumbContainer = document.getElementById('breadcrumb');
-    if (!breadcrumbContainer) return;
-    
-    const breadcrumbs = [];
-    
-    // Siempre incluir inicio
-    breadcrumbs.push({
-        text: 'Inicio',
-        path: '/',
-        icon: 'home'
-    });
-    
-    // Agregar elementos según la ruta
-    if (route.path.startsWith('/area/')) {
-        const areaId = route.params.id;
-        breadcrumbs.push({
-            text: `Área ${areaId}`,
-            path: `/area/${areaId}`,
-            icon: 'folder'
-        });
-    } else if (route.path.startsWith('/indicador/')) {
-        const indicadorClave = route.params.clave;
-        breadcrumbs.push({
-            text: `Indicador ${indicadorClave}`,
-            path: `/indicador/${indicadorClave}`,
-            icon: 'bar-chart'
-        });
-    } else if (route.path === '/visualizacion') {
-        breadcrumbs.push({
-            text: 'Visualización',
-            path: '/visualizacion',
-            icon: 'bar-chart-3'
-        });
-    } else if (route.path === '/admin') {
-        breadcrumbs.push({
-            text: 'Administración',
-            path: '/admin',
-            icon: 'settings'
-        });
-    }
-    
-    // Renderizar breadcrumb
-    breadcrumbContainer.innerHTML = breadcrumbs.map((crumb, index) => {
-        const isLast = index === breadcrumbs.length - 1;
-        return `
-            <span class="flex items-center">
-                ${index > 0 ? '<i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 mx-2"></i>' : ''}
-                ${isLast ? 
-                    `<span class="text-aifa-blue font-medium flex items-center">
-                        <i data-lucide="${crumb.icon}" class="w-4 h-4 mr-1"></i>
-                        ${crumb.text}
-                    </span>` :
-                    `<a href="#${crumb.path}" class="text-gray-600 hover:text-aifa-blue flex items-center transition-colors">
-                        <i data-lucide="${crumb.icon}" class="w-4 h-4 mr-1"></i>
-                        ${crumb.text}
-                    </a>`
-                }
-            </span>
-        `;
-    }).join('');
-    
-    // Recrear iconos
+    container.innerHTML = `
+        <div class="text-center py-12">
+            <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">${title}</h2>
+            <p class="text-gray-600 mb-4">${message}</p>
+            <div class="space-x-3">
+                <button onclick="window.router.goBack()" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">
+                    Volver
+                </button>
+                <button onclick="window.router.navigateTo('/')" class="bg-aifa-blue text-white px-6 py-2 rounded-lg hover:bg-aifa-dark">
+                    Ir al inicio
+                </button>
+            </div>
+        </div>
+    `;
+
     if (window.lucide) {
         window.lucide.createIcons();
     }
 }
 
 // =====================================================
-// FUNCIONES AUXILIARES DE NAVEGACIÓN
+// ACTUALIZACIÓN DE UI
 // =====================================================
 
-/**
- * Volver a la página anterior
- */
-export function goBack() {
-    window.history.back();
+function updateActiveNavigation(definition) {
+    document.querySelectorAll('.nav-button').forEach(button => {
+        button.classList.remove('text-aifa-blue', 'bg-blue-50');
+        button.classList.add('text-gray-600', 'bg-white');
+    });
+
+    if (definition?.navId) {
+        const activeButton = document.getElementById(definition.navId);
+        if (activeButton) {
+            activeButton.classList.remove('text-gray-600', 'bg-white');
+            activeButton.classList.add('text-aifa-blue', 'bg-blue-50');
+        }
+    }
 }
 
-/**
- * Recargar la ruta actual
- */
-export function reloadCurrentRoute() {
-    const route = parseCurrentRoute();
-    handleRouteChange(route);
+function updateBreadcrumb(definition, params) {
+    const breadcrumbContainer = document.getElementById('breadcrumb');
+    if (!breadcrumbContainer) return;
+
+    const breadcrumbs = getBreadcrumbsForRoute(definition, params);
+    breadcrumbContainer.innerHTML = breadcrumbs.map((crumb, index) => {
+        const isLast = index === breadcrumbs.length - 1;
+        const icon = crumb.icon ? `<i data-lucide="${crumb.icon}" class="w-4 h-4 mr-1"></i>` : '';
+        const separator = index > 0 ? '<i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 mx-2"></i>' : '';
+
+        if (isLast) {
+            return `
+                <span class="flex items-center">
+                    ${separator}
+                    <span class="text-aifa-blue font-medium flex items-center">
+                        ${icon}${crumb.label}
+                    </span>
+                </span>
+            `;
+        }
+
+        return `
+            <span class="flex items-center">
+                ${separator}
+                <a href="#${crumb.path}" class="text-gray-600 hover:text-aifa-blue flex items-center transition-colors">
+                    ${icon}${crumb.label}
+                </a>
+            </span>
+        `;
+    }).join('');
+
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}
+
+function updateDocumentTitle(definition, params) {
+    const title = getTitleForRoute(definition, params);
+    document.title = title ? `${title} · Sistema de Indicadores AIFA` : 'Sistema de Indicadores AIFA';
+}
+
+// =====================================================
+// CONTROLADOR PRINCIPAL DE RUTA
+// =====================================================
+
+async function handleRouteChange(route) {
+    if (routerState.isNavigating) {
+        return;
+    }
+
+    routerState.isNavigating = true;
+
+    try {
+        const resolved = resolveDefinition(route.path);
+        if (!resolved) {
+            showErrorPage('Ruta no encontrada', `No existe una vista configurada para ${route.path}`);
+            return;
+        }
+
+        const { definition, params } = resolved;
+
+        if (definition.requiresAuth !== false && !isAuthenticated()) {
+            if (DEBUG.enabled) {
+                console.log('🚫 Ruta protegida, redirigiendo a login');
+            }
+            navigateTo('/login', {}, true);
+            return;
+        }
+
+        if (definition.path === '/login' && isAuthenticated()) {
+            const targetRoute = getDefaultRouteForUser();
+            navigateTo(targetRoute, {}, true);
+            return;
+        }
+
+        routerState.currentRoute = route;
+        routerState.currentParams = params;
+        routerState.currentQuery = route.query;
+        routerState.currentDefinition = definition;
+        routerState.history.push(route.fullPath);
+
+        await renderRoute(route, resolved);
+        updateActiveNavigation(definition);
+        updateBreadcrumb(definition, params);
+        updateDocumentTitle(definition, params);
+
+        if (DEBUG.enabled) {
+            console.log('📍 Ruta actualizada:', {
+                path: route.path,
+                params,
+                query: route.query
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error al cambiar de ruta:', error);
+        showToast('Error de navegación', 'error');
+        showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
+    } finally {
+        routerState.isNavigating = false;
+    }
 }
 
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
 
-/**
- * Configurar event listeners del router
- */
 function setupRouterListeners() {
-    // Listener para cambios de hash
     window.addEventListener('hashchange', () => {
         const route = parseCurrentRoute();
-        handleRouteChange(route);
+        handleRouteChange(route).catch(error => console.error('❌ Error en hashchange:', error));
     });
-    
-    // Listener para carga inicial
+
     window.addEventListener('DOMContentLoaded', () => {
         const route = parseCurrentRoute();
-        handleRouteChange(route);
+        handleRouteChange(route).catch(error => console.error('❌ Error al cargar ruta inicial:', error));
     });
 }
 
-/**
- * Inicializar router
- */
-export function initRouter() {
-    if (DEBUG.enabled) {
-        console.log('🧭 Inicializando router...');
+export function initRouter({ routes = [] } = {}) {
+    if (routerState.initialized) {
+        return;
     }
-    
+
+    configureRoutes(routes);
     setupRouterListeners();
-    
-    // Cargar ruta inicial
-    const route = parseCurrentRoute();
-    handleRouteChange(route);
-    
+
+    const initialRoute = parseCurrentRoute();
+    handleRouteChange(initialRoute).catch(error => console.error('❌ Error en ruta inicial:', error));
+
+    routerState.initialized = true;
+
     if (DEBUG.enabled) {
         console.log('✅ Router inicializado');
     }
-}
-
-// Auto-inicializar cuando se carga el módulo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initRouter);
-} else {
-    initRouter();
 }
