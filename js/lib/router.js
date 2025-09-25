@@ -4,7 +4,7 @@
 
 import { DEBUG } from '../config.js';
 import { appState, getCurrentProfile, hasRoleLevel, isAuthenticated } from './supa.js';
-import { showToast, showLoading, hideLoading } from './ui.js';
+import { showToast, showLoading, hideLoading, resetLoadingState } from './ui.js';
 
 // Estado del router
 export const routerState = {
@@ -160,6 +160,7 @@ async function renderRoute(route) {
     }
     
     try {
+        resetLoadingState();
         showLoading('Cargando vista...');
         
         let viewModule;
