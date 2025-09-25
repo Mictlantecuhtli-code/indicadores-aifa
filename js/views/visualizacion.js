@@ -307,28 +307,47 @@ return `
             </div>
             
             <!-- Filtro de indicadores -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        Indicadores
-                    </label>
-                    <div class="relative">
-                        <button 
-                            id="indicadores-filter-btn"
-                            class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
-                        >
-                            <span id="indicadores-filter-text">${getIndicadoresFilterText()}</span>
-                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
-                        </button>
-                        
-                        <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-                            <div class="p-3">
-                                <div class="space-y-2">
-                                    ${createIndicadoresFilterOptions()}
-                                </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Indicadores <span class="text-xs text-gray-500">(${visualizacionState.availableIndicadores.length} disponibles)</span>
+                </label>
+                <div class="relative">
+                    <button
+                        id="indicadores-filter-btn"
+                        class="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+                    >
+                        <span id="indicadores-filter-text" class="truncate">${getIndicadoresFilterText()}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+
+                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-72 overflow-hidden">
+                        <div class="p-3 border-b border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-medium text-gray-700">Seleccionar indicadores</span>
+                                <button
+                                    id="clear-indicadores-btn"
+                                    class="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                                >
+                                    Limpiar todo
+                                </button>
+                            </div>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    id="select-all-indicadores"
+                                    class="rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                                >
+                                <span class="text-sm font-medium text-gray-700">Seleccionar todos los indicadores</span>
+                            </label>
+                        </div>
+                        <div class="max-h-60 overflow-y-auto">
+                            <div class="p-3 space-y-2 indicadores-options">
+                                ${createIndicadoresFilterOptions()}
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
             
             <!-- Filtro de años -->
             <div>
@@ -442,28 +461,40 @@ function createAreasFilterOptions() {
 /**
  * Crear opciones de filtro de indicadores agrupadas por área
  */
-        function createIndicadoresFilterOptions() {
-            let html = '';
-            
-            // Solo mostrar indicadores sin agrupar por área
-            visualizacionState.availableIndicadores.forEach(indicador => {
-                html += `
-                    <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                        <input 
-                            type="radio" 
-                            name="indicador-selection"
-                            value="${indicador.id}" 
-                            ${visualizacionState.selectedIndicadores.includes(indicador.id) ? 'checked' : ''}
-                            class="indicador-radio rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
-                        >
-                        <span class="text-sm text-gray-700">${indicador.nombre}</span>
-                        <span class="text-xs text-gray-500">(${indicador.clave})</span>
-                    </label>
-                `;
-            });
-            
-            return html;
-        }
+function createIndicadoresFilterOptions() {
+    if (!visualizacionState.availableIndicadores || visualizacionState.availableIndicadores.length === 0) {
+        return `
+            <div class="text-center text-sm text-gray-500 py-2">
+                No hay indicadores disponibles
+            </div>
+        `;
+    }
+
+    return visualizacionState.availableIndicadores.map(indicador => {
+        const isSelected = visualizacionState.selectedIndicadores.includes(indicador.id);
+        const isAreaSelected = visualizacionState.selectedAreas.map(String).includes(String(indicador.area_id));
+        const areaLabel = indicador.area_nombre ? cleanAreaName(indicador.area_nombre) : null;
+
+        return `
+            <label
+                class="flex items-start space-x-2 cursor-pointer rounded p-2 transition-colors ${isAreaSelected ? 'hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'}"
+                data-area-id="${indicador.area_id}"
+            >
+                <input
+                    type="checkbox"
+                    value="${String(indicador.id)}"
+                    ${isSelected ? 'checked' : ''}
+                    ${isAreaSelected ? '' : 'disabled'}
+                    class="indicador-checkbox mt-0.5 rounded border-gray-300 text-aifa-blue focus:ring-aifa-blue"
+                >
+                <span class="flex-1 min-w-0">
+                    <span class="block text-sm font-medium text-gray-700 truncate">${indicador.nombre}</span>
+                    <span class="block text-xs text-gray-500 truncate">${indicador.clave}${areaLabel ? ` · ${areaLabel}` : ''}</span>
+                </span>
+            </label>
+        `;
+    }).join('');
+}
 
 /**
  * Obtener clase de indentación según la jerarquía del área
@@ -1910,9 +1941,9 @@ function setupFilterCheckboxes() {
     document.querySelectorAll('.area-checkbox').forEach(cb => {
         cb.addEventListener('change', updateAreasSelection);
     });
-    
-        document.querySelectorAll('.indicador-radio').forEach(rb => {
-            rb.addEventListener('change', updateIndicadoresSelection);
+
+    document.querySelectorAll('.indicador-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateIndicadoresSelection);
     });
     
     document.querySelectorAll('.year-checkbox').forEach(cb => {
@@ -1935,8 +1966,12 @@ function setupFilterCheckboxes() {
         clearIndicadoresBtn.addEventListener('click', (e) => {
             e.preventDefault();
             document.querySelectorAll('.indicador-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('select-all-indicadores').checked = false;
-            //updateIndicadoresSelection();
+            const selectAll = document.getElementById('select-all-indicadores');
+            if (selectAll) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+            updateIndicadoresSelection();
         });
     }
     
@@ -1949,6 +1984,7 @@ function setupFilterCheckboxes() {
             updateYearsSelection();
         });
     }
+    updateAvailableIndicadoresFilter();
 }
 
 /**
@@ -2309,21 +2345,33 @@ function updateAreasSelection() {
  * Actualizar selección de indicadores
  */
 function updateIndicadoresSelection() {
-    const radioButtons = document.querySelectorAll('.indicador-radio');
-    const selectedIndicador = Array.from(radioButtons)
-        .find(rb => rb.checked);
-    
-    if (selectedIndicador) {
-        visualizacionState.selectedIndicadores = [selectedIndicador.value];
-    } else {
-        visualizacionState.selectedIndicadores = [];
-    }
-    
+    const checkboxes = document.querySelectorAll('.indicador-checkbox');
+    const selectedIndicadores = Array.from(checkboxes)
+        .filter(cb => cb.checked && !cb.disabled)
+        .map(cb => {
+            const indicador = visualizacionState.availableIndicadores.find(i => String(i.id) === cb.value);
+            return indicador ? indicador.id : cb.value;
+        });
+
+    visualizacionState.selectedIndicadores = selectedIndicadores;
+
     // Actualizar texto del filtro
     const filterText = document.getElementById('indicadores-filter-text');
     if (filterText) {
         filterText.textContent = getIndicadoresFilterText();
     }
+
+    // Actualizar estado del checkbox "seleccionar todos"
+    const selectAllCheckbox = document.getElementById('select-all-indicadores');
+    if (selectAllCheckbox) {
+        const enabledCheckboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
+        const selectedEnabled = enabledCheckboxes.filter(cb => cb.checked);
+        selectAllCheckbox.checked = enabledCheckboxes.length > 0 && selectedEnabled.length === enabledCheckboxes.length;
+        selectAllCheckbox.indeterminate = selectedEnabled.length > 0 && selectedEnabled.length < enabledCheckboxes.length;
+    }
+
+    updateApplyFiltersButton();
+    updateAreaIndicatorCounts();
 }
 
 /**
@@ -2360,40 +2408,33 @@ function updateYearsSelection() {
  * Actualizar filtro de indicadores disponibles según áreas
  */
 function updateAvailableIndicadoresFilter() {
-    // Deshabilitar indicadores que no pertenecen a áreas seleccionadas
-        const radioButtons = document.querySelectorAll('.indicador-radio');
-        
-        radioButtons.forEach(radioButton => {
-        const indicadorId = radioButton.value;
-        const indicador = visualizacionState.availableIndicadores.find(i => i.id === indicadorId);
-        
+    const checkboxes = document.querySelectorAll('.indicador-checkbox');
+
+    checkboxes.forEach(checkbox => {
+        const indicador = visualizacionState.availableIndicadores.find(i => String(i.id) === checkbox.value);
+
         if (indicador) {
-            const isAreaSelected = visualizacionState.selectedAreas.includes(indicador.area_id);
-        radioButton.disabled = !isAreaSelected;
-        
-        if (!isAreaSelected) {
-            radioButton.checked = false;
-        }
-        
-        // Actualizar estilo visual
-        const label = radioButton.closest('label');
+            const isAreaSelected = visualizacionState.selectedAreas.map(String).includes(String(indicador.area_id));
+            checkbox.disabled = !isAreaSelected;
+
+            if (!isAreaSelected && checkbox.checked) {
+                checkbox.checked = false;
+            }
+
+            const label = checkbox.closest('label');
             if (label) {
-                if (!isAreaSelected) {
-                    label.classList.add('opacity-40', 'cursor-not-allowed');
-                    label.classList.remove('hover:bg-gray-50');
-                } else {
+                if (isAreaSelected) {
                     label.classList.remove('opacity-40', 'cursor-not-allowed');
                     label.classList.add('hover:bg-gray-50');
+                } else {
+                    label.classList.add('opacity-40', 'cursor-not-allowed');
+                    label.classList.remove('hover:bg-gray-50');
                 }
             }
         }
     });
-    
-    // Actualizar selección de indicadores
+
     updateIndicadoresSelection();
-    
-    // Actualizar contador en el dropdown de áreas
-    updateAreaIndicatorCounts();
 }
 
 /**
@@ -2476,18 +2517,20 @@ function updateApplyFiltersButton() {
  * Refrescar dropdown de indicadores con nueva estructura
  */
 function refreshIndicadoresDropdown() {
-    const container = document.querySelector('#indicadores-filter-dropdown .p-3:last-child');
+    const container = document.querySelector('#indicadores-filter-dropdown .indicadores-options');
     if (!container) return;
-    
+
     container.innerHTML = createIndicadoresFilterOptions();
-    
+
     // Re-configurar event listeners para los nuevos checkboxes
     setTimeout(() => {
-        document.querySelectorAll('.indicador-radio').forEach(cb => {
-            cb.removeEventListener('change', updateIndicadoresSelection);
+        document.querySelectorAll('.indicador-checkbox').forEach(cb => {
             cb.addEventListener('change', updateIndicadoresSelection);
         });
-        
+
+        updateAvailableIndicadoresFilter();
+        setupSelectAllCheckboxes();
+
         // Recrear iconos si es necesario
         if (window.lucide) {
             window.lucide.createIcons();
@@ -2554,13 +2597,30 @@ function setupSelectAllCheckboxes() {
         selectAllAreas.removeEventListener('change', handleSelectAllAreas);
         selectAllAreas.addEventListener('change', handleSelectAllAreas);
     }
-    
-   
+
+    // Select all para indicadores
+    const selectAllIndicadores = document.getElementById('select-all-indicadores');
+    if (selectAllIndicadores) {
+        selectAllIndicadores.removeEventListener('change', handleSelectAllIndicadores);
+        selectAllIndicadores.addEventListener('change', handleSelectAllIndicadores);
+
+        const enabledCheckboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
+        const selectedCheckboxes = enabledCheckboxes.filter(cb => cb.checked);
+        selectAllIndicadores.checked = enabledCheckboxes.length > 0 && selectedCheckboxes.length === enabledCheckboxes.length;
+        selectAllIndicadores.indeterminate = selectedCheckboxes.length > 0 && selectedCheckboxes.length < enabledCheckboxes.length;
+    }
+
+
     // Select all para años
     const selectAllYears = document.getElementById('select-all-years');
     if (selectAllYears) {
         selectAllYears.removeEventListener('change', handleSelectAllYears);
         selectAllYears.addEventListener('change', handleSelectAllYears);
+
+        const yearCheckboxes = Array.from(document.querySelectorAll('.year-checkbox'));
+        const selectedYears = yearCheckboxes.filter(cb => cb.checked);
+        selectAllYears.checked = yearCheckboxes.length > 0 && selectedYears.length === yearCheckboxes.length;
+        selectAllYears.indeterminate = selectedYears.length > 0 && selectedYears.length < yearCheckboxes.length;
     }
 }
 
@@ -2678,12 +2738,16 @@ function getAreasFilterText() {
  */
 function getIndicadoresFilterText() {
     const count = visualizacionState.selectedIndicadores.length;
-    const total = visualizacionState.availableIndicadores.length;
-    
+    const enabledIndicadores = visualizacionState.availableIndicadores.filter(indicador =>
+        visualizacionState.selectedAreas.map(String).includes(String(indicador.area_id))
+    );
+    const totalEnabled = enabledIndicadores.length;
+
     if (count === 0) return 'Seleccionar indicadores';
-    if (count === total) return 'Todos los indicadores';
+    if (totalEnabled > 0 && count === totalEnabled) return 'Todos los indicadores';
     if (count === 1) {
-        const indicador = visualizacionState.availableIndicadores.find(i => i.id === visualizacionState.selectedIndicadores[0]);
+        const firstSelected = visualizacionState.selectedIndicadores[0];
+        const indicador = visualizacionState.availableIndicadores.find(i => String(i.id) === String(firstSelected));
         return indicador?.nombre || 'Indicador seleccionado';
     }
     return `${count} indicadores seleccionados`;

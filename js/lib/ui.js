@@ -152,21 +152,40 @@ export function showLoading(message = 'Cargando...') {
  */
 export function hideLoading() {
     uiState.loadingStack = Math.max(0, uiState.loadingStack - 1);
-    
+
     if (uiState.loadingStack === 0) {
         uiState.loading = false;
-        
+
         const loadingContainer = document.getElementById('loading-container');
         if (loadingContainer) {
             loadingContainer.classList.add('hidden');
         }
-        
+
         // Restaurar interacciones
         const appContainer = document.getElementById('app-container');
         if (appContainer) {
             appContainer.style.pointerEvents = '';
             appContainer.style.opacity = '';
         }
+    }
+}
+
+/**
+ * Reiniciar el estado del indicador de carga
+ */
+export function resetLoadingState() {
+    uiState.loadingStack = 0;
+    uiState.loading = false;
+
+    const loadingContainer = document.getElementById('loading-container');
+    if (loadingContainer) {
+        loadingContainer.classList.add('hidden');
+    }
+
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        appContainer.style.pointerEvents = '';
+        appContainer.style.opacity = '';
     }
 }
 
