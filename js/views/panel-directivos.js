@@ -4,7 +4,7 @@
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
-import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica } from '../lib/charts.js';
+import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica, normalizarSerieTemporal } from '../lib/charts.js';
 // Estado del panel de directivos
 const panelState = {
     userProfile: null,
@@ -513,116 +513,7 @@ async function cargarDatosReales(indicador) {
 
         if (error) throw error;
 
-        const normalizarValor = valorOriginal => {
-            if (valorOriginal === null || valorOriginal === undefined) return null;
-
-            if (typeof valorOriginal === 'number') {
-                return Number.isFinite(valorOriginal) ? valorOriginal : null;
-            }
-
-            if (typeof valorOriginal === 'string') {
-                const limpio = valorOriginal.trim();
-                if (limpio === '') return null;
-
-                // Eliminar símbolos no numéricos excepto separadores decimales
-                const soloNumeros = limpio.replace(/[^0-9.,-]/g, '');
-                if (soloNumeros === '') return null;
-
-                const tieneComa = soloNumeros.includes(',');
-                const tienePunto = soloNumeros.includes('.');
-                let valorNormalizado = soloNumeros;
-
-                if (tieneComa && tienePunto) {
-                    // Determinar cuál es el separador decimal usando la última aparición
-                    const ultimaComa = soloNumeros.lastIndexOf(',');
-                    const ultimoPunto = soloNumeros.lastIndexOf('.');
-
-                    if (ultimaComa > ultimoPunto) {
-                        // Formato tipo 1.234,56 -> quitar puntos (miles) y usar coma como decimal
-                        valorNormalizado = soloNumeros.replace(/\./g, '').replace(/,/g, '.');
-                    } else {
-                        // Formato tipo 1,234.56 -> quitar comas (miles)
-                        valorNormalizado = soloNumeros.replace(/,/g, '');
-                    }
-                } else if (tieneComa && !tienePunto) {
-                    // Formato tipo 1234,56 -> usar coma como decimal
-                    valorNormalizado = soloNumeros.replace(/,/g, '.');
-                } else {
-                    // Formato tipo 1 234.56 -> quitar posibles separadores de miles
-                    valorNormalizado = soloNumeros.replace(/,/g, '');
-                }
-
-                const numero = Number(valorNormalizado);
-                return Number.isFinite(numero) ? numero : null;
-            }
-
-            return null;
-        };
-
-        const obtenerMarcaDeTiempo = registro => {
-            const candidatas = [
-                registro.fecha_ultima_edicion,
-                registro.fecha_captura,
-                registro.fecha_medicion,
-                registro.fecha
-            ].filter(Boolean);
-
-            if (candidatas.length === 0) return 0;
-
-            const maxFecha = candidatas.reduce((max, fecha) => {
-                const time = new Date(fecha).getTime();
-                return Number.isFinite(time) && time > max ? time : max;
-            }, 0);
-
-            return maxFecha;
-        };
-
-        const registrosOrdenados = (data || [])
-            .map(d => {
-                const valorNormalizado = normalizarValor(d.valor);
-                const mesNumerico = typeof d.mes === 'string' ? Number(d.mes) : d.mes;
-                const anioNumerico = typeof d.anio === 'string' ? Number(d.anio) : d.anio;
-                const fechaPeriodo = `${anioNumerico}-${String(mesNumerico).padStart(2, '0')}-01`;
-
-                return {
-                    ...d,
-                    mes: mesNumerico,
-                    anio: anioNumerico,
-                    fecha: fechaPeriodo,
-                    valor: valorNormalizado,
-                    _timestamp: obtenerMarcaDeTiempo({ ...d, fecha: fechaPeriodo })
-                };
-            })
-            .filter(registro => registro.valor !== null && registro.valor !== undefined)
-            .sort((a, b) => {
-                if (a.anio !== b.anio) return a.anio - b.anio;
-                if (a.mes !== b.mes) return a.mes - b.mes;
-                return a._timestamp - b._timestamp;
-            });
-
-        const registrosPorPeriodo = new Map();
-
-        for (const registro of registrosOrdenados) {
-            const clavePeriodo = `${registro.anio}-${String(registro.mes).padStart(2, '0')}`;
-            const existente = registrosPorPeriodo.get(clavePeriodo);
-
-            if (!existente) {
-                registrosPorPeriodo.set(clavePeriodo, registro);
-                continue;
-            }
-
-            if (registro._timestamp >= existente._timestamp) {
-                registrosPorPeriodo.set(clavePeriodo, registro);
-            }
-        }
-
-        panelState.datosReales = Array.from(registrosPorPeriodo.values())
-            .sort((a, b) => {
-                if (a.anio !== b.anio) return a.anio - b.anio;
-                return a.mes - b.mes;
-            })
-            .map(({ _timestamp, ...registro }) => registro);
-
+        panelState.datosReales = normalizarSerieTemporal(data || []);
         if (DEBUG.enabled) console.log('📊 Datos reales cargados:', panelState.datosReales.length);
 
     } catch (error) {

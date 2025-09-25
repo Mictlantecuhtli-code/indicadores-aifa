@@ -80,6 +80,46 @@ const CHART_CONFIGS = {
     }
 };
 
+const MAPA_MESES = {
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 7,
+    8: 8,
+    9: 9,
+    10: 10,
+    11: 11,
+    12: 12,
+    ene: 1,
+    enero: 1,
+    feb: 2,
+    febrero: 2,
+    mar: 3,
+    marzo: 3,
+    abr: 4,
+    abril: 4,
+    may: 5,
+    mayo: 5,
+    jun: 6,
+    junio: 6,
+    jul: 7,
+    julio: 7,
+    ago: 8,
+    agosto: 8,
+    sep: 9,
+    sept: 9,
+    septiembre: 9,
+    oct: 10,
+    octubre: 10,
+    nov: 11,
+    noviembre: 11,
+    dic: 12,
+    diciembre: 12
+};
+
 function obtenerColorPorAnio(anio) {
     return COLORES_ANIO[anio] || '#6B7280';
 }
@@ -126,15 +166,15 @@ async function crearGraficaComparativa(canvasId, datos, opciones = {}) {
         destruirGrafica('panelDirectivos');
         const ctx = canvas.getContext('2d');
 
+        const registrosNormalizados = normalizarSerieTemporal(datos);
+
         const datasets = [];
         const datosAnioAnterior = crearArrayMeses(null);
-        datos.filter(d => {
-            const fecha = new Date(d.fecha);
-            return fecha.getFullYear() === anioAnterior;
-        }).forEach(d => {
-            const fecha = new Date(d.fecha);
-            datosAnioAnterior[fecha.getMonth()] = d.valor;
-        });
+        registrosNormalizados
+            .filter(d => d.anio === anioAnterior)
+            .forEach(d => {
+                datosAnioAnterior[d.mes - 1] = d.valor;
+            });
 
         datasets.push({
             label: anioAnterior.toString(),
@@ -146,13 +186,11 @@ async function crearGraficaComparativa(canvasId, datos, opciones = {}) {
         });
 
         const datosAnioActual = crearArrayMeses(null);
-        datos.filter(d => {
-            const fecha = new Date(d.fecha);
-            return fecha.getFullYear() === anioActual;
-        }).forEach(d => {
-            const fecha = new Date(d.fecha);
-            datosAnioActual[fecha.getMonth()] = d.valor;
-        });
+        registrosNormalizados
+            .filter(d => d.anio === anioActual)
+            .forEach(d => {
+                datosAnioActual[d.mes - 1] = d.valor;
+            });
 
         datasets.push({
             label: anioActual.toString(),
@@ -190,15 +228,22 @@ async function crearGraficaMeta(canvasId, datosReales, datosMetas, opciones = {}
         destruirGrafica('meta');
         const ctx = canvas.getContext('2d');
 
+        const datosRealesNormalizados = normalizarSerieTemporal(datosReales);
+        const datosMetasNormalizados = normalizarSerieTemporal(datosMetas);
+
         const dataReal = crearArrayMeses(null);
-        datosReales.filter(d => new Date(d.fecha).getFullYear() === anio).forEach(d => {
-            dataReal[new Date(d.fecha).getMonth()] = d.valor;
-        });
+        datosRealesNormalizados
+            .filter(d => d.anio === anio)
+            .forEach(d => {
+                dataReal[d.mes - 1] = d.valor;
+            });
 
         const dataMeta = crearArrayMeses(null);
-        datosMetas.filter(d => new Date(d.fecha).getFullYear() === anio).forEach(d => {
-            dataMeta[new Date(d.fecha).getMonth()] = d.valor;
-        });
+        datosMetasNormalizados
+            .filter(d => d.anio === anio)
+            .forEach(d => {
+                dataMeta[d.mes - 1] = d.valor;
+            });
 
         chartInstances.meta = new Chart(ctx, {
             type: 'line',
@@ -229,18 +274,15 @@ async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
         destruirGrafica('visualizacion');
         const ctx = canvas.getContext('2d');
 
+        const registrosNormalizados = normalizarSerieTemporal(datos);
+
         const datasets = aniosSeleccionados.map(anio => {
             const yearData = crearArrayMeses(null);
-            datos.filter(d => new Date(d.fecha).getFullYear() === anio).forEach(d => {
-                const mesIndex = new Date(d.fecha).getMonth();
-                const valor = d.valor === null || d.valor === undefined ? null : Number(d.valor);
-
-                if (!Number.isFinite(valor)) {
-                    return;
-                }
-
-                yearData[mesIndex] = valor;
-            });
+            registrosNormalizados
+                .filter(d => d.anio === anio)
+                .forEach(d => {
+                    yearData[d.mes - 1] = d.valor;
+                });
             return { label: anio.toString(), data: yearData, borderColor: obtenerColorPorAnio(anio) };
         });
 
@@ -257,11 +299,198 @@ async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
     }
 }
 
+function normalizarValorNumerico(valorOriginal) {
+    if (valorOriginal === null || valorOriginal === undefined) return null;
+
+    if (typeof valorOriginal === 'number') {
+        return Number.isFinite(valorOriginal) ? valorOriginal : null;
+    }
+
+    if (typeof valorOriginal === 'string') {
+        const limpio = valorOriginal.trim();
+        if (limpio === '') return null;
+
+        const soloNumeros = limpio.replace(/[^0-9.,-]/g, '');
+        if (soloNumeros === '') return null;
+
+        const tieneComa = soloNumeros.includes(',');
+        const tienePunto = soloNumeros.includes('.');
+        let valorNormalizado = soloNumeros;
+
+        if (tieneComa && tienePunto) {
+            const ultimaComa = soloNumeros.lastIndexOf(',');
+            const ultimoPunto = soloNumeros.lastIndexOf('.');
+
+            if (ultimaComa > ultimoPunto) {
+                valorNormalizado = soloNumeros.replace(/\./g, '').replace(/,/g, '.');
+            } else {
+                valorNormalizado = soloNumeros.replace(/,/g, '');
+            }
+        } else if (tieneComa && !tienePunto) {
+            valorNormalizado = soloNumeros.replace(/,/g, '.');
+        } else {
+            valorNormalizado = soloNumeros.replace(/,/g, '');
+        }
+
+        const numero = Number(valorNormalizado);
+        return Number.isFinite(numero) ? numero : null;
+    }
+
+    return null;
+}
+
+function obtenerEntero(valor) {
+    if (valor === null || valor === undefined) return null;
+
+    if (typeof valor === 'number') {
+        return Number.isFinite(valor) ? Math.trunc(valor) : null;
+    }
+
+    if (typeof valor === 'string') {
+        const limpio = valor.trim();
+        if (limpio === '') return null;
+
+        const numero = Number(limpio);
+        if (Number.isFinite(numero)) {
+            return Math.trunc(numero);
+        }
+
+        const soloNumeros = limpio.replace(/[^0-9-]/g, '');
+        if (soloNumeros === '') return null;
+
+        const numeroLimpio = Number(soloNumeros);
+        return Number.isFinite(numeroLimpio) ? Math.trunc(numeroLimpio) : null;
+    }
+
+    return null;
+}
+
+function obtenerMes(valor, respaldoFecha) {
+    let mes = obtenerEntero(valor);
+
+    if (!Number.isFinite(mes) || mes < 1 || mes > 12) {
+        if (typeof valor === 'string') {
+            const llave = valor.trim().toLowerCase();
+            mes = MAPA_MESES[llave] || null;
+        }
+    }
+
+    if (!Number.isFinite(mes) && respaldoFecha) {
+        const fecha = new Date(respaldoFecha);
+        if (Number.isFinite(fecha.getTime())) {
+            mes = fecha.getMonth() + 1;
+        }
+    }
+
+    return Number.isFinite(mes) ? mes : null;
+}
+
+function obtenerAnio(valor, respaldoFecha) {
+    let anio = obtenerEntero(valor);
+
+    if (!Number.isFinite(anio) && respaldoFecha) {
+        const fecha = new Date(respaldoFecha);
+        if (Number.isFinite(fecha.getTime())) {
+            anio = fecha.getFullYear();
+        }
+    }
+
+    return Number.isFinite(anio) ? anio : null;
+}
+
+function construirFechaPeriodo(anio, mes) {
+    if (!Number.isFinite(anio) || !Number.isFinite(mes)) return null;
+    return `${anio}-${String(mes).padStart(2, '0')}-01`;
+}
+
+function obtenerMarcaDeTiempoRegistro(registro = {}) {
+    const candidatas = [
+        registro.fecha_ultima_edicion,
+        registro.updated_at,
+        registro.fecha_captura,
+        registro.created_at,
+        registro.fecha_medicion,
+        registro.fecha
+    ].filter(Boolean);
+
+    if (candidatas.length === 0) return 0;
+
+    const maxFecha = candidatas.reduce((max, fecha) => {
+        const time = new Date(fecha).getTime();
+        return Number.isFinite(time) && time > max ? time : max;
+    }, 0);
+
+    return maxFecha;
+}
+
+function normalizarSerieTemporal(datos = []) {
+    const registrosProcesados = (datos || [])
+        .map(registro => {
+            const fechaReferencia = registro.fecha || registro.periodo || registro.periodo_inicio;
+            const anio = obtenerAnio(
+                registro.anio ?? registro.year ?? registro.anio_medicion ?? registro.periodo_anio,
+                fechaReferencia
+            );
+            const mes = obtenerMes(
+                registro.mes ?? registro.month ?? registro.mes_medicion ?? registro.periodo_mes,
+                fechaReferencia
+            );
+
+            if (!Number.isFinite(anio) || !Number.isFinite(mes)) {
+                return null;
+            }
+
+            const fechaPeriodo = construirFechaPeriodo(anio, mes);
+            const valorNormalizado = normalizarValorNumerico(
+                registro.valor ?? registro.total ?? registro.cantidad ?? registro.value
+            );
+
+            if (valorNormalizado === null || valorNormalizado === undefined) {
+                return null;
+            }
+
+            return {
+                ...registro,
+                anio,
+                mes,
+                fecha: fechaPeriodo,
+                valor: valorNormalizado,
+                _timestamp: obtenerMarcaDeTiempoRegistro({ ...registro, fecha: fechaPeriodo })
+            };
+        })
+        .filter(Boolean)
+        .filter(registro => registro.mes >= 1 && registro.mes <= 12)
+        .sort((a, b) => {
+            if (a.anio !== b.anio) return a.anio - b.anio;
+            if (a.mes !== b.mes) return a.mes - b.mes;
+            return a._timestamp - b._timestamp;
+        });
+
+    const registrosUnicos = new Map();
+
+    for (const registro of registrosProcesados) {
+        const clave = `${registro.anio}-${String(registro.mes).padStart(2, '0')}`;
+        const existente = registrosUnicos.get(clave);
+
+        if (!existente || registro._timestamp >= existente._timestamp) {
+            registrosUnicos.set(clave, registro);
+        }
+    }
+
+    return Array.from(registrosUnicos.values())
+        .sort((a, b) => {
+            if (a.anio !== b.anio) return a.anio - b.anio;
+            return a.mes - b.mes;
+        })
+        .map(({ _timestamp, ...registro }) => registro);
+}
+
 export {
     crearGraficaComparativa,
     crearGraficaMeta,
     crearGraficaHistorica,
     destruirGrafica,
     CHART_CONFIGS,
-    MESES
+    MESES,
+    normalizarSerieTemporal
 };
