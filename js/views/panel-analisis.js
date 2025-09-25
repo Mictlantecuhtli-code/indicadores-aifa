@@ -18,6 +18,15 @@ const analisisState = {
     ultimoMesDatos: null
 };
 
+function redirectToPanelDirectivos(message, type = 'error') {
+    if (message) {
+        showToast(message, type);
+    }
+
+    hideLoading();
+    window.router.navigateTo('/panel-directivos');
+}
+
 // =====================================================
 // RENDERIZADO PRINCIPAL
 // =====================================================
@@ -30,8 +39,7 @@ export async function render(container, params = {}, query = {}) {
         
         // Validar parámetros de query
         if (!query.indicador || !query.opcion) {
-            showToast('Parámetros de análisis incompletos', 'error');
-            window.router.navigateTo('/panel-directivos');
+            redirectToPanelDirectivos('Parámetros de análisis incompletos', 'error');
             return;
         }
         
@@ -45,8 +53,7 @@ export async function render(container, params = {}, query = {}) {
         await cargarDatosIndicador();
         
         if (!analisisState.indicadorData) {
-            showToast('Indicador no encontrado', 'error');
-            window.router.navigateTo('/panel-directivos');
+            redirectToPanelDirectivos('Indicador no encontrado', 'error');
             return;
         }
         
@@ -70,9 +77,7 @@ export async function render(container, params = {}, query = {}) {
         
     } catch (error) {
         console.error('❌ Error al renderizar análisis:', error);
-        hideLoading();
-        showToast('Error al cargar el análisis', 'error');
-        window.router.navigateTo('/panel-directivos');
+        redirectToPanelDirectivos('Error al cargar el análisis', 'error');
     }
 }
 
