@@ -666,7 +666,12 @@ export async function changePassword(currentPassword, newPassword) {
         if (reauthError) {
             const message = (reauthError.message || '').toLowerCase();
             if (message.includes('invalid') && message.includes('credentials')) {
-                throw new SupabaseError('La contraseña actual es incorrecta.', reauthError.name || reauthError.code, reauthError);
+                throw new SupabaseError(
+                    'La contraseña actual es incorrecta.',
+                    'INVALID_CREDENTIALS',
+                    reauthError
+                );
+
             }
 
             throw reauthError;
@@ -690,6 +695,18 @@ export async function changePassword(currentPassword, newPassword) {
 
         if (data?.user) {
             appState.user = data.user;
+        }
+
+        // Refrescar la sesión para evitar estados inconsistentes tras actualizar credenciales.
+        try {
+            const { data: refreshedSession, error: refreshError } = await supabase.auth.getSession();
+            if (!refreshError && refreshedSession?.session) {
+                appState.session = refreshedSession.session;
+            }
+        } catch (refreshError) {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ No se pudo refrescar la sesión después del cambio de contraseña:', refreshError);
+            }
         }
 
         if (DEBUG.enabled) {

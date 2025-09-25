@@ -283,6 +283,9 @@ function setupUserMenu() {
 }
 
 function openChangePasswordModal() {
+    let isSubmitting = false;
+
+
     const modalId = ui.showModal({
         title: 'Cambiar contraseña',
         content: `
@@ -314,6 +317,11 @@ function openChangePasswordModal() {
                 text: 'Actualizar contraseña',
                 primary: true,
                 handler: async () => {
+                    if (isSubmitting) {
+                        return false;
+                    }
+
+
                     const errorContainer = document.getElementById('change-password-error');
                     const currentInput = document.getElementById('current-password');
                     const newInput = document.getElementById('new-password');
@@ -385,16 +393,30 @@ function openChangePasswordModal() {
                         submitButton.textContent = 'Actualizando...';
                     }
 
+
+                    isSubmitting = true;
+
                     try {
                         await changePassword(currentPassword, newPassword);
                         ui.showToast('Contraseña actualizada correctamente', 'success');
+                        clearError();
+
                         return true;
                     } catch (error) {
                         console.error('Error al cambiar contraseña:', error);
                         const message = error?.message || 'No fue posible actualizar la contraseña.';
                         showError(message);
+
+                        if (error?.code === 'INVALID_CREDENTIALS') {
+                            markFieldError(currentInput);
+                            currentInput?.focus();
+                        }
+
+                        ui.showToast(message, 'error');
                         return false;
                     } finally {
+                        isSubmitting = false;
+
                         if (submitButton) {
                             submitButton.disabled = false;
                             submitButton.textContent = submitButton.dataset.originalText || 'Actualizar contraseña';
