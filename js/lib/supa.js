@@ -24,6 +24,27 @@ export const appState = {
 
 const authListeners = new Set();
 
+const SESSION_REFRESH_MARGIN_MS = 2 * 60 * 1000; // 2 minutos antes del vencimiento
+const SESSION_CHECK_INTERVAL_MS = 30 * 1000; // Verificar cada 30s
+const MAX_REFRESH_FAILURES = 2;
+
+let sessionMonitorId = null;
+let refreshInProgress = null;
+let refreshFailureCount = 0;
+let sessionExpirationNotified = false;
+let visibilityListenersRegistered = false;
+
+const visibilityHandler = () => {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState === 'visible') {
+        refreshActiveSession({ force: true, reason: 'visibilitychange' }).catch(() => {});
+    }
+};
+
+const focusHandler = () => {
+    refreshActiveSession({ force: true, reason: 'window_focus' }).catch(() => {});
+};
+
 export function onAuthStateChange(listener) {
     if (typeof listener !== 'function') {
         return () => {};
@@ -44,6 +65,131 @@ function notifyAuthListeners(event, session) {
             console.error('⚠️ Error en listener de autenticación:', error);
         }
     });
+}
+
+function resetSessionFailureState() {
+    refreshFailureCount = 0;
+    sessionExpirationNotified = false;
+}
+
+function handleSessionExpiration(error = null) {
+    if (sessionExpirationNotified) {
+        return;
+    }
+
+    if (DEBUG.enabled && error) {
+        console.warn('⚠️ Sesión expirada o inválida:', error);
+    }
+
+    sessionExpirationNotified = true;
+    refreshFailureCount = 0;
+    appState.session = null;
+    appState.user = null;
+    appState.profile = null;
+
+    notifyAuthListeners('SESSION_EXPIRED', null);
+}
+
+export async function refreshActiveSession(options = {}) {
+    const { force = false, reason = 'manual' } = options || {};
+
+    if (refreshInProgress) {
+        return refreshInProgress;
+    }
+
+    refreshInProgress = (async () => {
+        try {
+            const now = Date.now();
+            const expiresAt = appState.session?.expires_at
+                ? appState.session.expires_at * 1000
+                : null;
+
+            const shouldRefresh = force
+                || !appState.session
+                || !expiresAt
+                || (expiresAt - now) <= SESSION_REFRESH_MARGIN_MS;
+
+            if (!shouldRefresh) {
+                resetSessionFailureState();
+                return appState.session;
+            }
+
+            const hadSession = !!appState.session;
+            const action = hadSession ? 'refreshSession' : 'getSession';
+            const { data, error } = action === 'refreshSession'
+                ? await supabase.auth.refreshSession()
+                : await supabase.auth.getSession();
+
+            if (error) {
+                throw error;
+            }
+
+            const session = data?.session || null;
+
+            if (!session) {
+                if (!hadSession) {
+                    resetSessionFailureState();
+                    return null;
+                }
+                throw new Error('No se recibió sesión al actualizar.');
+            }
+
+            appState.session = session;
+            appState.user = session.user || data?.user || appState.user;
+
+            resetSessionFailureState();
+
+            return session;
+        } catch (error) {
+            refreshFailureCount += 1;
+
+            if (DEBUG.enabled) {
+                console.error(`❌ Error al refrescar sesión (${reason}):`, error);
+            }
+
+            if (refreshFailureCount >= MAX_REFRESH_FAILURES) {
+                handleSessionExpiration(error);
+            }
+
+            return null;
+        }
+    })().finally(() => {
+        refreshInProgress = null;
+    });
+
+    return refreshInProgress;
+}
+
+export function startSessionMonitor() {
+    if (typeof window === 'undefined') return;
+
+    if (!sessionMonitorId) {
+        sessionMonitorId = window.setInterval(() => {
+            if (!appState.session) return;
+            refreshActiveSession({ reason: 'interval' }).catch(() => {});
+        }, SESSION_CHECK_INTERVAL_MS);
+    }
+
+    if (!visibilityListenersRegistered && typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', visibilityHandler);
+        window.addEventListener('focus', focusHandler);
+        visibilityListenersRegistered = true;
+    }
+
+    refreshActiveSession({ force: true, reason: 'monitor_start' }).catch(() => {});
+}
+
+export function stopSessionMonitor() {
+    if (sessionMonitorId) {
+        clearInterval(sessionMonitorId);
+        sessionMonitorId = null;
+    }
+
+    if (visibilityListenersRegistered && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        window.removeEventListener('focus', focusHandler);
+        visibilityListenersRegistered = false;
+    }
 }
 
 // =====================================================
@@ -613,20 +759,20 @@ export async function getCurrentProfile() {
 export async function signInWithPassword(email, password) {
     try {
         if (DEBUG.enabled) console.log('🔐 Intentando login:', email);
-        
+
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password: password
         });
-        
+
         if (error) {
             console.error('❌ Error en login:', error);
             throw new SupabaseError(error.message, error.name);
         }
-        
+
         appState.session = data.session;
         appState.user = data.user;
-        
+
         // Cargar perfil del usuario
         //appState.profile = await getCurrentProfile();
         try {
@@ -639,13 +785,89 @@ export async function signInWithPassword(email, password) {
                 rol_principal: 'ADMIN'
             };
         }
-        
+
         if (DEBUG.enabled) console.log('✅ Login exitoso:', data.user.email);
-        
+
         return { data };
     } catch (error) {
         handleError(error, 'Error al iniciar sesión');
         throw error;
+    }
+}
+
+/**
+ * Cambiar la contraseña del usuario autenticado
+ */
+export async function changePassword(currentPassword, newPassword) {
+    if (!appState.user?.email) {
+        throw new SupabaseError('No hay una sesión activa. Inicia sesión nuevamente.');
+    }
+
+    try {
+        const { data: reauthData, error: reauthError } = await supabase.auth.signInWithPassword({
+            email: appState.user.email,
+            password: currentPassword
+        });
+
+        if (reauthError) {
+            const message = (reauthError.message || '').toLowerCase();
+            if (message.includes('invalid') && message.includes('credentials')) {
+                throw new SupabaseError(
+                    'La contraseña actual es incorrecta.',
+                    'INVALID_CREDENTIALS',
+                    reauthError
+                );
+            }
+
+            throw reauthError;
+        }
+
+        if (reauthData?.session) {
+            appState.session = reauthData.session;
+        }
+
+        if (reauthData?.user) {
+            appState.user = reauthData.user;
+        }
+
+        const { data, error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        if (data?.user) {
+            appState.user = data.user;
+        }
+
+        // Refrescar la sesión para evitar estados inconsistentes tras actualizar credenciales.
+        try {
+            const { data: refreshedSession, error: refreshError } = await supabase.auth.getSession();
+            if (!refreshError && refreshedSession?.session) {
+                appState.session = refreshedSession.session;
+            }
+        } catch (refreshError) {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ No se pudo refrescar la sesión después del cambio de contraseña:', refreshError);
+            }
+        }
+
+        if (DEBUG.enabled) {
+            console.log('✅ Contraseña actualizada para', appState.user?.email);
+        }
+
+        notifyAuthListeners('PASSWORD_CHANGED', appState.session);
+
+        return true;
+    } catch (error) {
+        if (error instanceof SupabaseError) {
+            throw error;
+        }
+
+        const message = handleError(error, 'Error al actualizar la contraseña');
+        throw new SupabaseError(message, error?.code || error?.name, error);
     }
 }
 
@@ -1440,6 +1662,10 @@ async function setupSupabase() {
             appState.session = session;
             appState.user = session?.user || null;
 
+            if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)) {
+                resetSessionFailureState();
+            }
+
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
             } else if (event === 'SIGNED_OUT') {
@@ -1458,6 +1684,8 @@ async function setupSupabase() {
         notifyAuthListeners('INITIAL_SESSION', appState.session);
 
         appState.initialized = true;
+
+        startSessionMonitor();
 
         if (DEBUG.enabled) {
             console.log('✅ Supabase inicializado correctamente');
