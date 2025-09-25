@@ -514,7 +514,6 @@ async function cargarDatosReales(indicador) {
         if (error) throw error;
 
         panelState.datosReales = normalizarSerieTemporal(data || []);
-
         if (DEBUG.enabled) console.log('📊 Datos reales cargados:', panelState.datosReales.length);
 
     } catch (error) {
