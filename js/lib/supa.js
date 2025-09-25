@@ -671,6 +671,7 @@ export async function changePassword(currentPassword, newPassword) {
                     'INVALID_CREDENTIALS',
                     reauthError
                 );
+
             }
 
             throw reauthError;
