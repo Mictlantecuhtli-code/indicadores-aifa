@@ -512,7 +512,7 @@ async function cargarDatosReales(indicador) {
         });
         
         if (error) throw error;
-        
+       
         const registrosOrdenados = (data || []).map(d => {
             const valorNormalizado = d.valor === null || d.valor === undefined
                 ? null
