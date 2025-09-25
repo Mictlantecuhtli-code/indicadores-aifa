@@ -14,12 +14,28 @@ export const routerState = {
     currentDefinition: null,
     history: [],
     isNavigating: false,
-    initialized: false
+    initialized: false,
+    activeNavigationId: null
 };
 
 let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
+const pendingRoutes = [];
+
+let navigationSequence = 0;
+
+const CLEANUP_TIMEOUT_MS = 4000;
+const LOAD_TIMEOUT_MS = 12000;
+const RENDER_TIMEOUT_MS = 16000;
+
+class NavigationTimeoutError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'NavigationTimeoutError';
+        this.code = 'NAVIGATION_TIMEOUT';
+    }
+}
 
 // =====================================================
 // CONFIGURACIÓN
@@ -119,6 +135,134 @@ function getBreadcrumbsForRoute(definition, params) {
     }
 }
 
+function withTimeout(promise, timeoutMs, context = '') {
+    if (!timeoutMs || timeoutMs <= 0) {
+        return Promise.resolve(promise);
+    }
+
+    const label = context ? ` (${context})` : '';
+
+    return new Promise((resolve, reject) => {
+        let timeoutId = null;
+
+        const clear = () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+
+        timeoutId = setTimeout(() => {
+            clear();
+            reject(new NavigationTimeoutError(`Tiempo de espera excedido${label}`));
+        }, timeoutMs);
+
+        Promise.resolve(promise)
+            .then(result => {
+                clear();
+                resolve(result);
+            })
+            .catch(error => {
+                clear();
+                reject(error);
+            });
+    });
+}
+
+async function executeWithTimeout(task, timeoutMs, context) {
+    if (typeof task !== 'function') {
+        return;
+    }
+
+    try {
+        await withTimeout(task(), timeoutMs, context);
+    } catch (error) {
+        if (error instanceof NavigationTimeoutError) {
+            console.warn(`⚠️ ${context} tardó demasiado y se canceló.`);
+        } else {
+            console.warn(`⚠️ Error durante ${context}:`, error);
+        }
+    }
+}
+
+function resolveTimeout(candidate, fallback) {
+    if (candidate === null || candidate === undefined) {
+        return fallback;
+    }
+
+    if (candidate === false) {
+        return 0;
+    }
+
+    if (candidate === true) {
+        return fallback;
+    }
+
+    const numericCandidate = Number(candidate);
+    if (!Number.isFinite(numericCandidate)) {
+        return fallback;
+    }
+
+    if (numericCandidate <= 0) {
+        return 0;
+    }
+
+    return numericCandidate;
+}
+
+function getRenderTimeout(viewModule, route, params, query) {
+    if (!viewModule) {
+        return RENDER_TIMEOUT_MS;
+    }
+
+    let candidate;
+
+    if (typeof viewModule.getRenderTimeout === 'function') {
+        try {
+            candidate = viewModule.getRenderTimeout({ route, params, query });
+        } catch (error) {
+            console.warn('⚠️ Error al obtener tiempo de render personalizado:', error);
+        }
+    }
+
+    if (candidate === undefined && typeof viewModule.renderTimeoutMs !== 'undefined') {
+        candidate = viewModule.renderTimeoutMs;
+    }
+
+    if (candidate === undefined && viewModule.render && typeof viewModule.render.timeoutMs !== 'undefined') {
+        candidate = viewModule.render.timeoutMs;
+    }
+
+    if (candidate === undefined && viewModule.metadata && typeof viewModule.metadata.renderTimeoutMs !== 'undefined') {
+        candidate = viewModule.metadata.renderTimeoutMs;
+    }
+
+    return resolveTimeout(candidate, RENDER_TIMEOUT_MS);
+}
+
+function enqueueRoute(route) {
+    if (!route) return;
+
+    const existingIndex = pendingRoutes.findIndex(item => item.fullPath === route.fullPath);
+    if (existingIndex !== -1) {
+        pendingRoutes.splice(existingIndex, 1);
+    }
+
+    pendingRoutes.push(route);
+
+    if (pendingRoutes.length > 10) {
+        pendingRoutes.splice(0, pendingRoutes.length - 10);
+    }
+}
+
+function dequeueRoute() {
+    return pendingRoutes.shift() || null;
+}
+
+function clearPendingRoutes() {
+    pendingRoutes.length = 0;
+}
+
 // =====================================================
 // NAVEGACIÓN
 // =====================================================
@@ -171,20 +315,15 @@ export function getDefaultRouteForUser(profile = appState.profile) {
 // =====================================================
 
 async function cleanupActiveView() {
-    if (typeof teardownActiveView === 'function') {
-        try {
-            await teardownActiveView();
-        } catch (error) {
-            console.warn('⚠️ Error al ejecutar teardown de la vista previa:', error);
-        }
+    const teardown = teardownActiveView;
+    const activeModule = activeViewModule;
+
+    if (typeof teardown === 'function') {
+        await executeWithTimeout(() => teardown(), CLEANUP_TIMEOUT_MS, 'la limpieza de la vista anterior');
     }
 
-    if (activeViewModule && typeof activeViewModule.destroy === 'function') {
-        try {
-            await activeViewModule.destroy();
-        } catch (error) {
-            console.warn('⚠️ Error al destruir la vista previa:', error);
-        }
+    if (activeModule && typeof activeModule.destroy === 'function') {
+        await executeWithTimeout(() => activeModule.destroy(), CLEANUP_TIMEOUT_MS, 'el destructor de la vista anterior');
     }
 
     teardownActiveView = null;
@@ -203,29 +342,40 @@ async function renderRoute(route, resolved) {
 
         await cleanupActiveView();
 
-        const viewModule = await resolved.definition.loader();
+        const viewModule = await withTimeout(
+            Promise.resolve().then(() => resolved.definition.loader()),
+            LOAD_TIMEOUT_MS,
+            `carga de la vista ${route.path}`
+        );
+
         if (!viewModule || typeof viewModule.render !== 'function') {
             throw new Error('La vista no expone una función render válida');
         }
 
         activeViewModule = viewModule;
-        const teardown = await viewModule.render(container, resolved.params, route.query);
+
+        const renderTimeout = getRenderTimeout(viewModule, route, resolved.params, route.query);
+
+        const teardown = await withTimeout(
+            Promise.resolve(viewModule.render(container, resolved.params, route.query)),
+            renderTimeout,
+            `renderizado de ${route.path}`
+        );
+
         teardownActiveView = typeof teardown === 'function' ? teardown : null;
 
-        // Recrear iconos después de renderizar
         if (window.lucide) {
             window.lucide.createIcons();
         }
-
-        hideLoading();
 
         if (DEBUG.enabled) {
             console.log(`✅ Vista renderizada: ${route.path}`);
         }
     } catch (error) {
-        hideLoading();
         console.error(`❌ Error al renderizar la ruta ${route.path}:`, error);
         showErrorPage('Error al cargar la vista', error.message || 'Ocurrió un problema al renderizar la vista.');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -318,12 +468,24 @@ function updateDocumentTitle(definition, params) {
 // CONTROLADOR PRINCIPAL DE RUTA
 // =====================================================
 
-async function handleRouteChange(route) {
-    if (routerState.isNavigating) {
+async function handleRouteChange(route, options = {}) {
+    if (!route) return;
+
+    const { fromQueue = false } = options;
+
+    if (routerState.isNavigating && !fromQueue) {
+        enqueueRoute(route);
+
+        if (DEBUG.enabled) {
+            console.log('⏳ Navegación en cola:', route.fullPath);
+        }
+
         return;
     }
 
     routerState.isNavigating = true;
+    const navigationId = ++navigationSequence;
+    routerState.activeNavigationId = navigationId;
 
     try {
         const resolved = resolveDefinition(route.path);
@@ -338,12 +500,15 @@ async function handleRouteChange(route) {
             if (DEBUG.enabled) {
                 console.log('🚫 Ruta protegida, redirigiendo a login');
             }
+
+            clearPendingRoutes();
             navigateTo('/login', {}, true);
             return;
         }
 
         if (definition.path === '/login' && isAuthenticated()) {
             const targetRoute = getDefaultRouteForUser();
+            clearPendingRoutes();
             navigateTo(targetRoute, {}, true);
             return;
         }
@@ -372,7 +537,28 @@ async function handleRouteChange(route) {
         showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
     } finally {
         routerState.isNavigating = false;
+        routerState.activeNavigationId = null;
+
+        processNextRoute();
     }
+}
+
+function processNextRoute() {
+    if (routerState.isNavigating) {
+        return;
+    }
+
+    const nextRoute = dequeueRoute();
+    if (!nextRoute) {
+        return;
+    }
+
+    Promise.resolve()
+        .then(() => handleRouteChange(nextRoute, { fromQueue: true }))
+        .catch(error => {
+            console.error('❌ Error al procesar navegación en cola:', error);
+            showToast('No fue posible completar la navegación pendiente.', 'error');
+        });
 }
 
 // =====================================================
