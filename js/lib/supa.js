@@ -587,7 +587,6 @@ export async function getCurrentProfile() {
     try {
         const user = await getCurrentUser();
         if (!user) return null;
-
         let { data: profileData, error: profileError } = await supabase
             .from('perfiles')
             .select(PROFILE_COLUMNS)
@@ -620,7 +619,6 @@ export async function getCurrentProfile() {
 
         const now = new Date().toISOString();
         let profile = mapProfileRecord(profileData);
-
         if (!profile) {
             const defaultProfile = {
                 id: user.id,
@@ -931,7 +929,6 @@ export function hasRoleLevel(userRole, minRole) {
 // =====================================================
 // ADMINISTRACIÓN DE USUARIOS
 // =====================================================
-
 function mapProfileRecord(record) {
     if (!record) return null;
 
@@ -1050,13 +1047,10 @@ async function logAuditOperation({
             observaciones: observations || null,
             es_automatico: automatic
         };
-
         const { error } = await supabase.from('auditoria_log').insert(auditRecord);
-
         if (error) {
             throw new SupabaseError(error.message, error.code, error.details);
         }
-
         if (DEBUG.enabled) {
             console.log('📝 Auditoría registrada:', {
                 tabla: table,
@@ -1081,8 +1075,8 @@ async function fetchProfileSnapshot(userId) {
     if (error) {
         throw new SupabaseError(error.message, error.code, error.details);
     }
-
     return mapProfileRecord(data || null);
+
 }
 
 async function fetchAssignmentSnapshot(assignmentId) {
@@ -1123,7 +1117,6 @@ export async function fetchAdminUsers() {
             orderBy: [{ column: 'fecha_asignacion', ascending: false }]
         })
     ]);
-
     const profiles = (profilesResponse.data || []).map(mapProfileRecord);
     const assignments = assignmentsResponse.data || [];
 
@@ -1147,7 +1140,6 @@ export async function createUserWithProfile(userData) {
     const now = new Date().toISOString();
     let createdAuthUserId = null;
     let profilePersisted = false;
-
     try {
         const {
             email,
@@ -1162,7 +1154,6 @@ export async function createUserWithProfile(userData) {
         if (!email || !password || !rol_principal) {
             throw new SupabaseError('Datos de usuario incompletos');
         }
-
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedName = sanitizeTextValue(nombre_completo) || normalizedEmail;
         const normalizedRole = normalizeRole(rol_principal);
@@ -1355,7 +1346,6 @@ export async function updateUserProfile(userId, updates = {}) {
             puesto: updatedProfile.puesto
         }
     });
-
     await logAuditOperation({
         table: 'perfiles',
         recordId: userId,
@@ -1406,7 +1396,6 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
             next: null,
             observations: `Eliminación definitiva del usuario ${existing.email}`
         });
-
         await tryDeleteAuthUser(userId);
 
         if (appState.profile?.id === userId) {
@@ -1434,7 +1423,6 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
     if (error) {
         throw new SupabaseError(error.message, error.code, error.details);
     }
-
     const updatedProfile = mapProfileRecord(updatedRows?.[0] || { ...existing, ...updates });
 
     await logAuditOperation({
@@ -1446,11 +1434,9 @@ export async function deleteUserAccount(userId, { hardDelete = false } = {}) {
         changedFields: ['estado', 'fecha_actualizacion'],
         observations: `Usuario ${existing.email} marcado como inactivo`
     });
-
     await tryUpdateAuthUser(userId, {
         banned_until: new Date().toISOString()
     });
-
     if (appState.profile?.id === userId) {
         appState.profile = { ...appState.profile, ...updatedProfile };
     }

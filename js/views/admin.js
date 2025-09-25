@@ -215,6 +215,9 @@ function setupStaticListeners(container) {
 // =====================================================
 // CARGA DE DATOS
 // =====================================================
+async function ensureAdminProfile() {
+    if (!appState.profile) {
+        await getCurrentProfile();
 
 async function ensureAdminProfile() {
     if (!appState.profile) {
@@ -228,7 +231,6 @@ async function ensureAdminProfile() {
     if (DEBUG.enabled) {
         console.warn('⚠️ Usuario sin privilegios de administrador');
     }
-
     return false;
 }
 
