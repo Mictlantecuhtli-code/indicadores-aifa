@@ -284,6 +284,7 @@ function setupUserMenu() {
 
 function openChangePasswordModal() {
     let isSubmitting = false;
+
     const modalId = ui.showModal({
         title: 'Cambiar contraseña',
         content: `

@@ -15,14 +15,15 @@ export const routerState = {
     history: [],
     isNavigating: false,
     initialized: false,
-    activeNavigationId: null
+    activeNavigationId: null,
+    navigationSequence: 0
+
 };
 
 let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
 const pendingRoutes = [];
-let navigationSequence = 0;
 
 const CLEANUP_TIMEOUT_MS = 4000;
 const LOAD_TIMEOUT_MS = 12000;
@@ -35,9 +36,6 @@ class NavigationTimeoutError extends Error {
         this.code = 'NAVIGATION_TIMEOUT';
     }
 }
-
-
-let navigationSequence = 0;
 
 const CLEANUP_TIMEOUT_MS = 4000;
 const LOAD_TIMEOUT_MS = 12000;
@@ -496,7 +494,6 @@ async function handleRouteChange(route, options = {}) {
     }
 
     routerState.isNavigating = true;
-    const navigationId = ++navigationSequence;
     routerState.activeNavigationId = navigationId;
 
     try {
@@ -553,6 +550,13 @@ async function handleRouteChange(route, options = {}) {
 
         processNextRoute();
     }
+
+    Promise.resolve()
+        .then(() => handleRouteChange(nextRoute, { fromQueue: true }))
+        .catch(error => {
+            console.error('❌ Error al procesar navegación en cola:', error);
+            showToast('No fue posible completar la navegación pendiente.', 'error');
+        });
 }
 
 function processNextRoute() {
