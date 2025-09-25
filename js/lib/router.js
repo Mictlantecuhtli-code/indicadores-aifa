@@ -151,6 +151,7 @@ export function getDefaultRouteForUser(profile = appState.profile) {
     if (!profile) {
         const defaultRoute = routeDefinitions.find(route => route.default);
         return defaultRoute?.path || '/';
+
     }
 
     const role = profile?.rol_principal;

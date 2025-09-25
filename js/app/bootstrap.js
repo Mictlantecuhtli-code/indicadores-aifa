@@ -102,7 +102,6 @@ async function openUserMenu() {
     }
 
     const profile = appState.profile || await getCurrentProfile();
-
     const escapeHTML = (value) => {
         if (value === null || value === undefined) return '';
         return String(value)
@@ -166,12 +165,14 @@ async function openUserMenu() {
                         Cerrar sesión
                     </button>
                 </div>
+
             </div>
         `,
         actions: [
             {
                 text: 'Cerrar',
                 handler: () => true
+
             }
         ]
     });
