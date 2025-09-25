@@ -36,7 +36,6 @@ class NavigationTimeoutError extends Error {
         this.code = 'NAVIGATION_TIMEOUT';
     }
 }
-
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -240,6 +239,7 @@ function getRenderTimeout(viewModule, route, params, query) {
     return resolveTimeout(candidate, RENDER_TIMEOUT_MS);
 }
 
+
 function enqueueRoute(route) {
     if (!route) return;
 
@@ -353,12 +353,12 @@ async function renderRoute(route, resolved) {
         }
 
         activeViewModule = viewModule;
-
         const renderTimeout = getRenderTimeout(viewModule, route, resolved.params, route.query);
 
         const teardown = await withTimeout(
             Promise.resolve(viewModule.render(container, resolved.params, route.query)),
             renderTimeout,
+
             `renderizado de ${route.path}`
         );
 
@@ -541,6 +541,25 @@ async function handleRouteChange(route, options = {}) {
 
         processNextRoute();
     }
+}
+
+function processNextRoute() {
+    if (routerState.isNavigating) {
+        return;
+    }
+
+    const nextRoute = dequeueRoute();
+    if (!nextRoute) {
+        return;
+
+    }
+
+    Promise.resolve()
+        .then(() => handleRouteChange(nextRoute, { fromQueue: true }))
+        .catch(error => {
+            console.error('❌ Error al procesar navegación en cola:', error);
+            showToast('No fue posible completar la navegación pendiente.', 'error');
+        });
 }
 
 function processNextRoute() {
