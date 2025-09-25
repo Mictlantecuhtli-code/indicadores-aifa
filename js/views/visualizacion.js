@@ -7,6 +7,8 @@ import { DEBUG, APP_CONFIG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
+const MAX_INDICADORES_SELECTION = 4;
+
 const CHART_COLORS = [ '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4','#84CC16', '#F97316', '#EC4899', '#6B7280', '#14B8A6', '#A855F7'];
 
 
@@ -320,10 +322,10 @@ return `
                         <i data-lucide="chevron-down" class="w-4 h-4"></i>
                     </button>
 
-                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-72 overflow-hidden">
+                    <div id="indicadores-filter-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
                         <div class="p-3 border-b border-gray-100">
                             <div class="flex items-center justify-between mb-3">
-                                <span class="text-sm font-medium text-gray-700">Seleccionar indicadores</span>
+                                <span class="text-sm font-medium text-gray-700">Seleccionar indicadores <span class="text-xs text-gray-500">(máx. ${MAX_INDICADORES_SELECTION})</span></span>
                                 <button
                                     id="clear-indicadores-btn"
                                     class="text-xs text-gray-500 hover:text-red-600 transition-colors"
@@ -341,7 +343,7 @@ return `
                             </label>
                         </div>
                         <div class="max-h-60 overflow-y-auto">
-                            <div class="p-3 space-y-2 indicadores-options">
+                            <div class="p-3 pb-4 space-y-2 indicadores-options">
                                 ${createIndicadoresFilterOptions()}
                             </div>
                         </div>
@@ -614,7 +616,7 @@ function createComparativeViewHTML() {
 function createDashboardViewHTML() {
     return `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            ${visualizacionState.selectedIndicadores.slice(0, 4).map((indicadorId, index) => {
+            ${visualizacionState.selectedIndicadores.slice(0, MAX_INDICADORES_SELECTION).map((indicadorId, index) => {
                 const indicador = visualizacionState.availableIndicadores.find(i => i.id === indicadorId);
                 return `
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -626,9 +628,9 @@ function createDashboardViewHTML() {
                 `;
             }).join('')}
             
-            ${visualizacionState.selectedIndicadores.length > 4 ? `
+            ${visualizacionState.selectedIndicadores.length > MAX_INDICADORES_SELECTION ? `
                 <div class="lg:col-span-2 text-center py-6 text-gray-500">
-                    <p>Mostrando los primeros 4 indicadores. Use el modo comparativo para ver todos.</p>
+                    <p>Mostrando los primeros ${MAX_INDICADORES_SELECTION} indicadores. Use el modo comparativo para ver todos.</p>
                 </div>
             ` : ''}
         </div>
@@ -1254,7 +1256,7 @@ function createComparativeChart() {
  * Crear gráficas del dashboard
  */
 function createDashboardCharts() {
-    const maxCharts = Math.min(4, visualizacionState.selectedIndicadores.length);
+    const maxCharts = Math.min(MAX_INDICADORES_SELECTION, visualizacionState.selectedIndicadores.length);
     
     for (let i = 0; i < maxCharts; i++) {
         const indicadorId = visualizacionState.selectedIndicadores[i];
@@ -1752,7 +1754,7 @@ function setupDefaultSelections() {
         const areaIndicadores = visualizacionState.availableIndicadores.filter(
             i => visualizacionState.selectedAreas.includes(i.area_id)
         );
-        visualizacionState.selectedIndicadores = areaIndicadores.slice(0, 3).map(i => i.id);
+        visualizacionState.selectedIndicadores = areaIndicadores.slice(0, MAX_INDICADORES_SELECTION).map(i => i.id);
     }
     
         // Si no hay años seleccionados, seleccionar TODOS los años disponibles
@@ -1943,7 +1945,7 @@ function setupFilterCheckboxes() {
     });
 
     document.querySelectorAll('.indicador-checkbox').forEach(cb => {
-        cb.addEventListener('change', updateIndicadoresSelection);
+        cb.addEventListener('change', handleIndicadorCheckboxChange);
     });
     
     document.querySelectorAll('.year-checkbox').forEach(cb => {
@@ -2147,12 +2149,19 @@ async function handleExportAll() {
  * Manejar aplicación de filtros
  */
 async function handleApplyFilters() {
+    const applyBtn = document.getElementById('apply-filters-btn');
+
     try {
+        if (applyBtn) {
+            applyBtn.disabled = true;
+            applyBtn.dataset.loading = 'true';
+        }
+
         showLoading('Aplicando filtros...');
-        
+
         // Cargar nuevos datos con filtros aplicados
         await loadChartData();
-        
+
         // Actualizar contenido de visualización
         const content = document.getElementById('visualization-content');
         if (content) {
@@ -2175,14 +2184,17 @@ async function handleApplyFilters() {
         // Actualizar estadísticas
         updateStatsDisplay();
         
-        hideLoading();
-        
         showToast('Filtros aplicados correctamente', 'success');
-        
+
     } catch (error) {
         console.error('❌ Error al aplicar filtros:', error);
-        hideLoading();
         showToast('Error al aplicar los filtros', 'error');
+    } finally {
+        if (applyBtn) {
+            delete applyBtn.dataset.loading;
+        }
+        hideLoading();
+        updateApplyFiltersButton();
     }
 }
 
@@ -2344,6 +2356,21 @@ function updateAreasSelection() {
 /**
  * Actualizar selección de indicadores
  */
+function handleIndicadorCheckboxChange(event) {
+    const checkbox = event.currentTarget;
+
+    if (checkbox.checked) {
+        const selectedCheckboxes = Array.from(document.querySelectorAll('.indicador-checkbox:checked:not(:disabled)'));
+        if (selectedCheckboxes.length > MAX_INDICADORES_SELECTION) {
+            checkbox.checked = false;
+            showToast(`Solo puedes seleccionar hasta ${MAX_INDICADORES_SELECTION} indicadores a la vez`, 'warning');
+            return;
+        }
+    }
+
+    updateIndicadoresSelection();
+}
+
 function updateIndicadoresSelection() {
     const checkboxes = document.querySelectorAll('.indicador-checkbox');
     const selectedIndicadores = Array.from(checkboxes)
@@ -2353,7 +2380,18 @@ function updateIndicadoresSelection() {
             return indicador ? indicador.id : cb.value;
         });
 
-    visualizacionState.selectedIndicadores = selectedIndicadores;
+    const limitedSelection = selectedIndicadores.slice(0, MAX_INDICADORES_SELECTION);
+
+    if (limitedSelection.length !== selectedIndicadores.length) {
+        const allowedSet = new Set(limitedSelection.map(id => String(id)));
+        checkboxes.forEach(cb => {
+            if (!allowedSet.has(cb.value) && cb.checked) {
+                cb.checked = false;
+            }
+        });
+    }
+
+    visualizacionState.selectedIndicadores = limitedSelection;
 
     // Actualizar texto del filtro
     const filterText = document.getElementById('indicadores-filter-text');
@@ -2525,7 +2563,8 @@ function refreshIndicadoresDropdown() {
     // Re-configurar event listeners para los nuevos checkboxes
     setTimeout(() => {
         document.querySelectorAll('.indicador-checkbox').forEach(cb => {
-            cb.addEventListener('change', updateIndicadoresSelection);
+            cb.addEventListener('change', handleIndicadorCheckboxChange);
+
         });
 
         updateAvailableIndicadoresFilter();
@@ -2636,10 +2675,22 @@ function handleSelectAllAreas(e) {
 }
 
 function handleSelectAllIndicadores(e) {
-    const checkboxes = document.querySelectorAll('.indicador-checkbox:not(:disabled)');
-    checkboxes.forEach(cb => {
-        cb.checked = e.target.checked;
-    });
+    const checkboxes = Array.from(document.querySelectorAll('.indicador-checkbox:not(:disabled)'));
+
+    if (e.target.checked) {
+        checkboxes.forEach((cb, index) => {
+            cb.checked = index < MAX_INDICADORES_SELECTION;
+        });
+
+        if (checkboxes.length > MAX_INDICADORES_SELECTION) {
+            showToast(`Solo puedes seleccionar hasta ${MAX_INDICADORES_SELECTION} indicadores a la vez`, 'warning');
+        }
+    } else {
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+        });
+    }
+
     updateIndicadoresSelection();
 }
 
