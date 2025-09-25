@@ -2564,6 +2564,7 @@ function refreshIndicadoresDropdown() {
     setTimeout(() => {
         document.querySelectorAll('.indicador-checkbox').forEach(cb => {
             cb.addEventListener('change', handleIndicadorCheckboxChange);
+
         });
 
         updateAvailableIndicadoresFilter();
