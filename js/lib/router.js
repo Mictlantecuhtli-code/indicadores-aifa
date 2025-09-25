@@ -22,7 +22,6 @@ let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
 const pendingRoutes = [];
-
 let navigationSequence = 0;
 
 const CLEANUP_TIMEOUT_MS = 4000;
@@ -37,6 +36,20 @@ class NavigationTimeoutError extends Error {
     }
 }
 
+
+let navigationSequence = 0;
+
+const CLEANUP_TIMEOUT_MS = 4000;
+const LOAD_TIMEOUT_MS = 12000;
+const RENDER_TIMEOUT_MS = 16000;
+
+class NavigationTimeoutError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'NavigationTimeoutError';
+        this.code = 'NAVIGATION_TIMEOUT';
+    }
+}
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -353,7 +366,6 @@ async function renderRoute(route, resolved) {
         }
 
         activeViewModule = viewModule;
-
         const renderTimeout = getRenderTimeout(viewModule, route, resolved.params, route.query);
 
         const teardown = await withTimeout(
