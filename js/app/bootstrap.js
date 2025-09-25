@@ -321,7 +321,6 @@ function openChangePasswordModal() {
                         return false;
                     }
 
-
                     const errorContainer = document.getElementById('change-password-error');
                     const currentInput = document.getElementById('current-password');
                     const newInput = document.getElementById('new-password');
@@ -393,14 +392,12 @@ function openChangePasswordModal() {
                         submitButton.textContent = 'Actualizando...';
                     }
 
-
                     isSubmitting = true;
 
                     try {
                         await changePassword(currentPassword, newPassword);
                         ui.showToast('Contraseña actualizada correctamente', 'success');
                         clearError();
-
                         return true;
                     } catch (error) {
                         console.error('Error al cambiar contraseña:', error);
@@ -416,7 +413,6 @@ function openChangePasswordModal() {
                         return false;
                     } finally {
                         isSubmitting = false;
-
                         if (submitButton) {
                             submitButton.disabled = false;
                             submitButton.textContent = submitButton.dataset.originalText || 'Actualizar contraseña';
@@ -467,8 +463,19 @@ async function bootstrap() {
         await initSupabase();
         updateUserHeader();
 
-        onAuthStateChange(() => {
+        onAuthStateChange(({ event }) => {
             updateUserHeader();
+
+            if (event === 'SESSION_EXPIRED') {
+                ui.showToast('Tu sesión expiró por inactividad. Vuelve a iniciar sesión.', 'warning');
+
+                setTimeout(() => {
+                    const isOnLogin = window.location.hash?.includes('/login');
+                    if (!isOnLogin) {
+                        navigateTo('/login', {}, true);
+                    }
+                }, 250);
+            }
         });
 
         if (!window.location.hash) {
