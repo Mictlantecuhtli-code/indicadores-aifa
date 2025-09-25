@@ -64,10 +64,12 @@ let adminContainerRef = null;
 
 export async function render(container) {
     adminContainerRef = container;
-    container.innerHTML = renderLayout();
-    setupStaticListeners(container);
 
     try {
+        container.innerHTML = renderLayout();
+        setupStaticListeners(container);
+
+
         showLoading('Cargando panel de administración...');
 
         const isAdmin = await ensureAdminProfile();
@@ -82,8 +84,13 @@ export async function render(container) {
         refreshIcons();
     } catch (error) {
         console.error('❌ Error al renderizar panel de administración:', error);
-        container.innerHTML = renderErrorState(error);
+
+        if (container) {
+            container.innerHTML = renderErrorState(error);
+        }
         showToast('No se pudo cargar el panel de administración', 'error');
+        refreshIcons();
+
     } finally {
         hideLoading();
     }
@@ -231,20 +238,41 @@ async function ensureAdminProfile() {
     if (DEBUG.enabled) {
         console.warn('⚠️ Usuario sin privilegios de administrador');
     }
+
     return false;
 }
 
 async function loadInitialData() {
-    const [areas, users] = await Promise.all([
+    const [areasResult, usersResult] = await Promise.allSettled([
         fetchAdminAreas(),
         fetchAdminUsers()
     ]);
 
-    adminState.areas = (areas || []).filter(area => area.estado !== 'ELIMINADO');
-    adminState.users = (users || []).map(user => ({
-        ...user,
-        assignments: sortAssignments(user.assignments || [])
-    }));
+    const loadErrors = [];
+
+    if (areasResult.status === 'fulfilled') {
+        const areas = areasResult.value || [];
+        adminState.areas = areas.filter(area => area.estado !== 'ELIMINADO');
+    } else {
+        console.error('❌ Error al cargar áreas:', areasResult.reason);
+        adminState.areas = [];
+        loadErrors.push(areasResult.reason);
+        showToast('No se pudieron cargar las áreas disponibles', 'error');
+    }
+
+    if (usersResult.status === 'fulfilled') {
+        const users = usersResult.value || [];
+        adminState.users = users.map(user => ({
+            ...user,
+            assignments: sortAssignments(user.assignments || [])
+        }));
+    } else {
+        console.error('❌ Error al cargar usuarios:', usersResult.reason);
+        adminState.users = [];
+        loadErrors.push(usersResult.reason);
+        showToast('No se pudieron cargar los usuarios', 'error');
+    }
+
 
     sortUsers();
 
@@ -255,7 +283,15 @@ async function loadInitialData() {
     } else {
         adminState.selectedUserId = null;
     }
-}
+
+
+    if (loadErrors.length === 2) {
+        throw loadErrors[0] instanceof Error
+            ? loadErrors[0]
+            : new Error('No se pudieron cargar los datos del panel de administración');
+
+    }
+
 
 // =====================================================
 // RENDER DE TABLAS Y DETALLES
@@ -276,6 +312,7 @@ function renderUsersTable() {
         `;
         return;
     }
+
 
     const filteredUsers = getFilteredUsers();
 
