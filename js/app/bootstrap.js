@@ -618,6 +618,11 @@ async function bootstrap() {
         updateUserHeader();
         syncProtectedHeaderVisibility();
 
+        window.addEventListener('router:route-changed', () => {
+            syncProtectedHeaderVisibility();
+            closeUserMenuDropdown();
+        });
+
         onAuthStateChange(() => {
             updateUserHeader();
             syncProtectedHeaderVisibility();
