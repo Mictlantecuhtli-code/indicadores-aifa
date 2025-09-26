@@ -119,6 +119,7 @@ function syncNavigationVisibility() {
 }
 
 function updateUserHeader() {
+    const userInfo = document.getElementById('user-info');
     const userName = document.getElementById('user-name');
     const userRole = document.getElementById('user-role');
     const userMenuLabel = document.getElementById('user-menu-label');
