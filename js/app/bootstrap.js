@@ -621,25 +621,7 @@ function setupUserMenu() {
             closeUserMenuDropdown({ focusButton: true });
         }
     });
-        
-        userMenuButton.addEventListener('keydown', event => {
-            if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                
-                // Verificar sesión antes de abrir
-                if (!appState.session) {
-                    navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
-                    return;
-                }
-                
-                openUserMenuDropdown();
-            }
-            if (event.key === 'Escape' && userMenuState.isOpen) {
-                event.preventDefault();
-                closeUserMenuDropdown({ focusButton: true });
-            }
-        });
-    }
+
     const changePasswordButton = document.getElementById('user-menu-change-password');
     if (changePasswordButton) {
         changePasswordButton.addEventListener('click', event => {
@@ -652,23 +634,24 @@ function setupUserMenu() {
         });
     }
 
-    const signoutButton = document.getElementById('user-menu-signout');
-    if (signoutButton) {
-        signoutButton.addEventListener('click', async (e) => {
-            e.preventDefault();
-            
+    const signOutButton = document.getElementById('user-menu-signout');
+    if (signOutButton) {
+        signOutButton.addEventListener('click', async event => {
+            event.preventDefault();
+            closeUserMenuDropdown();
+
             try {
-                const confirmed = await ui.showConfirm('¿Está seguro que desea cerrar sesión?', {
+                const confirmed = await ui.showConfirm('¿Estás seguro de cerrar sesión?', {
                     title: 'Confirmar cierre de sesión',
                     confirmText: 'Cerrar sesión',
                     cancelText: 'Cancelar',
                     type: 'warning'
                 });
-    
+
                 if (!confirmed) {
                     return;
                 }
-    
+
                 // Limpiar todos los intervals antes de cerrar sesión
                 if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
                 if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
@@ -677,10 +660,10 @@ function setupUserMenu() {
                 // Limpiar sessionStorage
                 sessionStorage.removeItem('aifa-session-backup');
                 sessionStorage.removeItem('aifa-last-activity');
-    
+
                 await signOut();
                 ui.showToast('Sesión cerrada correctamente', 'success');
-    
+
                 setTimeout(() => {
                     navigateTo('/login', {}, true);
                     window.location.reload();
@@ -692,7 +675,6 @@ function setupUserMenu() {
         });
     }
 }
-
 // =====================================================
 // BOOTSTRAP PRINCIPAL
 // =====================================================
