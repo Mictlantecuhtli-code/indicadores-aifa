@@ -654,6 +654,9 @@ export async function signInWithPassword(email, password) {
  */
 export async function signOut() {
     try {
+        // Limpiar recursos antes de cerrar sesión
+        cleanupResources();
+        
         const { error } = await supabase.auth.signOut();
 
         if (error) {
@@ -673,7 +676,7 @@ export async function signOut() {
         handleError(error, 'Error al cerrar sesión');
         throw error;
     }
-}
+}    
 
 /**
  * Cambiar contraseña del usuario autenticado
@@ -1498,8 +1501,14 @@ async function setupSupabase() {
 
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
+                // Iniciar auto-refresh cuando se logea
+                setupGlobalAutoRefresh();
             } else if (event === 'SIGNED_OUT') {
                 appState.profile = null;
+                // Limpiar recursos cuando se deslogea
+                cleanupResources();
+            } else if (event === 'TOKEN_REFRESHED') {
+                if (DEBUG.enabled) console.log('🔄 Token renovado exitosamente');
             }
 
             notifyAuthListeners(event, session);
