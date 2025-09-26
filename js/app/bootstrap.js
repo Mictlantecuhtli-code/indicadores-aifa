@@ -572,26 +572,24 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
 
 
 function setupUserMenu() {
-    const { button } = getUserMenuElements();
-    if (!button) return;
-
-    button.addEventListener('click', event => {
-        event.preventDefault();
-        toggleUserMenuDropdown();
-    });
-
-    button.addEventListener('keydown', event => {
-        if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            openUserMenuDropdown();
-        }
-
-        if (event.key === 'Escape' && userMenuState.isOpen) {
-            event.preventDefault();
-            closeUserMenuDropdown({ focusButton: true });
-        }
-    });
-
+    const userMenuButton = document.getElementById('user-menu-button');
+    if (userMenuButton) {
+        userMenuButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            // Verificar que la sesión siga activa antes de abrir el menú
+            if (!appState.session) {
+                navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+                return;
+            }
+            
+            if (userMenuState.isOpen) {
+                closeUserMenuDropdown();
+            } else {
+                openUserMenuDropdown();
+            }
+        });
+    }
     const changePasswordButton = document.getElementById('user-menu-change-password');
     if (changePasswordButton) {
         changePasswordButton.addEventListener('click', event => {
@@ -604,27 +602,35 @@ function setupUserMenu() {
         });
     }
 
-    const signOutButton = document.getElementById('user-menu-signout');
-    if (signOutButton) {
-        signOutButton.addEventListener('click', async event => {
-            event.preventDefault();
-            closeUserMenuDropdown();
-
+    const signoutButton = document.getElementById('user-menu-signout');
+    if (signoutButton) {
+        signoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
             try {
-                const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
+                const confirmed = await ui.showConfirm('¿Está seguro que desea cerrar sesión?', {
                     title: 'Confirmar cierre de sesión',
                     confirmText: 'Cerrar sesión',
                     cancelText: 'Cancelar',
                     type: 'warning'
                 });
-
+    
                 if (!confirmed) {
                     return;
                 }
-
+    
+                // Limpiar todos los intervals antes de cerrar sesión
+                if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
+                if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
+                if (window.areaRefreshInterval) clearInterval(window.areaRefreshInterval);
+                
+                // Limpiar sessionStorage
+                sessionStorage.removeItem('aifa-session-backup');
+                sessionStorage.removeItem('aifa-last-activity');
+    
                 await signOut();
                 ui.showToast('Sesión cerrada correctamente', 'success');
-
+    
                 setTimeout(() => {
                     navigateTo('/login', {}, true);
                     window.location.reload();
