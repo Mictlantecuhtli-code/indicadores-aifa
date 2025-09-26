@@ -121,6 +121,36 @@ function updateUserHeader() {
         userMenuButton.classList.remove('btn-disabled');
         userMenuButton.removeAttribute('disabled');
     }
+
+    applyRoleNavigationRestrictions();
+}
+
+const ROLE_NAVIGATION_RULES = {
+    DIRECTOR: new Set(['nav-visualizacion', 'nav-panel-directivos'])
+};
+
+function applyRoleNavigationRestrictions() {
+    const navigation = document.getElementById('main-nav');
+    if (!navigation) return;
+
+    const allowedNavIds = ROLE_NAVIGATION_RULES[appState.profile?.rol_principal] || null;
+
+    const navButtons = navigation.querySelectorAll('[id^="nav-"]');
+    navButtons.forEach(button => {
+        const shouldHideForRole = allowedNavIds ? !allowedNavIds.has(button.id) : false;
+
+        if (shouldHideForRole) {
+            if (!button.dataset.roleHidden) {
+                button.dataset.roleHidden = 'true';
+            }
+            if (!button.classList.contains('hidden')) {
+                button.classList.add('hidden');
+            }
+        } else if (button.dataset.roleHidden) {
+            button.classList.remove('hidden');
+            delete button.dataset.roleHidden;
+        }
+    });
 }
 
 function syncProtectedHeaderVisibility() {
