@@ -1,8 +1,0 @@
-{
-  "name": "indicadores-aifa",
-  "version": "1.0.0",
-  "description": "Proyecto de indicadores AIFA",
-  "scripts": {
-    "test": "echo \"No hay pruebas definidas\""
-  }
-}
