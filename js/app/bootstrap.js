@@ -647,6 +647,7 @@ async function bootstrap() {
         setupGlobalErrorHandlers();
         setupNavigation();
         setupUserMenu();
+        setupSessionMonitoring();
 
         if (window.lucide) {
             window.lucide.createIcons();
@@ -780,4 +781,79 @@ function handlePageHide(event) {
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);
     }
+}
+/**
+ * Configurar monitoreo de sesión
+ */
+function setupSessionMonitoring() {
+    // Verificar sesión cada minuto
+    setInterval(async () => {
+        if (appState.session && document.visibilityState === 'visible') {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error || !session) {
+                    console.warn('⚠️ Sesión perdida, redirigiendo al login');
+                    
+                    // Limpiar estado
+                    appState.session = null;
+                    appState.user = null;
+                    appState.profile = null;
+                    
+                    // Limpiar intervals
+                    if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
+                    if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
+                    if (window.areaRefreshInterval) clearInterval(window.areaRefreshInterval);
+                    
+                    // Redirigir al login
+                    navigateTo('/login', { 
+                        message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.', 
+                        type: 'warning' 
+                    }, true);
+                }
+            } catch (error) {
+                console.error('❌ Error al verificar sesión:', error);
+            }
+        }
+    }, 60000); // Cada minuto
+    
+    // Detectar cambios de pestaña/ventana con más precisión
+    let isTabActive = true;
+    
+    document.addEventListener('visibilitychange', () => {
+        isTabActive = !document.hidden;
+        
+        if (isTabActive && appState.session) {
+            // Al regresar a la pestaña, verificar sesión inmediatamente
+            setTimeout(async () => {
+                try {
+                    await getCurrentSession();
+                    if (!appState.session) {
+                        navigateTo('/login', { 
+                            message: 'Su sesión ha expirado', 
+                            type: 'warning' 
+                        }, true);
+                    }
+                } catch (error) {
+                    console.error('❌ Error al verificar sesión al regresar:', error);
+                }
+            }, 500);
+        }
+    });
+    
+    // Detectar eventos de almacenamiento (útil para múltiples pestañas)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'supabase.auth.token' && !e.newValue && appState.session) {
+            // Sesión cerrada en otra pestaña
+            console.warn('⚠️ Sesión cerrada en otra pestaña');
+            appState.session = null;
+            appState.user = null;
+            appState.profile = null;
+            
+            navigateTo('/login', { 
+                message: 'Sesión cerrada en otra ventana', 
+                type: 'info' 
+            }, true);
+        }
+    });
 }
