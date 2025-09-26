@@ -1562,55 +1562,84 @@ export function initSupabase() {
 initSupabase().catch(console.error);
 
 
+// =====================================================
+// MANEJO DE VISIBILIDAD Y FOCUS
+// =====================================================
+
+let isHandlingVisibilityChange = false;
+let visibilityChangeTimeout = null;
+
 /**
- * Configurar manejo de visibilidad para prevenir pérdida de sesión
+ * Configurar handlers de visibilidad
  */
 function setupVisibilityHandlers() {
-    // Manejar cambios de visibilidad del documento
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            // Cuando regresa a la ventana, verificar sesión
-            setTimeout(async () => {
+    // Handler para cambios de visibilidad/focus
+    const handleVisibilityChange = async () => {
+        // Evitar múltiples ejecuciones simultáneas
+        if (isHandlingVisibilityChange) {
+            return;
+        }
+        
+        // Limpiar timeout anterior si existe
+        if (visibilityChangeTimeout) {
+            clearTimeout(visibilityChangeTimeout);
+            visibilityChangeTimeout = null;
+        }
+        
+        const isVisible = document.visibilityState === 'visible' && document.hasFocus();
+        
+        if (DEBUG.enabled) {
+            if (isVisible) {
+                console.log('🔍 Ventana recuperó el foco');
+            } else {
+                console.log('🔍 Ventana perdió el foco');
+            }
+        }
+        
+        // Solo refrescar la sesión si la ventana está visible Y ha pasado tiempo
+        if (isVisible && appState.session) {
+            // Agregar un pequeño delay para evitar múltiples disparos
+            visibilityChangeTimeout = setTimeout(async () => {
+                isHandlingVisibilityChange = true;
                 try {
-                    await getCurrentSession();
-                    if (!appState.session || !appState.user) {
-                        console.warn('⚠️ Sesión perdida al regresar a la ventana');
-                        // Redirigir al login si perdió la sesión
-                        if (window.router?.navigateTo) {
-                            window.router.navigateTo('/login', {}, true);
-                        } else {
-                            window.location.hash = '#/login';
+                    // Solo verificar la sesión, NO forzar un cambio de estado
+                    const { data: { session } } = await supabase.auth.getSession();
+                    
+                    if (session) {
+                        // Solo actualizar si realmente cambió algo
+                        if (session.access_token !== appState.session?.access_token) {
+                            appState.session = session;
+                            appState.user = session.user;
+                            
+                            // NO notificar a los listeners a menos que sea necesario
+                            if (DEBUG.enabled) {
+                                console.log('✅ Sesión actualizada silenciosamente');
+                            }
                         }
+                    } else if (appState.session) {
+                        // Solo si realmente se perdió la sesión
+                        appState.session = null;
+                        appState.user = null;
+                        appState.profile = null;
+                        notifyAuthListeners('SIGNED_OUT', null);
                     }
                 } catch (error) {
-                    console.error('❌ Error al verificar sesión:', error);
+                    if (DEBUG.enabled) {
+                        console.warn('⚠️ Error al verificar sesión en visibility change:', error);
+                    }
+                } finally {
+                    isHandlingVisibilityChange = false;
                 }
-            }, 100);
+            }, 100); // Pequeño delay para evitar múltiples disparos
         }
-    });
-
-    // Manejar eventos de foco/blur de la ventana
-    window.addEventListener('blur', () => {
-        if (DEBUG.enabled) console.log('🔍 Ventana perdió el foco');
-        // Pausar auto-refresh cuando se pierde el foco
-        if (window.autoRefreshInterval) {
-            clearInterval(window.autoRefreshInterval);
-        }
-    });
-
-    window.addEventListener('focus', () => {
-        if (DEBUG.enabled) console.log('🔍 Ventana recuperó el foco');
-        // Verificar sesión al recuperar foco
-        setTimeout(async () => {
-            try {
-                await getCurrentSession();
-                // Reanudar auto-refresh si existe
-                setupGlobalAutoRefresh();
-            } catch (error) {
-                console.error('❌ Error al verificar sesión al recuperar foco:', error);
-            }
-        }, 100);
-    });
+    };
+    
+    // Usar solo visibilitychange, no blur/focus por separado
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // NO usar estos eventos que causan el problema:
+    // window.addEventListener('focus', handleVisibilityChange);
+    // window.addEventListener('blur', handleVisibilityChange);
 }
 
 /**
