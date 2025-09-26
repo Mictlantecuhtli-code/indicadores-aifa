@@ -155,11 +155,17 @@ function syncProtectedHeaderVisibility() {
     if (navigation) {
         navigation.hidden = !shouldShowNav;
         navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+        navigation.classList.toggle('invisible', !shouldShowNav);
+        navigation.classList.toggle('opacity-0', !shouldShowNav);
+        navigation.classList.toggle('pointer-events-none', !shouldShowNav);
     }
 
     if (userMenuButton) {
         userMenuButton.hidden = !shouldShowNav;
         userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+        userMenuButton.classList.toggle('invisible', !shouldShowNav);
+        userMenuButton.classList.toggle('opacity-0', !shouldShowNav);
+        userMenuButton.classList.toggle('pointer-events-none', !shouldShowNav);
 
         if (!shouldShowNav || !hasUser) {
             closeUserMenuDropdown();

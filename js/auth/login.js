@@ -81,7 +81,7 @@ function createLoginHTML() {
             <div class="max-w-md w-full space-y-6">
                 <div class="flex flex-col items-center text-center space-y-4">
                     <div class="mx-auto flex items-center justify-center">
-                        <img src="assets/AIFA_Logo.png" alt="AIFA Logo" class="h-24 w-auto sm:h-28">
+                        <img src="assets/AIFA_Logo.png" alt="AIFA Logo" class="h-[8.5rem] w-auto sm:h-[9.8rem]">
                     </div>
                     <h2 class="text-3xl font-extrabold text-gray-900">
                         Sistema de Indicadores
