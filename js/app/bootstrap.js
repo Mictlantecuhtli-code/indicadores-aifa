@@ -125,7 +125,8 @@ function updateUserHeader() {
     }
 }
 
-function updateNavigationVisibility() {
+function syncProtectedHeaderVisibility() {
+
     const navigation = document.getElementById('main-nav');
     const userMenuButton = document.getElementById('user-menu-button');
 
@@ -554,7 +555,6 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
                             onSuccess();
                         }
                     }, 600);
-
                 } catch (error) {
                     console.error('Error al cambiar contraseña:', error);
                     const message = error?.message || 'No se pudo actualizar la contraseña.';
@@ -592,11 +592,12 @@ async function bootstrap() {
 
         await initSupabase();
         updateUserHeader();
-        updateNavigationVisibility();
+        syncProtectedHeaderVisibility();
 
         onAuthStateChange(() => {
             updateUserHeader();
-            updateNavigationVisibility();
+            syncProtectedHeaderVisibility();
+
         });
 
         if (!window.location.hash) {
