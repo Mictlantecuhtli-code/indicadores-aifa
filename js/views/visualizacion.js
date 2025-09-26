@@ -2953,3 +2953,32 @@ function debugVisualizacionState() {
 if (DEBUG.enabled) {
     window.debugViz = debugVisualizacionState;
 }
+/**
+ * Configurar auto-refresh para visualización
+ */
+function setupAutoRefresh() {
+    // Limpiar interval anterior si existe
+    if (window.visualizacionRefreshInterval) {
+        clearInterval(window.visualizacionRefreshInterval);
+    }
+    
+    // Refresh automático cada 2 minutos para datos de visualización
+    window.visualizacionRefreshInterval = setInterval(async () => {
+        if (document.visibilityState === 'visible' && appState.session) {
+            try {
+                // Solo refresh si hay filtros aplicados
+                const hasFilters = visualizacionState.selectedAreas.length > 0 || 
+                                 visualizacionState.selectedIndicadores.length > 0;
+                
+                if (hasFilters) {
+                    await refreshChartsData();
+                }
+            } catch (error) {
+                console.error('❌ Error en auto-refresh de visualización:', error);
+                if (error.message?.includes('auth') || error.code === 'PGRST301') {
+                    clearInterval(window.visualizacionRefreshInterval);
+                }
+            }
+        }
+    }, 2 * 60 * 1000);
+}
