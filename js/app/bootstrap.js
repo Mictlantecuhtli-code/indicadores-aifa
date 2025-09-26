@@ -118,16 +118,8 @@ function updateUserHeader() {
         );
 
         userMenuButton.setAttribute('aria-expanded', userMenuState.isOpen ? 'true' : 'false');
-
-        if (hasUser) {
-            userMenuButton.disabled = false;
-            userMenuButton.classList.remove('btn-disabled');
-        } else {
-            userMenuButton.disabled = true;
-            if (!userMenuButton.classList.contains('btn-disabled')) {
-                userMenuButton.classList.add('btn-disabled');
-            }
-        }
+        userMenuButton.classList.remove('btn-disabled');
+        userMenuButton.removeAttribute('disabled');
     }
 }
 
@@ -171,13 +163,11 @@ function syncProtectedHeaderVisibility() {
 
         if (!shouldShowNav || !hasUser) {
             closeUserMenuDropdown();
-            userMenuButton.disabled = true;
-            if (!userMenuButton.classList.contains('btn-disabled')) {
-                userMenuButton.classList.add('btn-disabled');
-            }
-        } else {
-            userMenuButton.disabled = false;
             userMenuButton.classList.remove('btn-disabled');
+            userMenuButton.removeAttribute('disabled');
+        } else {
+            userMenuButton.classList.remove('btn-disabled');
+            userMenuButton.removeAttribute('disabled');
         }
 
         const displayName = hasUser
