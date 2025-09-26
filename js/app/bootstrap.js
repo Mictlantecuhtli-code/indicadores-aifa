@@ -112,6 +112,67 @@ function updateUserHeader() {
             'aria-label',
             hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
         );
+
+        if (hasUser) {
+            userMenuButton.disabled = false;
+            userMenuButton.classList.remove('btn-disabled');
+        } else {
+            userMenuButton.disabled = true;
+            if (!userMenuButton.classList.contains('btn-disabled')) {
+                userMenuButton.classList.add('btn-disabled');
+            }
+        }
+    }
+}
+
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav');
+    const userMenuButton = document.getElementById('user-menu-button');
+
+    let isPublicRoute = false;
+
+    try {
+        const { path } = parseCurrentRoute?.() || {};
+        const currentPath = path || '/';
+
+        for (const candidate of routes) {
+            if (candidate?.path && candidate.path === currentPath) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
+
+            if (candidate?.matcher instanceof RegExp && candidate.matcher.test(currentPath)) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
+        }
+    } catch (error) {
+        console.warn('No se pudo determinar la ruta actual para la visibilidad del header:', error);
+    }
+
+    const shouldShowNav = Boolean(appState.profile && isAuthenticated() && !isPublicRoute);
+
+    if (navigation) {
+        navigation.hidden = !shouldShowNav;
+        navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+    }
+
+    if (userMenuButton) {
+        userMenuButton.hidden = !shouldShowNav;
+        userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
+        if (!shouldShowNav) {
+            userMenuButton.disabled = true;
+        } else if (appState.user) {
+            userMenuButton.disabled = false;
+        }
+    }
+
+    if (userMenuButton) {
+        userMenuButton.setAttribute(
+            'aria-label',
+            hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
+        );
         userMenuButton.disabled = false;
         userMenuButton.classList.remove('btn-disabled');
     }
@@ -484,6 +545,7 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
                     changePasswordForm.reset();
                     inputs.forEach(input => input.classList.remove('input-error'));
                     ui.showToast('Contraseña actualizada correctamente', 'success');
+n
                     wasSuccessful = true;
                     setTimeout(() => {
                         ui.hideModal(modalId);
