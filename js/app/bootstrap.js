@@ -75,52 +75,79 @@ function setupNavigation() {
     });
 }
 
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav') || document.querySelector('header nav');
+    const navButtons = {
+        home: document.getElementById('nav-home'),
+        visualizacion: document.getElementById('nav-visualizacion'),
+        captura: document.getElementById('nav-captura'),
+        admin: document.getElementById('nav-admin'),
+        panelDirectivos: document.getElementById('nav-panel-directivos')
+    };
+
+    const isAuthenticatedUser = Boolean(appState.user && appState.profile);
+
+    if (document.body) {
+        document.body.dataset.authenticated = isAuthenticatedUser ? 'true' : 'false';
+    }
+
+    if (!navigation) {
+        return;
+    }
+
+    if (!isAuthenticatedUser) {
+        navigation.style.display = 'none';
+        return;
+    }
+
+    navigation.style.display = '';
+
+    Object.values(navButtons).forEach(button => {
+        if (button) {
+            button.classList.remove('hidden');
+        }
+    });
+
+    if (appState.profile?.rol_principal === 'DIRECTOR') {
+        ['nav-home', 'nav-captura', 'nav-admin'].forEach(id => {
+            const button = document.getElementById(id);
+            if (button) {
+                button.classList.add('hidden');
+            }
+        });
+    }
+}
+
 function updateUserHeader() {
     const userName = document.getElementById('user-name');
     const userRole = document.getElementById('user-role');
-    const userMenuButton = document.getElementById('user-menu-button');
+    const userMenuLabel = document.getElementById('user-menu-label');
+
 
     const { user, profile } = appState;
     const hasUser = Boolean(user && profile);
 
-    const displayName = hasUser
-        ? (profile?.nombre_completo?.trim() || user?.email || 'Usuario')
-        : 'Usuario';
+    if (user && profile) {
+        const displayName = profile.nombre_completo?.trim()
+            || appState.user?.user_metadata?.full_name
+            || appState.user?.email
+            || 'Usuario';
 
-    const roleLabel = hasUser && profile?.rol_principal
-        ? getRoleLabel(profile.rol_principal)
-        : '';
-
-    if (userName) {
-        userName.textContent = displayName;
-    }
-
-    if (userRole) {
-        if (roleLabel) {
-            userRole.textContent = roleLabel;
-            userRole.classList.remove('hidden');
-        } else {
-            userRole.textContent = '';
-            if (!userRole.classList.contains('hidden')) {
-                userRole.classList.add('hidden');
-            }
+        if (userInfo) {
+            userInfo.classList.remove('hidden');
         }
-    }
-
-    if (userMenuButton) {
-        userMenuButton.setAttribute(
-            'aria-label',
-            hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
-        );
-
-        if (hasUser) {
-            userMenuButton.disabled = false;
-            userMenuButton.classList.remove('btn-disabled');
-        } else {
-            userMenuButton.disabled = true;
-            if (!userMenuButton.classList.contains('btn-disabled')) {
-                userMenuButton.classList.add('btn-disabled');
-            }
+        if (userName) {
+            userName.textContent = displayName;
+        }
+        if (userRole) {
+            userRole.textContent = getRoleLabel(profile.rol_principal);
+        }
+        if (userMenuLabel) {
+            userMenuLabel.textContent = displayName;
+        }
+    } else {
+        if (userInfo) {
+            userInfo.classList.add('hidden');
         }
     }
 }
@@ -172,16 +199,13 @@ function syncProtectedHeaderVisibility() {
             userMenuButton.disabled = false;
             userMenuButton.classList.remove('btn-disabled');
         }
+        if (userMenuLabel) {
+            userMenuLabel.textContent = 'Iniciar sesión';
+        }
 
-        const displayName = hasUser
-            ? (profile?.nombre_completo?.trim() || user?.email || 'Usuario')
-            : 'Usuario';
-
-        userMenuButton.setAttribute(
-            'aria-label',
-            hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
-        );
     }
+
+    updateNavigationVisibility();
 }
 
 function updateNavigationVisibility() {
@@ -255,31 +279,18 @@ async function openUserMenu() {
                 <div class="grid gap-4">
                     ${infoFields.map(renderInfoField).join('')}
                 </div>
-                <section class="space-y-4 border-t border-gray-100 pt-4">
-                    <div class="space-y-1">
-                        <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                            <i data-lucide="shield" class="h-4 w-4"></i>
-                            Seguridad
-                        </h4>
-                        <p class="text-xs leading-snug text-gray-500">
-                            Actualiza tu contraseña para mantener tu cuenta protegida.
-                        </p>
-                    </div>
-                    <button
-                        id="open-change-password"
-                        type="button"
-                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-aifa-blue/30 bg-white px-4 py-2 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
-                    >
-                        <i data-lucide="key-round" class="h-4 w-4"></i>
-                        Cambiar contraseña
-                    </button>
-                </section>
-                <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <div class="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-xs leading-snug text-gray-500">Gestiona tu sesión desde esta ventana.</p>
-                    <button id="logout-btn-modal" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
-                        <i data-lucide="log-out" class="w-4 h-4"></i>
-                        Cerrar sesión
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button id="change-password-btn" class="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-100">
+                            <i data-lucide="key-round" class="w-4 h-4"></i>
+                            Cambiar contraseña
+                        </button>
+                        <button id="logout-btn-modal" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
+                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                            Cerrar sesión
+                        </button>
+                    </div>
                 </div>
 
             </div>
@@ -325,248 +336,11 @@ async function openUserMenu() {
             });
         }
 
-        const changePasswordTrigger = document.getElementById('open-change-password');
-        if (changePasswordTrigger) {
-            changePasswordTrigger.addEventListener('click', () => {
+        const changePasswordButton = document.getElementById('change-password-btn');
+        if (changePasswordButton) {
+            changePasswordButton.addEventListener('click', () => {
                 ui.hideModal(modalId);
-
-                setTimeout(() => {
-                    openChangePasswordModal({
-                        onCancel: () => openUserMenu(),
-                        onSuccess: () => openUserMenu()
-                    });
-                }, 120);
-            });
-        }
-    }, 100);
-}
-
-
-function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
-    const passwordRules = VALIDATION?.password || {};
-    const passwordMinLength = passwordRules?.minLength || 8;
-    const passwordMaxLengthAttr = passwordRules?.maxLength ? ` maxlength="${passwordRules.maxLength}"` : '';
-    const passwordRequirementsMessage = escapeHTML(
-        passwordRules?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
-    );
-
-    let wasSuccessful = false;
-
-    const modalId = ui.showModal({
-        title: 'Cambiar contraseña',
-        content: `
-            <form id="change-password-form" class="space-y-3" novalidate>
-                <div>
-                    <label for="current-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Contraseña actual</label>
-                    <input
-                        id="current-password"
-                        name="currentPassword"
-                        type="password"
-                        autocomplete="current-password"
-                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                        required
-                    />
-                </div>
-                <div>
-                    <label for="new-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Nueva contraseña</label>
-                    <input
-                        id="new-password"
-                        name="newPassword"
-                        type="password"
-                        autocomplete="new-password"
-                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
-                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                        required
-                    />
-                </div>
-                <div>
-                    <label for="confirm-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Confirmar nueva contraseña</label>
-                    <input
-                        id="confirm-password"
-                        name="confirmPassword"
-                        type="password"
-                        autocomplete="new-password"
-                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
-                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                        required
-                    />
-                </div>
-                <p id="change-password-feedback" class="text-xs hidden"></p>
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-xs leading-snug text-gray-500 sm:max-w-xs">
-                        ${passwordRequirementsMessage}
-                    </p>
-                    <button
-                        id="change-password-submit"
-                        type="submit"
-                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-aifa-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
-                    >
-                        <span id="change-password-submit-content" class="inline-flex items-center gap-2">
-                            <i data-lucide="key-round" class="h-4 w-4"></i>
-                            Actualizar contraseña
-                        </span>
-                        <span id="change-password-submit-loading" class="hidden items-center gap-2">
-                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i>
-                            Guardando...
-                        </span>
-                    </button>
-                </div>
-            </form>
-        `,
-        actions: [
-            {
-                text: 'Cancelar',
-                handler: () => true
-            }
-        ],
-        onClose: () => {
-            if (!wasSuccessful && typeof onCancel === 'function') {
-                setTimeout(() => onCancel(), 0);
-            }
-        }
-    });
-
-    setTimeout(() => {
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-
-        const changePasswordForm = document.getElementById('change-password-form');
-        const changePasswordButton = document.getElementById('change-password-submit');
-        const changePasswordFeedback = document.getElementById('change-password-feedback');
-        const changePasswordButtonContent = document.getElementById('change-password-submit-content');
-        const changePasswordButtonLoading = document.getElementById('change-password-submit-loading');
-        const currentPasswordInput = document.getElementById('current-password');
-        const newPasswordInput = document.getElementById('new-password');
-        const confirmPasswordInput = document.getElementById('confirm-password');
-
-        if (
-            changePasswordForm &&
-            changePasswordButton &&
-            changePasswordFeedback &&
-            changePasswordButtonContent &&
-            changePasswordButtonLoading &&
-            currentPasswordInput &&
-            newPasswordInput &&
-            confirmPasswordInput
-        ) {
-            const inputs = [currentPasswordInput, newPasswordInput, confirmPasswordInput];
-
-            const clearFeedback = () => {
-                changePasswordFeedback.textContent = '';
-                changePasswordFeedback.classList.add('hidden');
-                changePasswordFeedback.classList.remove('text-red-600', 'text-green-600');
-            };
-
-            const showFeedback = (message, type = 'error') => {
-                changePasswordFeedback.textContent = message;
-                changePasswordFeedback.classList.remove('hidden');
-                changePasswordFeedback.classList.remove('text-red-600', 'text-green-600');
-                changePasswordFeedback.classList.add(type === 'success' ? 'text-green-600' : 'text-red-600');
-            };
-
-            const toggleButtonLoading = (isLoading) => {
-                changePasswordButton.disabled = isLoading;
-                changePasswordButton.classList.toggle('btn-disabled', isLoading);
-                if (isLoading) {
-                    changePasswordButtonContent.classList.add('hidden');
-                    changePasswordButtonLoading.classList.remove('hidden');
-                } else {
-                    changePasswordButtonContent.classList.remove('hidden');
-                    changePasswordButtonLoading.classList.add('hidden');
-                }
-            };
-
-            inputs.forEach(input => {
-                input.addEventListener('input', () => {
-                    input.classList.remove('input-error');
-                    if (!changePasswordFeedback.classList.contains('hidden')) {
-                        clearFeedback();
-                    }
-                });
-            });
-
-            changePasswordForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-
-                inputs.forEach(input => input.classList.remove('input-error'));
-                clearFeedback();
-
-                const currentPassword = currentPasswordInput.value;
-                const newPassword = newPasswordInput.value;
-                const confirmPassword = confirmPasswordInput.value;
-
-                if (!currentPassword.trim()) {
-                    currentPasswordInput.classList.add('input-error');
-                    currentPasswordInput.focus();
-                    showFeedback('Ingresa tu contraseña actual.', 'error');
-                    return;
-                }
-
-                if (!newPassword.trim()) {
-                    newPasswordInput.classList.add('input-error');
-                    newPasswordInput.focus();
-                    showFeedback('Ingresa una nueva contraseña.', 'error');
-                    return;
-                }
-
-                if (passwordRules.minLength && newPassword.length < passwordRules.minLength) {
-                    newPasswordInput.classList.add('input-error');
-                    newPasswordInput.focus();
-                    showFeedback(passwordRules.message || `La contraseña debe tener al menos ${passwordRules.minLength} caracteres.`, 'error');
-                    return;
-                }
-
-                if (passwordRules.maxLength && newPassword.length > passwordRules.maxLength) {
-                    newPasswordInput.classList.add('input-error');
-                    newPasswordInput.focus();
-                    showFeedback(`La contraseña no puede exceder ${passwordRules.maxLength} caracteres.`, 'error');
-                    return;
-                }
-
-                if (passwordRules.pattern instanceof RegExp && !passwordRules.pattern.test(newPassword)) {
-                    newPasswordInput.classList.add('input-error');
-                    newPasswordInput.focus();
-                    showFeedback(passwordRules.message || 'La contraseña no cumple con los requisitos de seguridad.', 'error');
-                    return;
-                }
-
-                if (newPassword === currentPassword) {
-                    newPasswordInput.classList.add('input-error');
-                    newPasswordInput.focus();
-                    showFeedback('La nueva contraseña debe ser diferente a la actual.', 'error');
-                    return;
-                }
-
-                if (newPassword !== confirmPassword) {
-                    confirmPasswordInput.classList.add('input-error');
-                    confirmPasswordInput.focus();
-                    showFeedback('La confirmación no coincide con la nueva contraseña.', 'error');
-                    return;
-                }
-
-                try {
-                    toggleButtonLoading(true);
-                    await changePassword(currentPassword, newPassword);
-                    showFeedback('Contraseña actualizada correctamente.', 'success');
-                    changePasswordForm.reset();
-                    inputs.forEach(input => input.classList.remove('input-error'));
-                    ui.showToast('Contraseña actualizada correctamente', 'success');
-
-                    wasSuccessful = true;
-                    setTimeout(() => {
-                        ui.hideModal(modalId);
-                        if (typeof onSuccess === 'function') {
-                            onSuccess();
-                        }
-                    }, 600);
-                } catch (error) {
-                    console.error('Error al cambiar contraseña:', error);
-                    const message = error?.message || 'No se pudo actualizar la contraseña.';
-                    showFeedback(message, 'error');
-                } finally {
-                    toggleButtonLoading(false);
-                }
+                openChangePasswordModal();
             });
         }
     }, 100);
@@ -580,6 +354,167 @@ function setupUserMenu() {
     button.addEventListener('click', openUserMenu);
 }
 
+function openChangePasswordModal() {
+    let isSubmitting = false;
+
+    const modalId = ui.showModal({
+        title: 'Cambiar contraseña',
+        content: `
+            <form id="change-password-form" class="space-y-4">
+                <div>
+                    <label for="current-password" class="block text-sm font-medium text-gray-700">Contraseña actual</label>
+                    <input id="current-password" type="password" autocomplete="current-password" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-aifa-blue focus:outline-none focus:ring-1 focus:ring-aifa-blue" required>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="new-password" class="block text-sm font-medium text-gray-700">Nueva contraseña</label>
+                        <input id="new-password" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-aifa-blue focus:outline-none focus:ring-1 focus:ring-aifa-blue" required>
+                    </div>
+                    <div>
+                        <label for="confirm-password" class="block text-sm font-medium text-gray-700">Confirmar nueva contraseña</label>
+                        <input id="confirm-password" type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-aifa-blue focus:outline-none focus:ring-1 focus:ring-aifa-blue" required>
+                    </div>
+                </div>
+                <div id="change-password-error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"></div>
+                <p class="text-xs text-gray-500">La nueva contraseña debe tener al menos 8 caracteres.</p>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            },
+            {
+                text: 'Actualizar contraseña',
+                primary: true,
+                handler: async () => {
+                    if (isSubmitting) {
+                        return false;
+                    }
+
+                    const errorContainer = document.getElementById('change-password-error');
+                    const currentInput = document.getElementById('current-password');
+                    const newInput = document.getElementById('new-password');
+                    const confirmInput = document.getElementById('confirm-password');
+                    const submitButton = document.getElementById('modal-action-1');
+
+                    const clearError = () => {
+                        if (errorContainer) {
+                            errorContainer.textContent = '';
+                            errorContainer.classList.add('hidden');
+                        }
+                    };
+
+                    const showError = (message) => {
+                        if (errorContainer) {
+                            errorContainer.textContent = message;
+                            errorContainer.classList.remove('hidden');
+                        }
+                    };
+
+                    const resetFieldState = (field) => {
+                        if (field) {
+                            field.classList.remove('border-red-500', 'bg-red-50');
+                        }
+                    };
+
+                    const markFieldError = (field) => {
+                        if (field) {
+                            field.classList.add('border-red-500', 'bg-red-50');
+                        }
+                    };
+
+                    clearError();
+                    [currentInput, newInput, confirmInput].forEach(resetFieldState);
+
+                    const currentPassword = currentInput?.value?.trim() || '';
+                    const newPassword = newInput?.value?.trim() || '';
+                    const confirmPassword = confirmInput?.value?.trim() || '';
+
+                    if (!currentPassword || !newPassword || !confirmPassword) {
+                        showError('Completa todos los campos para continuar.');
+                        [currentInput, newInput, confirmInput].forEach(markFieldError);
+                        return false;
+                    }
+
+                    if (newPassword.length < 8) {
+                        showError('La nueva contraseña debe tener al menos 8 caracteres.');
+                        markFieldError(newInput);
+                        markFieldError(confirmInput);
+                        return false;
+                    }
+
+                    if (newPassword !== confirmPassword) {
+                        showError('Las contraseñas nuevas no coinciden.');
+                        markFieldError(newInput);
+                        markFieldError(confirmInput);
+                        return false;
+                    }
+
+                    if (currentPassword === newPassword) {
+                        showError('La nueva contraseña debe ser diferente a la actual.');
+                        markFieldError(newInput);
+                        return false;
+                    }
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.dataset.originalText = submitButton.dataset.originalText || submitButton.textContent;
+                        submitButton.textContent = 'Actualizando...';
+                    }
+
+                    isSubmitting = true;
+
+                    try {
+                        await changePassword(currentPassword, newPassword);
+                        ui.showToast('Contraseña actualizada correctamente', 'success');
+                        clearError();
+                        return true;
+                    } catch (error) {
+                        console.error('Error al cambiar contraseña:', error);
+                        const message = error?.message || 'No fue posible actualizar la contraseña.';
+                        showError(message);
+
+                        if (error?.code === 'INVALID_CREDENTIALS') {
+                            markFieldError(currentInput);
+                            currentInput?.focus();
+                        }
+
+                        ui.showToast(message, 'error');
+                        return false;
+                    } finally {
+                        isSubmitting = false;
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = submitButton.dataset.originalText || 'Actualizar contraseña';
+                        }
+                    }
+                }
+            }
+        ]
+    });
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        const form = document.getElementById('change-password-form');
+        if (form) {
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                const submitButton = document.getElementById('modal-action-1');
+                submitButton?.click();
+            });
+        }
+
+        const currentInput = document.getElementById('current-password');
+        currentInput?.focus();
+    }, 100);
+
+    return modalId;
+}
+
 // =====================================================
 // BOOTSTRAP PRINCIPAL
 // =====================================================
@@ -590,6 +525,7 @@ async function bootstrap() {
         setupGlobalErrorHandlers();
         setupNavigation();
         setupUserMenu();
+        updateNavigationVisibility();
 
         if (window.lucide) {
             window.lucide.createIcons();
@@ -599,10 +535,18 @@ async function bootstrap() {
         updateUserHeader();
         syncProtectedHeaderVisibility();
 
-        onAuthStateChange(() => {
+        onAuthStateChange(({ event }) => {
             updateUserHeader();
-            syncProtectedHeaderVisibility();
+            if (event === 'SESSION_EXPIRED') {
+                ui.showToast('Tu sesión expiró por inactividad. Vuelve a iniciar sesión.', 'warning');
 
+                setTimeout(() => {
+                    const isOnLogin = window.location.hash?.includes('/login');
+                    if (!isOnLogin) {
+                        navigateTo('/login', {}, true);
+                    }
+                }, 250);
+            }
         });
 
         if (!window.location.hash) {
