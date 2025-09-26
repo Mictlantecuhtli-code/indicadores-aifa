@@ -1616,7 +1616,7 @@ function setupVisibilityHandlers() {
 /**
  * Configurar auto-refresh global más seguro
  */
-function setupGlobalAutoRefresh() {
+export function setupGlobalAutoRefresh() {
     // Limpiar interval existente
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);
