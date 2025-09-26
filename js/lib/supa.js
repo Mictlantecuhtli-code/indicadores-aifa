@@ -798,8 +798,7 @@ export async function signInWithPassword(email, password) {
 /**
  * Cambiar la contraseña del usuario autenticado
  */
-async function performPasswordChange(currentPassword, newPassword) {
-
+export async function changePassword(currentPassword, newPassword) {
     if (!appState.user?.email) {
         throw new SupabaseError('No hay una sesión activa. Inicia sesión nuevamente.');
     }
@@ -871,9 +870,6 @@ async function performPasswordChange(currentPassword, newPassword) {
         throw new SupabaseError(message, error?.code || error?.name, error);
     }
 }
-
-export { performPasswordChange as changePassword };
-
 
 /**
  * Cerrar sesión

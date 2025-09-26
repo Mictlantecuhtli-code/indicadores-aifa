@@ -203,6 +203,9 @@ function syncProtectedHeaderVisibility() {
         if (userMenuLabel) {
             userMenuLabel.textContent = 'Iniciar sesión';
         }
+        if (userMenuLabel) {
+            userMenuLabel.textContent = 'Iniciar sesión';
+        }
     }
 
     syncNavigationVisibility();
