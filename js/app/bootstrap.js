@@ -3,7 +3,7 @@
 // Inicializa configuración, router, navegación y sesión.
 // =====================================================
 
-import { DEBUG } from '../config.js';
+import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
@@ -23,6 +23,16 @@ const ROLE_NAMES = {
 
 function getRoleLabel(role) {
     return ROLE_NAMES[role] || role || 'Sin rol';
+}
+
+function escapeHTML(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function exposeGlobals() {
@@ -109,12 +119,13 @@ function updateNavigationVisibility() {
 }
 
 function updateUserHeader() {
-    const userInfo = document.getElementById('user-info');
     const userName = document.getElementById('user-name');
     const userRole = document.getElementById('user-role');
     const userMenuLabel = document.getElementById('user-menu-label');
 
+
     const { user, profile } = appState;
+    const hasUser = Boolean(user && profile);
 
     if (user && profile) {
         const displayName = profile.nombre_completo?.trim()
@@ -138,18 +149,73 @@ function updateUserHeader() {
         if (userInfo) {
             userInfo.classList.add('hidden');
         }
-        if (userName) {
-            userName.textContent = 'Usuario';
+    }
+}
+
+function syncProtectedHeaderVisibility() {
+    const navigation = document.getElementById('main-nav');
+    const userMenuButton = document.getElementById('user-menu-button');
+    const { user, profile } = appState;
+
+    let isPublicRoute = false;
+
+    try {
+        const { path } = parseCurrentRoute?.() || {};
+        const currentPath = path || '/';
+
+        for (const candidate of routes) {
+            if (candidate?.path && candidate.path === currentPath) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
+
+            if (candidate?.matcher instanceof RegExp && candidate.matcher.test(currentPath)) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
         }
-        if (userRole) {
-            userRole.textContent = '';
+    } catch (error) {
+        console.warn('No se pudo determinar la ruta actual para la visibilidad del header:', error);
+    }
+
+    const hasUser = Boolean(user && profile);
+    const shouldShowNav = Boolean(hasUser && isAuthenticated() && !isPublicRoute);
+
+    if (navigation) {
+        navigation.hidden = !shouldShowNav;
+        navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+    }
+
+    if (userMenuButton) {
+        userMenuButton.hidden = !shouldShowNav;
+        userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
+        if (!shouldShowNav || !hasUser) {
+            userMenuButton.disabled = true;
+            if (!userMenuButton.classList.contains('btn-disabled')) {
+                userMenuButton.classList.add('btn-disabled');
+            }
+        } else {
+            userMenuButton.disabled = false;
+            userMenuButton.classList.remove('btn-disabled');
         }
         if (userMenuLabel) {
             userMenuLabel.textContent = 'Iniciar sesión';
         }
+
     }
 
     updateNavigationVisibility();
+}
+
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav');
+    if (!navigation) return;
+
+    const shouldShowNav = isAuthenticated();
+    navigation.hidden = !shouldShowNav;
+    navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
 }
 
 async function openUserMenu() {
@@ -159,15 +225,6 @@ async function openUserMenu() {
     }
 
     const profile = appState.profile || await getCurrentProfile();
-    const escapeHTML = (value) => {
-        if (value === null || value === undefined) return '';
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    };
 
     const displayName = escapeHTML(
         profile?.nombre_completo?.trim() ||
@@ -208,6 +265,13 @@ async function openUserMenu() {
         </div>
     `;
 
+    const passwordConfig = VALIDATION?.password || {};
+    const passwordMinLength = passwordConfig?.minLength || 8;
+    const passwordMaxLengthAttr = passwordConfig?.maxLength ? ` maxlength="${passwordConfig.maxLength}"` : '';
+    const passwordRequirementsMessage = escapeHTML(
+        passwordConfig?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
+    );
+
     const modalId = ui.showModal({
         title: displayName,
         content: `
@@ -235,7 +299,6 @@ async function openUserMenu() {
             {
                 text: 'Cerrar',
                 handler: () => true
-
             }
         ]
     });
@@ -282,6 +345,7 @@ async function openUserMenu() {
         }
     }, 100);
 }
+
 
 function setupUserMenu() {
     const button = document.getElementById('user-menu-button');
@@ -469,10 +533,10 @@ async function bootstrap() {
 
         await initSupabase();
         updateUserHeader();
+        syncProtectedHeaderVisibility();
 
         onAuthStateChange(({ event }) => {
             updateUserHeader();
-
             if (event === 'SESSION_EXPIRED') {
                 ui.showToast('Tu sesión expiró por inactividad. Vuelve a iniciar sesión.', 'warning');
 
