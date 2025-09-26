@@ -858,7 +858,7 @@ export async function changePassword(currentPassword, newPassword) {
             console.log('✅ Contraseña actualizada para', appState.user?.email);
         }
 
-        notifyAuthListeners('PASSWORD_CHANGED', appState.session);
+        notifyAuthListeners('PASSWORD_UPDATED', appState.session);
 
         return true;
     } catch (error) {
@@ -894,59 +894,6 @@ export async function signOut() {
     } catch (error) {
         handleError(error, 'Error al cerrar sesión');
         throw error;
-    }
-}
-
-/**
- * Cambiar contraseña del usuario autenticado
- */
-export async function changePassword(currentPassword, newPassword) {
-    if (!appState.user?.email) {
-        throw new SupabaseError('No hay una sesión activa.');
-    }
-
-    const email = appState.user.email;
-
-    try {
-        const { data: verificationData, error: verificationError } = await supabase.auth.signInWithPassword({
-            email,
-            password: currentPassword
-        });
-
-        if (verificationError) {
-            throw new SupabaseError('La contraseña actual es incorrecta', verificationError.code || verificationError.name, verificationError);
-        }
-
-        if (verificationData?.session) {
-            appState.session = verificationData.session;
-        }
-
-        if (verificationData?.user) {
-            appState.user = verificationData.user;
-        }
-
-        const { data, error } = await supabase.auth.updateUser({
-            password: newPassword
-        });
-
-        if (error) {
-            throw error;
-        }
-
-        if (data?.user) {
-            appState.user = data.user;
-        }
-
-        notifyAuthListeners('PASSWORD_UPDATED', appState.session);
-
-        return true;
-    } catch (error) {
-        if (error instanceof SupabaseError) {
-            throw error;
-        }
-
-        const message = handleError(error, 'Error al cambiar contraseña');
-        throw new SupabaseError(message, error?.code || error?.name, error);
     }
 }
 
