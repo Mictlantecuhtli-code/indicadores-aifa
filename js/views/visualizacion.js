@@ -78,6 +78,14 @@ const visualizacionState = {
 export async function render(container, params = {}, query = {}) {
     try {
         if (DEBUG.enabled) console.log('📊 Renderizando vista de visualización');
+        
+        // Verificar sesión antes de renderizar
+        if (!appState.session) {
+            console.warn('⚠️ No hay sesión activa en visualización');
+            navigateTo('/login', { message: 'Sesión requerida', type: 'warning' }, true);
+            return;
+        }
+        
      // Obtener perfil del usuario
         visualizacionState.userProfile = await getCurrentProfile();
         if (!visualizacionState.userProfile) {
@@ -131,6 +139,9 @@ export async function render(container, params = {}, query = {}) {
             setupEventListeners();
         }
         
+        // Configurar auto-refresh
+        setupAutoRefresh();
+        
         // Marcar tiempo de carga
         visualizacionState.lastRefresh = new Date();
         
@@ -141,6 +152,12 @@ export async function render(container, params = {}, query = {}) {
     } catch (error) {
         hideLoading();
         console.error('❌ Error al renderizar vista de visualización:', error);
+        
+        // Si es error de autenticación, redirigir
+        if (error.message?.includes('auth') || error.code === 'PGRST301') {
+            navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+            return;
+        }
         
         // HTML de error simple
         container.innerHTML = `
