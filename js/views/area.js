@@ -587,10 +587,23 @@ function setupEventListeners() {
  * Configurar auto-refresh
  */
 function setupAutoRefresh() {
-    // Refresh automático cada 3 minutos
-    setInterval(async () => {
-        if (document.visibilityState === 'visible') {
-            await refreshDataSilently();
+    // Limpiar interval anterior si existe
+    if (window.areaRefreshInterval) {
+        clearInterval(window.areaRefreshInterval);
+    }
+    
+    // Refresh automático cada 3 minutos, solo si hay sesión y ventana visible
+    window.areaRefreshInterval = setInterval(async () => {
+        if (document.visibilityState === 'visible' && appState.session && areaState.areaId) {
+            try {
+                await refreshDataSilently();
+            } catch (error) {
+                console.error('❌ Error en auto-refresh de área:', error);
+                // Si hay error de autenticación, detener refresh
+                if (error.message?.includes('auth') || error.code === 'PGRST301') {
+                    clearInterval(window.areaRefreshInterval);
+                }
+            }
         }
     }, 3 * 60 * 1000);
 }
