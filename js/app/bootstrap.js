@@ -75,7 +75,8 @@ function setupNavigation() {
     });
 }
 
-function updateNavigationVisibility() {
+function syncNavigationVisibility() {
+
     const navigation = document.getElementById('main-nav') || document.querySelector('header nav');
     const navButtons = {
         home: document.getElementById('nav-home'),
@@ -122,8 +123,6 @@ function updateUserHeader() {
     const userName = document.getElementById('user-name');
     const userRole = document.getElementById('user-role');
     const userMenuLabel = document.getElementById('user-menu-label');
-
-
     const { user, profile } = appState;
     const hasUser = Boolean(user && profile);
 
@@ -202,20 +201,9 @@ function syncProtectedHeaderVisibility() {
         if (userMenuLabel) {
             userMenuLabel.textContent = 'Iniciar sesión';
         }
-
     }
 
-    updateNavigationVisibility();
-}
-
-function updateNavigationVisibility() {
-    const navigation = document.getElementById('main-nav');
-    if (!navigation) return;
-
-    const shouldShowNav = isAuthenticated();
-    navigation.hidden = !shouldShowNav;
-    navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
-
+    syncNavigationVisibility();
 }
 
 async function openUserMenu() {
@@ -525,7 +513,8 @@ async function bootstrap() {
         setupGlobalErrorHandlers();
         setupNavigation();
         setupUserMenu();
-        updateNavigationVisibility();
+        syncNavigationVisibility();
+
 
         if (window.lucide) {
             window.lucide.createIcons();
