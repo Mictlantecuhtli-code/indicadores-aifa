@@ -726,13 +726,30 @@ window.handleExportArea = async function() {
  */
 async function refreshDataSilently() {
     try {
+        // Verificar sesión antes del refresh
+        if (!appState.session || !areaState.areaId) {
+            console.warn('⚠️ No hay sesión activa o área cargada para refresh silencioso');
+            return;
+        }
+        
         await Promise.all([
             loadAreaData(),
             loadIndicadores()
         ]);
-        areaState.lastRefresh = new Date();
+        
+        updateAreaDisplay();
+        updateIndicadoresDisplay();
+        
     } catch (error) {
-        if (DEBUG.enabled) console.warn('⚠️ Error en refresh silencioso:', error);
+        console.error('❌ Error en refresh silencioso de área:', error);
+        
+        // Si es error de autenticación, limpiar refresh
+        if (error.message?.includes('auth') || error.code === 'PGRST301') {
+            if (window.areaRefreshInterval) {
+                clearInterval(window.areaRefreshInterval);
+                window.areaRefreshInterval = null;
+            }
+        }
     }
 }
 
