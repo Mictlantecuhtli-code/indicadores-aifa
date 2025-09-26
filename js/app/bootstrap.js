@@ -3,11 +3,11 @@
 // Inicializa configuración, router, navegación y sesión.
 // =====================================================
 
-import { DEBUG } from '../config.js';
+import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
-import { initSupabase, appState, getCurrentProfile, onAuthStateChange, isAuthenticated, signOut } from '../lib/supa.js';
+import { initSupabase, appState, getCurrentProfile, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
 
 // =====================================================
 // UTILIDADES
@@ -23,6 +23,16 @@ const ROLE_NAMES = {
 
 function getRoleLabel(role) {
     return ROLE_NAMES[role] || role || 'Sin rol';
+}
+
+function escapeHTML(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function exposeGlobals() {
@@ -66,31 +76,95 @@ function setupNavigation() {
 }
 
 function updateUserHeader() {
-    const userInfo = document.getElementById('user-info');
     const userName = document.getElementById('user-name');
     const userRole = document.getElementById('user-role');
+    const userMenuButton = document.getElementById('user-menu-button');
 
     const { user, profile } = appState;
+    const hasUser = Boolean(user && profile);
 
-    if (user && profile) {
-        if (userInfo) {
-            userInfo.classList.remove('hidden');
-        }
-        if (userName) {
-            userName.textContent = profile.nombre_completo || user.email || 'Usuario';
-        }
-        if (userRole) {
-            userRole.textContent = getRoleLabel(profile.rol_principal);
-        }
-    } else {
-        if (userInfo) {
-            userInfo.classList.add('hidden');
-        }
-        if (userName) {
-            userName.textContent = 'Usuario';
-        }
-        if (userRole) {
+    const displayName = hasUser
+        ? (profile?.nombre_completo?.trim() || user?.email || 'Usuario')
+        : 'Usuario';
+
+    const roleLabel = hasUser && profile?.rol_principal
+        ? getRoleLabel(profile.rol_principal)
+        : '';
+
+    if (userName) {
+        userName.textContent = displayName;
+    }
+
+    if (userRole) {
+        if (roleLabel) {
+            userRole.textContent = roleLabel;
+            userRole.classList.remove('hidden');
+        } else {
             userRole.textContent = '';
+            if (!userRole.classList.contains('hidden')) {
+                userRole.classList.add('hidden');
+            }
+        }
+    }
+
+    if (userMenuButton) {
+        userMenuButton.setAttribute(
+            'aria-label',
+            hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
+        );
+
+        if (hasUser) {
+            userMenuButton.disabled = false;
+            userMenuButton.classList.remove('btn-disabled');
+        } else {
+            userMenuButton.disabled = true;
+            if (!userMenuButton.classList.contains('btn-disabled')) {
+                userMenuButton.classList.add('btn-disabled');
+            }
+        }
+    }
+}
+
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav');
+    const userMenuButton = document.getElementById('user-menu-button');
+
+    let isPublicRoute = false;
+
+    try {
+        const { path } = parseCurrentRoute?.() || {};
+        const currentPath = path || '/';
+
+        for (const candidate of routes) {
+            if (candidate?.path && candidate.path === currentPath) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
+
+            if (candidate?.matcher instanceof RegExp && candidate.matcher.test(currentPath)) {
+                isPublicRoute = candidate.requiresAuth === false;
+                break;
+            }
+        }
+    } catch (error) {
+        console.warn('No se pudo determinar la ruta actual para la visibilidad del header:', error);
+    }
+
+    const shouldShowNav = Boolean(appState.profile && isAuthenticated() && !isPublicRoute);
+
+    if (navigation) {
+        navigation.hidden = !shouldShowNav;
+        navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+    }
+
+    if (userMenuButton) {
+        userMenuButton.hidden = !shouldShowNav;
+        userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
+        if (!shouldShowNav) {
+            userMenuButton.disabled = true;
+        } else if (appState.user) {
+            userMenuButton.disabled = false;
         }
     }
 }
@@ -102,15 +176,6 @@ async function openUserMenu() {
     }
 
     const profile = appState.profile || await getCurrentProfile();
-    const escapeHTML = (value) => {
-        if (value === null || value === undefined) return '';
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    };
 
     const displayName = escapeHTML(
         profile?.nombre_completo?.trim() ||
@@ -158,6 +223,25 @@ async function openUserMenu() {
                 <div class="grid gap-4">
                     ${infoFields.map(renderInfoField).join('')}
                 </div>
+                <section class="space-y-4 border-t border-gray-100 pt-4">
+                    <div class="space-y-1">
+                        <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                            <i data-lucide="shield" class="h-4 w-4"></i>
+                            Seguridad
+                        </h4>
+                        <p class="text-xs leading-snug text-gray-500">
+                            Actualiza tu contraseña para mantener tu cuenta protegida.
+                        </p>
+                    </div>
+                    <button
+                        id="open-change-password"
+                        type="button"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-aifa-blue/30 bg-white px-4 py-2 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
+                    >
+                        <i data-lucide="key-round" class="h-4 w-4"></i>
+                        Cambiar contraseña
+                    </button>
+                </section>
                 <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
                     <p class="text-xs leading-snug text-gray-500">Gestiona tu sesión desde esta ventana.</p>
                     <button id="logout-btn-modal" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
@@ -172,7 +256,6 @@ async function openUserMenu() {
             {
                 text: 'Cerrar',
                 handler: () => true
-
             }
         ]
     });
@@ -183,34 +266,280 @@ async function openUserMenu() {
         }
 
         const logoutButton = document.getElementById('logout-btn-modal');
-        if (!logoutButton) return;
+        if (logoutButton) {
+            logoutButton.addEventListener('click', async () => {
+                try {
+                    const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
+                        title: 'Confirmar cierre de sesión',
+                        confirmText: 'Cerrar sesión',
+                        cancelText: 'Cancelar',
+                        type: 'warning'
+                    });
 
-        logoutButton.addEventListener('click', async () => {
-            try {
-                const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
-                    title: 'Confirmar cierre de sesión',
-                    confirmText: 'Cerrar sesión',
-                    cancelText: 'Cancelar',
-                    type: 'warning'
-                });
+                    if (!confirmed) return;
 
-                if (!confirmed) return;
+                    ui.hideModal(modalId);
+                    await signOut();
+                    ui.showToast('Sesión cerrada correctamente', 'success');
 
+                    setTimeout(() => {
+                        navigateTo('/login', {}, true);
+                        window.location.reload();
+                    }, 300);
+                } catch (error) {
+                    console.error('Error al cerrar sesión:', error);
+                    ui.showToast('Error al cerrar sesión', 'error');
+                }
+            });
+        }
+
+        const changePasswordTrigger = document.getElementById('open-change-password');
+        if (changePasswordTrigger) {
+            changePasswordTrigger.addEventListener('click', () => {
                 ui.hideModal(modalId);
-                await signOut();
-                ui.showToast('Sesión cerrada correctamente', 'success');
 
                 setTimeout(() => {
-                    navigateTo('/login', {}, true);
-                    window.location.reload();
-                }, 300);
-            } catch (error) {
-                console.error('Error al cerrar sesión:', error);
-                ui.showToast('Error al cerrar sesión', 'error');
-            }
-        });
+                    openChangePasswordModal({
+                        onCancel: () => openUserMenu(),
+                        onSuccess: () => openUserMenu()
+                    });
+                }, 120);
+            });
+        }
     }, 100);
 }
+
+
+function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
+    const passwordRules = VALIDATION?.password || {};
+    const passwordMinLength = passwordRules?.minLength || 8;
+    const passwordMaxLengthAttr = passwordRules?.maxLength ? ` maxlength="${passwordRules.maxLength}"` : '';
+    const passwordRequirementsMessage = escapeHTML(
+        passwordRules?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
+    );
+
+    let wasSuccessful = false;
+
+    const modalId = ui.showModal({
+        title: 'Cambiar contraseña',
+        content: `
+            <form id="change-password-form" class="space-y-3" novalidate>
+                <div>
+                    <label for="current-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Contraseña actual</label>
+                    <input
+                        id="current-password"
+                        name="currentPassword"
+                        type="password"
+                        autocomplete="current-password"
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <div>
+                    <label for="new-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Nueva contraseña</label>
+                    <input
+                        id="new-password"
+                        name="newPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <div>
+                    <label for="confirm-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Confirmar nueva contraseña</label>
+                    <input
+                        id="confirm-password"
+                        name="confirmPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <p id="change-password-feedback" class="text-xs hidden"></p>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs leading-snug text-gray-500 sm:max-w-xs">
+                        ${passwordRequirementsMessage}
+                    </p>
+                    <button
+                        id="change-password-submit"
+                        type="submit"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-aifa-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
+                    >
+                        <span id="change-password-submit-content" class="inline-flex items-center gap-2">
+                            <i data-lucide="key-round" class="h-4 w-4"></i>
+                            Actualizar contraseña
+                        </span>
+                        <span id="change-password-submit-loading" class="hidden items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i>
+                            Guardando...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            }
+        ],
+        onClose: () => {
+            if (!wasSuccessful && typeof onCancel === 'function') {
+                setTimeout(() => onCancel(), 0);
+            }
+        }
+    });
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        const changePasswordForm = document.getElementById('change-password-form');
+        const changePasswordButton = document.getElementById('change-password-submit');
+        const changePasswordFeedback = document.getElementById('change-password-feedback');
+        const changePasswordButtonContent = document.getElementById('change-password-submit-content');
+        const changePasswordButtonLoading = document.getElementById('change-password-submit-loading');
+        const currentPasswordInput = document.getElementById('current-password');
+        const newPasswordInput = document.getElementById('new-password');
+        const confirmPasswordInput = document.getElementById('confirm-password');
+
+        if (
+            changePasswordForm &&
+            changePasswordButton &&
+            changePasswordFeedback &&
+            changePasswordButtonContent &&
+            changePasswordButtonLoading &&
+            currentPasswordInput &&
+            newPasswordInput &&
+            confirmPasswordInput
+        ) {
+            const inputs = [currentPasswordInput, newPasswordInput, confirmPasswordInput];
+
+            const clearFeedback = () => {
+                changePasswordFeedback.textContent = '';
+                changePasswordFeedback.classList.add('hidden');
+                changePasswordFeedback.classList.remove('text-red-600', 'text-green-600');
+            };
+
+            const showFeedback = (message, type = 'error') => {
+                changePasswordFeedback.textContent = message;
+                changePasswordFeedback.classList.remove('hidden');
+                changePasswordFeedback.classList.remove('text-red-600', 'text-green-600');
+                changePasswordFeedback.classList.add(type === 'success' ? 'text-green-600' : 'text-red-600');
+            };
+
+            const toggleButtonLoading = (isLoading) => {
+                changePasswordButton.disabled = isLoading;
+                changePasswordButton.classList.toggle('btn-disabled', isLoading);
+                if (isLoading) {
+                    changePasswordButtonContent.classList.add('hidden');
+                    changePasswordButtonLoading.classList.remove('hidden');
+                } else {
+                    changePasswordButtonContent.classList.remove('hidden');
+                    changePasswordButtonLoading.classList.add('hidden');
+                }
+            };
+
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    input.classList.remove('input-error');
+                    if (!changePasswordFeedback.classList.contains('hidden')) {
+                        clearFeedback();
+                    }
+                });
+            });
+
+            changePasswordForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                inputs.forEach(input => input.classList.remove('input-error'));
+                clearFeedback();
+
+                const currentPassword = currentPasswordInput.value;
+                const newPassword = newPasswordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+
+                if (!currentPassword.trim()) {
+                    currentPasswordInput.classList.add('input-error');
+                    currentPasswordInput.focus();
+                    showFeedback('Ingresa tu contraseña actual.', 'error');
+                    return;
+                }
+
+                if (!newPassword.trim()) {
+                    newPasswordInput.classList.add('input-error');
+                    newPasswordInput.focus();
+                    showFeedback('Ingresa una nueva contraseña.', 'error');
+                    return;
+                }
+
+                if (passwordRules.minLength && newPassword.length < passwordRules.minLength) {
+                    newPasswordInput.classList.add('input-error');
+                    newPasswordInput.focus();
+                    showFeedback(passwordRules.message || `La contraseña debe tener al menos ${passwordRules.minLength} caracteres.`, 'error');
+                    return;
+                }
+
+                if (passwordRules.maxLength && newPassword.length > passwordRules.maxLength) {
+                    newPasswordInput.classList.add('input-error');
+                    newPasswordInput.focus();
+                    showFeedback(`La contraseña no puede exceder ${passwordRules.maxLength} caracteres.`, 'error');
+                    return;
+                }
+
+                if (passwordRules.pattern instanceof RegExp && !passwordRules.pattern.test(newPassword)) {
+                    newPasswordInput.classList.add('input-error');
+                    newPasswordInput.focus();
+                    showFeedback(passwordRules.message || 'La contraseña no cumple con los requisitos de seguridad.', 'error');
+                    return;
+                }
+
+                if (newPassword === currentPassword) {
+                    newPasswordInput.classList.add('input-error');
+                    newPasswordInput.focus();
+                    showFeedback('La nueva contraseña debe ser diferente a la actual.', 'error');
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    confirmPasswordInput.classList.add('input-error');
+                    confirmPasswordInput.focus();
+                    showFeedback('La confirmación no coincide con la nueva contraseña.', 'error');
+                    return;
+                }
+
+                try {
+                    toggleButtonLoading(true);
+                    await changePassword(currentPassword, newPassword);
+                    showFeedback('Contraseña actualizada correctamente.', 'success');
+                    changePasswordForm.reset();
+                    inputs.forEach(input => input.classList.remove('input-error'));
+                    ui.showToast('Contraseña actualizada correctamente', 'success');
+
+                    wasSuccessful = true;
+                    setTimeout(() => {
+                        ui.hideModal(modalId);
+                        if (typeof onSuccess === 'function') {
+                            onSuccess();
+                        }
+                    }, 600);
+                } catch (error) {
+                    console.error('Error al cambiar contraseña:', error);
+                    const message = error?.message || 'No se pudo actualizar la contraseña.';
+                    showFeedback(message, 'error');
+                } finally {
+                    toggleButtonLoading(false);
+                }
+            });
+        }
+    }, 100);
+}
+
 
 function setupUserMenu() {
     const button = document.getElementById('user-menu-button');
@@ -236,9 +565,11 @@ async function bootstrap() {
 
         await initSupabase();
         updateUserHeader();
+        updateNavigationVisibility();
 
         onAuthStateChange(() => {
             updateUserHeader();
+            updateNavigationVisibility();
         });
 
         if (!window.location.hash) {
