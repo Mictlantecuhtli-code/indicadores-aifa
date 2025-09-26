@@ -167,6 +167,25 @@ function updateNavigationVisibility() {
             userMenuButton.disabled = false;
         }
     }
+
+    if (userMenuButton) {
+        userMenuButton.setAttribute(
+            'aria-label',
+            hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
+        );
+        userMenuButton.disabled = false;
+        userMenuButton.classList.remove('btn-disabled');
+    }
+}
+
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav');
+    if (!navigation) return;
+
+    const shouldShowNav = isAuthenticated();
+    navigation.hidden = !shouldShowNav;
+    navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
 }
 
 async function openUserMenu() {
@@ -215,6 +234,13 @@ async function openUserMenu() {
             <p class="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">${value || 'Sin registro'}</p>
         </div>
     `;
+
+    const passwordConfig = VALIDATION?.password || {};
+    const passwordMinLength = passwordConfig?.minLength || 8;
+    const passwordMaxLengthAttr = passwordConfig?.maxLength ? ` maxlength="${passwordConfig.maxLength}"` : '';
+    const passwordRequirementsMessage = escapeHTML(
+        passwordConfig?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
+    );
 
     const modalId = ui.showModal({
         title: displayName,
@@ -292,7 +318,6 @@ async function openUserMenu() {
                 }
             });
         }
-
         const changePasswordTrigger = document.getElementById('open-change-password');
         if (changePasswordTrigger) {
             changePasswordTrigger.addEventListener('click', () => {
@@ -520,7 +545,7 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
                     changePasswordForm.reset();
                     inputs.forEach(input => input.classList.remove('input-error'));
                     ui.showToast('Contraseña actualizada correctamente', 'success');
-
+n
                     wasSuccessful = true;
                     setTimeout(() => {
                         ui.hideModal(modalId);
@@ -528,6 +553,7 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
                             onSuccess();
                         }
                     }, 600);
+
                 } catch (error) {
                     console.error('Error al cambiar contraseña:', error);
                     const message = error?.message || 'No se pudo actualizar la contraseña.';
