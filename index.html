@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Indicadores AIFA</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Configuración personalizada de Tailwind -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'aifa-blue': '#003f7f',
+            'aifa-dark': '#002a56',
+            'aifa-light': '#e6f0ff'
+          }
+        }
+      }
+    };
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Estilos personalizados -->
+  <style>
+    .toast {
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    .toast.removing {
+      animation: slideOut 0.3s ease-in forwards;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+    
+    .tab-button.active {
+      border-color: #003f7f;
+      color: #003f7f;
+    }
+    
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Estilo para inputs con error */
+    .input-error {
+      border-color: #ef4444;
+      background-color: #fef2f2;
+    }
+    
+    /* Estilo para botones deshabilitados */
+    .btn-disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    /* Animación de carga */
+    .loading-dots::after {
+      content: '';
+      animation: dots 1.5s infinite;
+    }
+    
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center py-4">
+        <!-- Logo y título -->
+        <div class="flex items-center space-x-4">
+          <div class="flex-shrink-0">
+            <img src="assets/AIFA_Logo.png" alt="Logo AIFA" class="h-16 w-auto sm:h-20"
+                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iOCIgZmlsbD0iIzFFNDBBRiIvPgo8cGF0aCBkPSJNMTIgMzZIMzZWMTJIMTJWMzZaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz4KPHA+dGggZD0iTTE4IDI0TDI0IDE4TDMwIDI0IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K';">
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-gray-900">Sistema de Indicadores AIFA</h1>
+            <p class="text-xs leading-tight text-gray-600 sm:text-sm sm:leading-snug whitespace-normal max-w-xs sm:max-w-md">
+              Aeropuerto Internacional Felipe Ángeles
+            </p>
+          </div>
+        </div>
+        
+        <!-- Navegación -->
+        <nav id="main-nav" hidden class="flex flex-wrap items-center gap-2 sm:gap-4" aria-hidden="true">
+          <button id="nav-home" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
+            <i data-lucide="home" class="w-4 h-4"></i><span>Inicio</span>
+          </button>
+          <button id="nav-visualizacion" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i><span>Visualización</span>
+          </button>
+          <button id="nav-captura" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
+            <i data-lucide="edit" class="w-4 h-4"></i><span>Captura</span>
+          </button>
+          <button id="nav-admin" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
+            <i data-lucide="settings" class="w-4 h-4"></i><span>Administración</span>
+          </button>
+          <button id="nav-panel-directivos" class="nav-button px-4 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg hover:bg-gray-100">
+            <i data-lucide="trending-up" class="w-4 h-4 inline mr-2"></i>
+            Panel Directivos
+          </button>
+        </nav>
+        
+        <!-- Usuario -->
+        <div class="flex items-center">
+          <button id="user-menu-button" hidden aria-hidden="true" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100 transition">
+            <i data-lucide="user" class="w-4 h-4 flex-shrink-0"></i>
+            <div class="flex flex-col items-start leading-tight text-left">
+              <span id="user-name" class="text-sm font-medium text-gray-900">Usuario</span>
+              <span id="user-role" class="text-xs text-gray-500 hidden">Rol</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="bg-gray-100 border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-gray-600" id="breadcrumb">
+      <span class="inline-flex items-center gap-2"><i data-lucide="map-pin" class="w-4 h-4"></i> Inicio</span>
+    </div>
+  </div>
+
+  <!-- Contenedor principal para vistas -->
+  <main id="app-container" class="max-w-7xl mx-auto p-4">
+    <!-- Contenido se carga dinámicamente aquí -->
+    <div class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <i data-lucide="loader-2" class="w-8 h-8 text-aifa-blue mx-auto mb-4 spinner"></i>
+        <p class="text-gray-600">Cargando aplicación<span class="loading-dots"></span></p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Contenedor de notificaciones -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+
+  <!-- Loading overlay -->
+  <div id="loading-container" class="fixed inset-0 hidden z-40">
+    <div class="w-full h-full flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div class="bg-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3">
+        <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-aifa-blue"></i>
+        <span id="loading-text">Cargando…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal genérico -->
+  <div id="modal-overlay" class="fixed inset-0 hidden z-50 bg-black/40">
+    <div class="mx-auto mt-24 max-w-lg bg-white rounded-lg shadow-lg p-6">
+      <h3 id="modal-title" class="text-lg font-semibold mb-4">Modal</h3>
+      <div id="modal-content" class="mb-6"></div>
+      <div id="modal-actions" class="flex justify-end gap-3"></div>
+    </div>
+  </div>
+  <!-- Inicialización de la aplicación -->
+  <script type="module" src="./js/app/bootstrap.js"></script>
+
+</body>
+</html>
