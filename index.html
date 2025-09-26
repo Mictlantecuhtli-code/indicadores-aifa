@@ -146,14 +146,53 @@
         </nav>
         
         <!-- Usuario -->
-        <div class="flex items-center">
-          <button id="user-menu-button" hidden aria-hidden="true" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100 transition">
+        <div class="relative flex items-center" id="user-menu-container">
+          <button
+            id="user-menu-button"
+            hidden
+            aria-hidden="true"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="user-menu-dropdown"
+            class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100 transition"
+            type="button"
+          >
             <i data-lucide="user" class="w-4 h-4 flex-shrink-0"></i>
             <div class="flex flex-col items-start leading-tight text-left">
               <span id="user-name" class="text-sm font-medium text-gray-900">Usuario</span>
               <span id="user-role" class="text-xs text-gray-500 hidden">Rol</span>
             </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
           </button>
+
+          <div
+            id="user-menu-dropdown"
+            role="menu"
+            aria-labelledby="user-menu-button"
+            aria-hidden="true"
+            class="absolute right-0 top-full z-40 mt-2 w-60 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 hidden"
+          >
+            <div class="py-2">
+              <button
+                id="user-menu-signout"
+                type="button"
+                role="menuitem"
+                class="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
+              >
+                <i data-lucide="log-out" class="h-4 w-4"></i>
+                Cerrar sesión
+              </button>
+              <button
+                id="user-menu-change-password"
+                type="button"
+                role="menuitem"
+                class="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 transition hover:bg-aifa-light hover:text-aifa-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue"
+              >
+                <i data-lucide="key-round" class="h-4 w-4"></i>
+                Cambio de contraseña
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
