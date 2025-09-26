@@ -1625,3 +1625,30 @@ function setupGlobalAutoRefresh() {
         }, 60000); // Cada minuto
     }
 }
+/**
+ * Limpiar recursos al cerrar sesión
+ */
+export function cleanupResources() {
+    // Limpiar intervals
+    if (window.autoRefreshInterval) {
+        clearInterval(window.autoRefreshInterval);
+        window.autoRefreshInterval = null;
+    }
+    if (window.homeRefreshInterval) {
+        clearInterval(window.homeRefreshInterval);
+        window.homeRefreshInterval = null;
+    }
+    if (window.areaRefreshInterval) {
+        clearInterval(window.areaRefreshInterval);
+        window.areaRefreshInterval = null;
+    }
+    
+    // Limpiar storage
+    sessionStorage.removeItem('aifa-session-backup');
+    sessionStorage.removeItem('aifa-last-activity');
+    
+    // Limpiar event listeners de visibilidad si existen
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.removeEventListener('pagehide', handlePageHide);
+}
