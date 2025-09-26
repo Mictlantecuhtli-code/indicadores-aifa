@@ -318,6 +318,7 @@ async function openUserMenu() {
                 }
             });
         }
+
         const changePasswordTrigger = document.getElementById('open-change-password');
         if (changePasswordTrigger) {
             changePasswordTrigger.addEventListener('click', () => {
@@ -545,7 +546,7 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
                     changePasswordForm.reset();
                     inputs.forEach(input => input.classList.remove('input-error'));
                     ui.showToast('Contraseña actualizada correctamente', 'success');
-n
+
                     wasSuccessful = true;
                     setTimeout(() => {
                         ui.hideModal(modalId);
