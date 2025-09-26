@@ -287,28 +287,30 @@ function createAnalisisHTML() {
     
     return `
         <div class="space-y-6">
-            <!-- Header con breadcrumb y título -->
-            <div class="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
-                <button 
-                    onclick="window.router.navigateTo('/panel-directivos')"
-                    class="text-white/80 hover:text-white mb-3 flex items-center gap-2 text-sm"
-                >
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                    Volver al Panel de Análisis
-                </button>
-                <h1 class="text-2xl font-bold mb-2">${analisisState.indicadorData.nombre}</h1>
-                <p class="text-blue-100">${obtenerNombreOpcion()}</p>
-            </div>
-
-            <!-- Información del último mes -->
-            ${analisisState.ultimoMesDatos ? `
-                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                    <div class="flex items-center gap-2 text-blue-800">
-                        <i data-lucide="info" class="w-5 h-5"></i>
-                        <span class="font-semibold">Último mes con datos: ${nombresMeses[analisisState.ultimoMesDatos.mes - 1]} ${analisisState.ultimoMesDatos.anio}</span>
-                    </div>
+            <!-- Header fijo con breadcrumb, título e información clave -->
+            <div class="sticky top-24 sm:top-28 lg:top-32 z-30 space-y-4 pb-2 bg-gray-50">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white shadow-lg">
+                    <button
+                        onclick="window.router.navigateTo('/panel-directivos')"
+                        class="text-white/80 hover:text-white mb-3 flex items-center gap-2 text-sm"
+                    >
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        Volver al Panel de Análisis
+                    </button>
+                    <h1 class="text-2xl font-bold mb-2">${analisisState.indicadorData.nombre}</h1>
+                    <p class="text-blue-100">${obtenerNombreOpcion()}</p>
                 </div>
-            ` : ''}
+
+                <!-- Información del último mes -->
+                ${analisisState.ultimoMesDatos ? `
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded shadow">
+                        <div class="flex items-center gap-2 text-blue-800">
+                            <i data-lucide="info" class="w-5 h-5"></i>
+                            <span class="font-semibold">Último mes con datos: ${nombresMeses[analisisState.ultimoMesDatos.mes - 1]} ${analisisState.ultimoMesDatos.anio}</span>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
 
             <!-- Tabla comparativa -->
             ${comparativo ? createTablaComparativa(comparativo, nombresMeses) : ''}
