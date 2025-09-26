@@ -333,6 +333,22 @@ function openUserMenuDropdown() {
     document.addEventListener('keydown', userMenuState.escapeHandler);
 }
 
+/**
+ * Toggle del menú de usuario con verificación de sesión
+ */
+function toggleUserMenuDropdown() {
+    if (!appState.session) {
+        navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+        return;
+    }
+    
+    if (userMenuState.isOpen) {
+        closeUserMenuDropdown();
+    } else {
+        openUserMenuDropdown();
+    }
+}
+
 function toggleUserMenuDropdown() {
     if (userMenuState.isOpen) {
         closeUserMenuDropdown();
@@ -589,6 +605,24 @@ function setupUserMenu() {
                 closeUserMenuDropdown();
             } else {
                 openUserMenuDropdown();
+            }
+        });
+        
+        userMenuButton.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                
+                // Verificar sesión antes de abrir
+                if (!appState.session) {
+                    navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+                    return;
+                }
+                
+                openUserMenuDropdown();
+            }
+            if (event.key === 'Escape' && userMenuState.isOpen) {
+                event.preventDefault();
+                closeUserMenuDropdown({ focusButton: true });
             }
         });
     }
@@ -867,6 +901,39 @@ function setupSessionMonitoring() {
         }
     });
 }
+
+/**
+ * Manejar eventos de foco de ventana
+ */
+window.addEventListener('focus', () => {
+    if (DEBUG.enabled) console.log('🔍 Ventana recuperó el foco');
+    // Verificar sesión al recuperar foco
+    setTimeout(async () => {
+        try {
+            await getCurrentSession();
+            
+            // Verificar que appState tenga sesión
+            if (!appState.session) {
+                console.warn('⚠️ No hay sesión después de verificar');
+                navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
+                return;
+            }
+            
+            // Reanudar auto-refresh si existe
+            setupGlobalAutoRefresh();
+        } catch (error) {
+            console.error('❌ Error al verificar sesión al recuperar foco:', error);
+        }
+    }, 100);
+});
+
+window.addEventListener('blur', () => {
+    if (DEBUG.enabled) console.log('🔍 Ventana perdió el foco');
+    // Pausar auto-refresh cuando se pierde el foco
+    if (window.autoRefreshInterval) {
+        clearInterval(window.autoRefreshInterval);
+    }
+});
 /**
  * Limpiar recursos al cerrar/recargar la página
  */
