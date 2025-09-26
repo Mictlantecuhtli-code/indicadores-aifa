@@ -126,9 +126,9 @@ function updateUserHeader() {
 }
 
 function syncProtectedHeaderVisibility() {
-
     const navigation = document.getElementById('main-nav');
     const userMenuButton = document.getElementById('user-menu-button');
+    const { user, profile } = appState;
 
     let isPublicRoute = false;
 
@@ -151,7 +151,8 @@ function syncProtectedHeaderVisibility() {
         console.warn('No se pudo determinar la ruta actual para la visibilidad del header:', error);
     }
 
-    const shouldShowNav = Boolean(appState.profile && isAuthenticated() && !isPublicRoute);
+    const hasUser = Boolean(user && profile);
+    const shouldShowNav = Boolean(hasUser && isAuthenticated() && !isPublicRoute);
 
     if (navigation) {
         navigation.hidden = !shouldShowNav;
@@ -162,20 +163,24 @@ function syncProtectedHeaderVisibility() {
         userMenuButton.hidden = !shouldShowNav;
         userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
 
-        if (!shouldShowNav) {
+        if (!shouldShowNav || !hasUser) {
             userMenuButton.disabled = true;
-        } else if (appState.user) {
+            if (!userMenuButton.classList.contains('btn-disabled')) {
+                userMenuButton.classList.add('btn-disabled');
+            }
+        } else {
             userMenuButton.disabled = false;
+            userMenuButton.classList.remove('btn-disabled');
         }
-    }
 
-    if (userMenuButton) {
+        const displayName = hasUser
+            ? (profile?.nombre_completo?.trim() || user?.email || 'Usuario')
+            : 'Usuario';
+
         userMenuButton.setAttribute(
             'aria-label',
             hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
         );
-        userMenuButton.disabled = false;
-        userMenuButton.classList.remove('btn-disabled');
     }
 }
 
