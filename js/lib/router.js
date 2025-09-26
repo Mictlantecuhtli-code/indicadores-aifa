@@ -359,6 +359,15 @@ async function handleRouteChange(route) {
         updateBreadcrumb(definition, params);
         updateDocumentTitle(definition, params);
 
+        window.dispatchEvent(new CustomEvent('router:route-changed', {
+            detail: {
+                route,
+                definition,
+                params,
+                query: route.query
+            }
+        }));
+
         if (DEBUG.enabled) {
             console.log('📍 Ruta actualizada:', {
                 path: route.path,

@@ -77,16 +77,16 @@ function createLoginHTML() {
     const remainingTime = isLocked ? Math.ceil((loginState.lockoutEnd - Date.now()) / 1000) : 0;
     
     return `
-        <div class="min-h-screen flex items-center justify-center bg-gray-50">
-            <div class="max-w-md w-full space-y-8">
-                <div>
-                    <div class="mx-auto h-20 w-20 flex items-center justify-center">
-                        <img src="assets/AIFA_Logo.png" alt="AIFA Logo" class="h-20 w-auto">
+        <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8 sm:py-10">
+            <div class="max-w-md w-full space-y-6">
+                <div class="flex flex-col items-center text-center space-y-4">
+                    <div class="mx-auto flex items-center justify-center">
+                        <img src="assets/AIFA_Logo.png" alt="AIFA Logo" class="h-[8.5rem] w-auto sm:h-[9.8rem]">
                     </div>
-                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                    <h2 class="text-3xl font-extrabold text-gray-900">
                         Sistema de Indicadores
                     </h2>
-                    <p class="mt-2 text-center text-sm text-gray-600">
+                    <p class="text-sm text-gray-600">
                         AIFA - Aeropuerto Internacional Felipe Ángeles
                     </p>
                 </div>
