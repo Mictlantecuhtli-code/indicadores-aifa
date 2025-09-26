@@ -144,7 +144,10 @@ if (typeof window !== 'undefined' && window.supabase) {
             auth: {
                 autoRefreshToken: true,
                 persistSession: true,
-                detectSessionInUrl: true
+                detectSessionInUrl: true,
+                storageKey: 'aifa-auth-token',
+                storage: window.localStorage,
+                flowType: 'pkce'
             }
         });
         
