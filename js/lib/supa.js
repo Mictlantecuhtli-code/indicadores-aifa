@@ -1486,6 +1486,9 @@ let initializationPromise = null;
 
 async function setupSupabase() {
     try {
+        // Configurar manejo de visibilidad
+        setupVisibilityHandlers();
+        
         // Configurar listener de cambios de autenticación
         supabase.auth.onAuthStateChange(async (event, session) => {
             if (DEBUG.enabled) console.log('🔐 Auth state changed:', event, session?.user?.email);
@@ -1545,3 +1548,80 @@ export function initSupabase() {
 
 // Auto-inicializar cuando se carga el módulo
 initSupabase().catch(console.error);
+
+
+/**
+ * Configurar manejo de visibilidad para prevenir pérdida de sesión
+ */
+function setupVisibilityHandlers() {
+    // Manejar cambios de visibilidad del documento
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // Cuando regresa a la ventana, verificar sesión
+            setTimeout(async () => {
+                try {
+                    await getCurrentSession();
+                    if (!appState.session || !appState.user) {
+                        console.warn('⚠️ Sesión perdida al regresar a la ventana');
+                        // Redirigir al login si perdió la sesión
+                        if (window.router?.navigateTo) {
+                            window.router.navigateTo('/login', {}, true);
+                        } else {
+                            window.location.hash = '#/login';
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Error al verificar sesión:', error);
+                }
+            }, 100);
+        }
+    });
+
+    // Manejar eventos de foco/blur de la ventana
+    window.addEventListener('blur', () => {
+        if (DEBUG.enabled) console.log('🔍 Ventana perdió el foco');
+        // Pausar auto-refresh cuando se pierde el foco
+        if (window.autoRefreshInterval) {
+            clearInterval(window.autoRefreshInterval);
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        if (DEBUG.enabled) console.log('🔍 Ventana recuperó el foco');
+        // Verificar sesión al recuperar foco
+        setTimeout(async () => {
+            try {
+                await getCurrentSession();
+                // Reanudar auto-refresh si existe
+                setupGlobalAutoRefresh();
+            } catch (error) {
+                console.error('❌ Error al verificar sesión al recuperar foco:', error);
+            }
+        }, 100);
+    });
+}
+
+/**
+ * Configurar auto-refresh global más seguro
+ */
+function setupGlobalAutoRefresh() {
+    // Limpiar interval existente
+    if (window.autoRefreshInterval) {
+        clearInterval(window.autoRefreshInterval);
+    }
+
+    // Solo si hay sesión activa y la ventana está visible
+    if (appState.session && document.visibilityState === 'visible') {
+        window.autoRefreshInterval = setInterval(async () => {
+            // Solo hacer refresh si la ventana está visible y hay sesión
+            if (document.visibilityState === 'visible' && appState.session) {
+                try {
+                    await getCurrentSession();
+                } catch (error) {
+                    console.error('❌ Error en auto-refresh de sesión:', error);
+                    clearInterval(window.autoRefreshInterval);
+                }
+            }
+        }, 60000); // Cada minuto
+    }
+}
