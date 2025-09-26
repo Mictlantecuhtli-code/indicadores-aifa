@@ -7,8 +7,9 @@ import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
-import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
-import { getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
+import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword, getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
+//import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
+//import { getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
 
 // =====================================================
 // UTILIDADES
