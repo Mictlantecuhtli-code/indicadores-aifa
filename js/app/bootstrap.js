@@ -8,6 +8,7 @@ import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
 import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
+import { getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
 
 // =====================================================
 // UTILIDADES
@@ -744,6 +745,8 @@ function handleVisibilityChange() {
  */
 async function verifySessionOnReturn() {
     try {
+        const { getCurrentSession, appState } = await import('../lib/supa.js');
+        
         const backup = sessionStorage.getItem('aifa-session-backup');
         if (backup) {
             const sessionData = JSON.parse(backup);
