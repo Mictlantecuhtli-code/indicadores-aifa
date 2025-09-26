@@ -1485,10 +1485,12 @@ export function escapeSearchText(text) {
 /**
  * Inicializar cliente y configurar listeners
  */
-let initializationPromise = null;
+//let initializationPromise = null;
 
 // Variable global para controlar el manejo de visibilidad (agrégala antes de la función)
 let isHandlingVisibilityChange = false;
+let visibilityChangeTimeout = null;
+let initializationPromise = null;
 
 async function setupSupabase() {
     try {
