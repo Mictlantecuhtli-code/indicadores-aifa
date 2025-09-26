@@ -1487,18 +1487,24 @@ export function escapeSearchText(text) {
  */
 let initializationPromise = null;
 
+// Variable global para controlar el manejo de visibilidad (agrégala antes de la función)
+let isHandlingVisibilityChange = false;
+
 async function setupSupabase() {
     try {
-        // Configurar manejo de visibilidad
-        setupVisibilityHandlers();
-        
-        // Configurar listener de cambios de autenticación
+        // Configurar listener de cambios de autenticación PRIMERO
         supabase.auth.onAuthStateChange(async (event, session) => {
+            // NO procesar eventos mientras se maneja cambio de visibilidad
+            if (isHandlingVisibilityChange) {
+                if (DEBUG.enabled) console.log('⏭️ Ignorando evento de auth durante cambio de visibilidad:', event);
+                return;
+            }
+            
             if (DEBUG.enabled) console.log('🔐 Auth state changed:', event, session?.user?.email);
-
+            
             appState.session = session;
             appState.user = session?.user || null;
-
+            
             if (event === 'SIGNED_IN') {
                 appState.profile = await getCurrentProfile();
                 // Iniciar auto-refresh cuando se logea
@@ -1510,23 +1516,25 @@ async function setupSupabase() {
             } else if (event === 'TOKEN_REFRESHED') {
                 if (DEBUG.enabled) console.log('🔄 Token renovado exitosamente');
             }
-
+            
             notifyAuthListeners(event, session);
         });
-
+        
         // Verificar sesión inicial
         await getCurrentSession();
         if (appState.session) {
             appState.profile = await getCurrentProfile();
         }
-
+        
+        // Configurar manejo de visibilidad DESPUÉS de tener la sesión inicial
+        setupVisibilityHandlers();
+        
         notifyAuthListeners('INITIAL_SESSION', appState.session);
-
         appState.initialized = true;
         
         // Iniciar verificación periódica de token
         startTokenHealthCheck();
-
+        
         if (DEBUG.enabled) {
             console.log('✅ Supabase inicializado correctamente');
             console.log('👤 Estado inicial:', {
@@ -1535,7 +1543,7 @@ async function setupSupabase() {
                 role: appState.profile?.rol_principal
             });
         }
-
+        
         return true;
     } catch (error) {
         console.error('❌ Error al inicializar Supabase:', error);
@@ -1572,21 +1580,19 @@ let visibilityChangeTimeout = null;
 /**
  * Configurar handlers de visibilidad
  */
+/**
+ * Configurar handlers de visibilidad
+ */
 function setupVisibilityHandlers() {
-    // Handler para cambios de visibilidad/focus
+    // Handler para cambios de visibilidad
     const handleVisibilityChange = async () => {
-        // Evitar múltiples ejecuciones simultáneas
-        if (isHandlingVisibilityChange) {
-            return;
-        }
-        
         // Limpiar timeout anterior si existe
         if (visibilityChangeTimeout) {
             clearTimeout(visibilityChangeTimeout);
             visibilityChangeTimeout = null;
         }
         
-        const isVisible = document.visibilityState === 'visible' && document.hasFocus();
+        const isVisible = document.visibilityState === 'visible';
         
         if (DEBUG.enabled) {
             if (isVisible) {
@@ -1596,25 +1602,37 @@ function setupVisibilityHandlers() {
             }
         }
         
-        // Solo refrescar la sesión si la ventana está visible Y ha pasado tiempo
+        // Solo refrescar la sesión si la ventana está visible Y tenemos sesión
         if (isVisible && appState.session) {
             // Agregar un pequeño delay para evitar múltiples disparos
             visibilityChangeTimeout = setTimeout(async () => {
+                // Evitar ejecuciones simultáneas
+                if (isHandlingVisibilityChange) {
+                    return;
+                }
+                
                 isHandlingVisibilityChange = true;
                 try {
                     // Solo verificar la sesión, NO forzar un cambio de estado
-                    const { data: { session } } = await supabase.auth.getSession();
+                    const { data: { session }, error } = await supabase.auth.getSession();
+                    
+                    if (error) {
+                        if (DEBUG.enabled) {
+                            console.warn('⚠️ Error al verificar sesión:', error);
+                        }
+                        return;
+                    }
                     
                     if (session) {
-                        // Solo actualizar si realmente cambió algo
+                        // Solo actualizar si realmente cambió el token
                         if (session.access_token !== appState.session?.access_token) {
                             appState.session = session;
                             appState.user = session.user;
                             
-                            // NO notificar a los listeners a menos que sea necesario
                             if (DEBUG.enabled) {
                                 console.log('✅ Sesión actualizada silenciosamente');
                             }
+                            // NO notificar a listeners para evitar re-renderizados
                         }
                     } else if (appState.session) {
                         // Solo si realmente se perdió la sesión
@@ -1630,16 +1648,16 @@ function setupVisibilityHandlers() {
                 } finally {
                     isHandlingVisibilityChange = false;
                 }
-            }, 100); // Pequeño delay para evitar múltiples disparos
+            }, 200); // Delay aumentado para mayor estabilidad
         }
     };
     
-    // Usar solo visibilitychange, no blur/focus por separado
+    // Usar solo visibilitychange
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // NO usar estos eventos que causan el problema:
-    // window.addEventListener('focus', handleVisibilityChange);
-    // window.addEventListener('blur', handleVisibilityChange);
+    if (DEBUG.enabled) {
+        console.log('✅ Handlers de visibilidad configurados');
+    }
 }
 
 /**
