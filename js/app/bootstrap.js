@@ -76,7 +76,6 @@ function setupNavigation() {
 }
 
 function syncNavigationVisibility() {
-
     const navigation = document.getElementById('main-nav') || document.querySelector('header nav');
     const navButtons = {
         home: document.getElementById('nav-home'),
@@ -197,6 +196,9 @@ function syncProtectedHeaderVisibility() {
         } else {
             userMenuButton.disabled = false;
             userMenuButton.classList.remove('btn-disabled');
+        }
+        if (userMenuLabel) {
+            userMenuLabel.textContent = 'Iniciar sesión';
         }
         if (userMenuLabel) {
             userMenuLabel.textContent = 'Iniciar sesión';
@@ -515,7 +517,6 @@ async function bootstrap() {
         setupUserMenu();
         syncNavigationVisibility();
 
-
         if (window.lucide) {
             window.lucide.createIcons();
         }
@@ -526,6 +527,7 @@ async function bootstrap() {
 
         onAuthStateChange(({ event }) => {
             updateUserHeader();
+
             if (event === 'SESSION_EXPIRED') {
                 ui.showToast('Tu sesión expiró por inactividad. Vuelve a iniciar sesión.', 'warning');
 
