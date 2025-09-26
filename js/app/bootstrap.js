@@ -47,7 +47,15 @@ function exposeGlobals() {
 }
 
 function setupGlobalErrorHandlers() {
-    window.addEventListener('error', event => {
+        // Manejar eventos de visibilidad para prevenir pérdida de sesión
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Manejar eventos de foco de ventana
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener('pagehide', handlePageHide);
+        
+        // Manejar errores no capturados
+        window.addEventListener('error', (event) => {
         console.error('❌ Error global capturado:', event.error);
         if (window.ui?.showToast) {
             window.ui.showToast('Ha ocurrido un error inesperado', 'error');
@@ -702,4 +710,74 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootstrap);
 } else {
     bootstrap();
+}
+/**
+ * Manejar cambios de visibilidad
+ */
+function handleVisibilityChange() {
+    if (document.visibilityState === 'hidden') {
+        // Cuando se oculta la página, guardar estado
+        if (appState.session) {
+            sessionStorage.setItem('aifa-session-backup', JSON.stringify({
+                timestamp: Date.now(),
+                userId: appState.user?.id,
+                email: appState.user?.email
+            }));
+        }
+    } else if (document.visibilityState === 'visible') {
+        // Cuando regresa, verificar sesión
+        setTimeout(async () => {
+            await verifySessionOnReturn();
+        }, 200);
+    }
+}
+
+/**
+ * Verificar sesión al regresar a la ventana
+ */
+async function verifySessionOnReturn() {
+    try {
+        const backup = sessionStorage.getItem('aifa-session-backup');
+        if (backup) {
+            const sessionData = JSON.parse(backup);
+            
+            // Si pasó más de 30 minutos, verificar sesión
+            if (Date.now() - sessionData.timestamp > 30 * 60 * 1000) {
+                await getCurrentSession();
+                
+                if (!appState.session) {
+                    console.warn('⚠️ Sesión expirada, redirigiendo al login');
+                    navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
+                    return;
+                }
+            }
+        }
+        
+        // Actualizar header de usuario
+        updateUserHeader();
+        
+    } catch (error) {
+        console.error('❌ Error al verificar sesión:', error);
+        navigateTo('/login', { message: 'Error de sesión', type: 'error' }, true);
+    }
+}
+
+/**
+ * Manejar antes de cerrar ventana
+ */
+function handleBeforeUnload(event) {
+    // Guardar estado actual si hay sesión
+    if (appState.session) {
+        sessionStorage.setItem('aifa-last-activity', Date.now().toString());
+    }
+}
+
+/**
+ * Manejar cuando se oculta la página
+ */
+function handlePageHide(event) {
+    // Limpiar intervals al salir
+    if (window.autoRefreshInterval) {
+        clearInterval(window.autoRefreshInterval);
+    }
 }
