@@ -348,14 +348,14 @@ function toggleUserMenuDropdown() {
         openUserMenuDropdown();
     }
 }
-
+/*
 function toggleUserMenuDropdown() {
     if (userMenuState.isOpen) {
         closeUserMenuDropdown();
     } else {
         openUserMenuDropdown();
     }
-}
+}*/
 
 
 function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
@@ -587,26 +587,40 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
         }
     }, 100);
 }
-
-
 function setupUserMenu() {
-    const userMenuButton = document.getElementById('user-menu-button');
-    if (userMenuButton) {
-        userMenuButton.addEventListener('click', (e) => {
-            e.stopPropagation();
+    const { button } = getUserMenuElements();
+    if (!button) return;
+
+    button.addEventListener('click', event => {
+        event.preventDefault();
+        
+        // Verificar que la sesión siga activa antes de abrir el menú
+        if (!appState.session) {
+            navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+            return;
+        }
+        
+        toggleUserMenuDropdown();
+    });
+
+    button.addEventListener('keydown', event => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
             
-            // Verificar que la sesión siga activa antes de abrir el menú
+            // Verificar sesión antes de abrir
             if (!appState.session) {
                 navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
                 return;
             }
             
-            if (userMenuState.isOpen) {
-                closeUserMenuDropdown();
-            } else {
-                openUserMenuDropdown();
-            }
-        });
+            openUserMenuDropdown();
+        }
+
+        if (event.key === 'Escape' && userMenuState.isOpen) {
+            event.preventDefault();
+            closeUserMenuDropdown({ focusButton: true });
+        }
+    });
         
         userMenuButton.addEventListener('keydown', event => {
             if (event.key === 'ArrowDown') {
