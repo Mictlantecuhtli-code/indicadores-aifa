@@ -7,7 +7,7 @@ import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
-import { initSupabase, appState, getCurrentProfile, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
+import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
 
 // =====================================================
 // UTILIDADES
@@ -83,6 +83,10 @@ function updateUserHeader() {
     const { user, profile } = appState;
     const hasUser = Boolean(user && profile);
 
+    if (!hasUser) {
+        closeUserMenuDropdown();
+    }
+
     const displayName = hasUser
         ? (profile?.nombre_completo?.trim() || user?.email || 'Usuario')
         : 'Usuario';
@@ -113,15 +117,9 @@ function updateUserHeader() {
             hasUser ? `Menú de usuario ${displayName}` : 'Menú de usuario'
         );
 
-        if (hasUser) {
-            userMenuButton.disabled = false;
-            userMenuButton.classList.remove('btn-disabled');
-        } else {
-            userMenuButton.disabled = true;
-            if (!userMenuButton.classList.contains('btn-disabled')) {
-                userMenuButton.classList.add('btn-disabled');
-            }
-        }
+        userMenuButton.setAttribute('aria-expanded', userMenuState.isOpen ? 'true' : 'false');
+        userMenuButton.classList.remove('btn-disabled');
+        userMenuButton.removeAttribute('disabled');
     }
 }
 
@@ -164,13 +162,12 @@ function syncProtectedHeaderVisibility() {
         userMenuButton.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
 
         if (!shouldShowNav || !hasUser) {
-            userMenuButton.disabled = true;
-            if (!userMenuButton.classList.contains('btn-disabled')) {
-                userMenuButton.classList.add('btn-disabled');
-            }
-        } else {
-            userMenuButton.disabled = false;
+            closeUserMenuDropdown();
             userMenuButton.classList.remove('btn-disabled');
+            userMenuButton.removeAttribute('disabled');
+        } else {
+            userMenuButton.classList.remove('btn-disabled');
+            userMenuButton.removeAttribute('disabled');
         }
 
         const displayName = hasUser
@@ -194,151 +191,108 @@ function updateNavigationVisibility() {
 
 }
 
-async function openUserMenu() {
+const userMenuState = {
+    isOpen: false,
+    outsideClickHandler: null,
+    escapeHandler: null
+};
+
+function getUserMenuElements() {
+    const container = document.getElementById('user-menu-container');
+    const button = document.getElementById('user-menu-button');
+    const dropdown = document.getElementById('user-menu-dropdown');
+
+    return { container, button, dropdown };
+}
+
+function closeUserMenuDropdown({ focusButton = false } = {}) {
+    const { button, dropdown } = getUserMenuElements();
+    if (!button || !dropdown) return;
+
+    if (dropdown.classList.contains('hidden') && !userMenuState.isOpen) {
+        return;
+    }
+
+    dropdown.classList.add('hidden');
+    dropdown.setAttribute('aria-hidden', 'true');
+    button.setAttribute('aria-expanded', 'false');
+
+    if (userMenuState.outsideClickHandler) {
+        document.removeEventListener('mousedown', userMenuState.outsideClickHandler);
+        document.removeEventListener('touchstart', userMenuState.outsideClickHandler);
+        userMenuState.outsideClickHandler = null;
+    }
+
+    if (userMenuState.escapeHandler) {
+        document.removeEventListener('keydown', userMenuState.escapeHandler);
+        userMenuState.escapeHandler = null;
+    }
+
+    userMenuState.isOpen = false;
+
+    if (focusButton) {
+        button.focus();
+    }
+}
+
+function openUserMenuDropdown() {
     if (!appState.user) {
         navigateTo('/login');
         return;
     }
 
-    const profile = appState.profile || await getCurrentProfile();
+    const { container, button, dropdown } = getUserMenuElements();
+    if (!button || !dropdown) return;
 
-    const displayName = escapeHTML(
-        profile?.nombre_completo?.trim() ||
-        appState.user?.user_metadata?.full_name ||
-        appState.user.email ||
-        'Mi cuenta'
-    );
-
-    const infoFields = [
-        {
-            label: 'Correo institucional',
-            value: escapeHTML(appState.user.email)
-        },
-        {
-            label: 'Rol principal',
-            value: escapeHTML(getRoleLabel(profile?.rol_principal))
-        }
-    ];
-
-    if (profile?.puesto) {
-        infoFields.push({
-            label: 'Puesto',
-            value: escapeHTML(profile.puesto)
-        });
+    if (userMenuState.isOpen) {
+        return;
     }
 
-    if (profile?.telefono) {
-        infoFields.push({
-            label: 'Teléfono',
-            value: escapeHTML(profile.telefono)
-        });
+    dropdown.classList.remove('hidden');
+    dropdown.setAttribute('aria-hidden', 'false');
+    button.setAttribute('aria-expanded', 'true');
+
+    if (window.lucide) {
+        window.lucide.createIcons();
     }
 
-    const renderInfoField = ({ label, value }) => `
-        <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">${label}</p>
-            <p class="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">${value || 'Sin registro'}</p>
-        </div>
-    `;
+    userMenuState.isOpen = true;
 
-    const passwordConfig = VALIDATION?.password || {};
-    const passwordMinLength = passwordConfig?.minLength || 8;
-    const passwordMaxLengthAttr = passwordConfig?.maxLength ? ` maxlength="${passwordConfig.maxLength}"` : '';
-    const passwordRequirementsMessage = escapeHTML(
-        passwordConfig?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
-    );
-
-    const modalId = ui.showModal({
-        title: displayName,
-        content: `
-            <div class="space-y-6">
-                <div class="grid gap-4">
-                    ${infoFields.map(renderInfoField).join('')}
-                </div>
-                <section class="space-y-4 border-t border-gray-100 pt-4">
-                    <div class="space-y-1">
-                        <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                            <i data-lucide="shield" class="h-4 w-4"></i>
-                            Seguridad
-                        </h4>
-                        <p class="text-xs leading-snug text-gray-500">
-                            Actualiza tu contraseña para mantener tu cuenta protegida.
-                        </p>
-                    </div>
-                    <button
-                        id="open-change-password"
-                        type="button"
-                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-aifa-blue/30 bg-white px-4 py-2 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
-                    >
-                        <i data-lucide="key-round" class="h-4 w-4"></i>
-                        Cambiar contraseña
-                    </button>
-                </section>
-                <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-                    <p class="text-xs leading-snug text-gray-500">Gestiona tu sesión desde esta ventana.</p>
-                    <button id="logout-btn-modal" class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100">
-                        <i data-lucide="log-out" class="w-4 h-4"></i>
-                        Cerrar sesión
-                    </button>
-                </div>
-
-            </div>
-        `,
-        actions: [
-            {
-                text: 'Cerrar',
-                handler: () => true
-            }
-        ]
-    });
+    const menuContainer = container;
 
     setTimeout(() => {
-        if (window.lucide) {
-            window.lucide.createIcons();
+        const firstMenuItem = dropdown.querySelector('button, a, [tabindex="0"]');
+        if (firstMenuItem) {
+            firstMenuItem.focus();
+        }
+    }, 0);
+
+    userMenuState.outsideClickHandler = event => {
+        if (menuContainer && menuContainer.contains(event.target)) {
+            return;
         }
 
-        const logoutButton = document.getElementById('logout-btn-modal');
-        if (logoutButton) {
-            logoutButton.addEventListener('click', async () => {
-                try {
-                    const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
-                        title: 'Confirmar cierre de sesión',
-                        confirmText: 'Cerrar sesión',
-                        cancelText: 'Cancelar',
-                        type: 'warning'
-                    });
+        closeUserMenuDropdown();
+    };
 
-                    if (!confirmed) return;
-
-                    ui.hideModal(modalId);
-                    await signOut();
-                    ui.showToast('Sesión cerrada correctamente', 'success');
-
-                    setTimeout(() => {
-                        navigateTo('/login', {}, true);
-                        window.location.reload();
-                    }, 300);
-                } catch (error) {
-                    console.error('Error al cerrar sesión:', error);
-                    ui.showToast('Error al cerrar sesión', 'error');
-                }
-            });
+    userMenuState.escapeHandler = event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeUserMenuDropdown({ focusButton: true });
         }
+    };
 
-        const changePasswordTrigger = document.getElementById('open-change-password');
-        if (changePasswordTrigger) {
-            changePasswordTrigger.addEventListener('click', () => {
-                ui.hideModal(modalId);
+    document.addEventListener('mousedown', userMenuState.outsideClickHandler);
+    document.addEventListener('touchstart', userMenuState.outsideClickHandler);
+    document.addEventListener('keydown', userMenuState.escapeHandler);
+}
 
-                setTimeout(() => {
-                    openChangePasswordModal({
-                        onCancel: () => openUserMenu(),
-                        onSuccess: () => openUserMenu()
-                    });
-                }, 120);
-            });
-        }
-    }, 100);
+function toggleUserMenuDropdown() {
+    if (userMenuState.isOpen) {
+        closeUserMenuDropdown();
+    } else {
+        openUserMenuDropdown();
+    }
 }
 
 
@@ -574,10 +528,69 @@ function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
 
 
 function setupUserMenu() {
-    const button = document.getElementById('user-menu-button');
+    const { button } = getUserMenuElements();
     if (!button) return;
 
-    button.addEventListener('click', openUserMenu);
+    button.addEventListener('click', event => {
+        event.preventDefault();
+        toggleUserMenuDropdown();
+    });
+
+    button.addEventListener('keydown', event => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openUserMenuDropdown();
+        }
+
+        if (event.key === 'Escape' && userMenuState.isOpen) {
+            event.preventDefault();
+            closeUserMenuDropdown({ focusButton: true });
+        }
+    });
+
+    const changePasswordButton = document.getElementById('user-menu-change-password');
+    if (changePasswordButton) {
+        changePasswordButton.addEventListener('click', event => {
+            event.preventDefault();
+            closeUserMenuDropdown();
+
+            setTimeout(() => {
+                openChangePasswordModal();
+            }, 50);
+        });
+    }
+
+    const signOutButton = document.getElementById('user-menu-signout');
+    if (signOutButton) {
+        signOutButton.addEventListener('click', async event => {
+            event.preventDefault();
+            closeUserMenuDropdown();
+
+            try {
+                const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
+                    title: 'Confirmar cierre de sesión',
+                    confirmText: 'Cerrar sesión',
+                    cancelText: 'Cancelar',
+                    type: 'warning'
+                });
+
+                if (!confirmed) {
+                    return;
+                }
+
+                await signOut();
+                ui.showToast('Sesión cerrada correctamente', 'success');
+
+                setTimeout(() => {
+                    navigateTo('/login', {}, true);
+                    window.location.reload();
+                }, 300);
+            } catch (error) {
+                console.error('Error al cerrar sesión:', error);
+                ui.showToast('Error al cerrar sesión', 'error');
+            }
+        });
+    }
 }
 
 // =====================================================
