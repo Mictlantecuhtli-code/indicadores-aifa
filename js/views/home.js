@@ -462,10 +462,23 @@ function setupEventListeners() {
  * Configurar auto-refresh de datos
  */
 function setupAutoRefresh() {
-    // Refresh automático cada 5 minutos
-    setInterval(async () => {
-        if (document.visibilityState === 'visible') {
-            await refreshDataSilently();
+    // Limpiar interval anterior si existe
+    if (window.homeRefreshInterval) {
+        clearInterval(window.homeRefreshInterval);
+    }
+    
+    // Refresh automático cada 5 minutos, solo si hay sesión y ventana visible
+    window.homeRefreshInterval = setInterval(async () => {
+        if (document.visibilityState === 'visible' && appState.session) {
+            try {
+                await refreshDataSilently();
+            } catch (error) {
+                console.error('❌ Error en auto-refresh de home:', error);
+                // Si hay error de autenticación, detener refresh
+                if (error.message?.includes('auth') || error.code === 'PGRST301') {
+                    clearInterval(window.homeRefreshInterval);
+                }
+            }
         }
     }, 5 * 60 * 1000);
 }
