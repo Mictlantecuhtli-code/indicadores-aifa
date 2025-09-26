@@ -1523,6 +1523,9 @@ async function setupSupabase() {
         notifyAuthListeners('INITIAL_SESSION', appState.session);
 
         appState.initialized = true;
+        
+        // Iniciar verificación periódica de token
+        startTokenHealthCheck();
 
         if (DEBUG.enabled) {
             console.log('✅ Supabase inicializado correctamente');
@@ -1660,4 +1663,42 @@ export function cleanupResources() {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('beforeunload', handleBeforeUnload);
     window.removeEventListener('pagehide', handlePageHide);
+}
+
+/**
+ * Verificar estado del token periódicamente
+ */
+function startTokenHealthCheck() {
+    setInterval(async () => {
+        if (appState.session && document.visibilityState === 'visible') {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error || !session) {
+                    console.warn('⚠️ Token expirado o inválido');
+                    
+                    // Intentar refrescar el token una vez
+                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                    
+                    if (refreshError || !refreshData.session) {
+                        console.error('❌ No se pudo refrescar el token:', refreshError);
+                        
+                        // Limpiar estado y redirigir
+                        appState.session = null;
+                        appState.user = null;
+                        appState.profile = null;
+                        
+                        if (window.router?.navigateTo) {
+                            window.router.navigateTo('/login', { 
+                                message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.', 
+                                type: 'warning' 
+                            }, true);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error en verificación de token:', error);
+            }
+        }
+    }, 2 * 60 * 1000); // Cada 2 minutos
 }
