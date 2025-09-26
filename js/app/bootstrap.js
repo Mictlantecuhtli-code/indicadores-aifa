@@ -863,3 +863,18 @@ function setupSessionMonitoring() {
         }
     });
 }
+/**
+ * Limpiar recursos al cerrar/recargar la página
+ */
+window.addEventListener('beforeunload', () => {
+    // Limpiar todos los intervals
+    if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
+    if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
+    if (window.areaRefreshInterval) clearInterval(window.areaRefreshInterval);
+    if (window.visualizacionRefreshInterval) clearInterval(window.visualizacionRefreshInterval);
+    
+    // Guardar timestamp de última actividad
+    if (appState.session) {
+        sessionStorage.setItem('aifa-last-activity', Date.now().toString());
+    }
+});
