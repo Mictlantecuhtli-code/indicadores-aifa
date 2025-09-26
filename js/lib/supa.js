@@ -1573,10 +1573,6 @@ initSupabase().catch(console.error);
 // =====================================================
 // MANEJO DE VISIBILIDAD Y FOCUS
 // =====================================================
-
-let isHandlingVisibilityChange = false;
-let visibilityChangeTimeout = null;
-
 /**
  * Configurar handlers de visibilidad
  */
