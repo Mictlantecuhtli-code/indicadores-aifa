@@ -110,11 +110,11 @@
   <!-- Header -->
   <header class="bg-white shadow-sm border-b">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center h-16">
+      <div class="flex justify-between items-center py-4">
         <!-- Logo y título -->
         <div class="flex items-center space-x-4">
           <div class="flex-shrink-0">
-            <img src="assets/AIFA_Logo.png" alt="Logo AIFA" class="h-14 w-auto sm:h-16" 
+            <img src="assets/AIFA_Logo.png" alt="Logo AIFA" class="h-16 w-auto sm:h-20"
                  onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iOCIgZmlsbD0iIzFFNDBBRiIvPgo8cGF0aCBkPSJNMTIgMzZIMzZWMTJIMTJWMzZaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz4KPHA+dGggZD0iTTE4IDI0TDI0IDE4TDMwIDI0IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K';">
           </div>
           <div>
@@ -126,7 +126,7 @@
         </div>
         
         <!-- Navegación -->
-        <nav class="hidden sm:flex items-center space-x-4">
+        <nav id="main-nav" hidden class="flex flex-wrap items-center gap-2 sm:gap-4" aria-hidden="true">
           <button id="nav-home" class="nav-button flex items-center gap-2 px-3 py-2 rounded-lg text-gray-600 bg-white hover:bg-gray-100">
             <i data-lucide="home" class="w-4 h-4"></i><span>Inicio</span>
           </button>

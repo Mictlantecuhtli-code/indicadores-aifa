@@ -25,6 +25,16 @@ function getRoleLabel(role) {
     return ROLE_NAMES[role] || role || 'Sin rol';
 }
 
+function escapeHTML(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function exposeGlobals() {
     window.ui = ui;
     window.router = {
@@ -107,6 +117,16 @@ function updateUserHeader() {
     }
 }
 
+function updateNavigationVisibility() {
+    const navigation = document.getElementById('main-nav');
+    if (!navigation) return;
+
+    const shouldShowNav = isAuthenticated();
+    navigation.hidden = !shouldShowNav;
+    navigation.setAttribute('aria-hidden', shouldShowNav ? 'false' : 'true');
+
+}
+
 async function openUserMenu() {
     if (!appState.user) {
         navigateTo('/login');
@@ -114,15 +134,6 @@ async function openUserMenu() {
     }
 
     const profile = appState.profile || await getCurrentProfile();
-    const escapeHTML = (value) => {
-        if (value === null || value === undefined) return '';
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    };
 
     const displayName = escapeHTML(
         profile?.nombre_completo?.trim() ||
@@ -187,63 +198,14 @@ async function openUserMenu() {
                             Actualiza tu contraseña para mantener tu cuenta protegida.
                         </p>
                     </div>
-                    <form id="change-password-form" class="space-y-3" novalidate>
-                        <div>
-                            <label for="current-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Contraseña actual</label>
-                            <input
-                                id="current-password"
-                                name="currentPassword"
-                                type="password"
-                                autocomplete="current-password"
-                                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label for="new-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Nueva contraseña</label>
-                            <input
-                                id="new-password"
-                                name="newPassword"
-                                type="password"
-                                autocomplete="new-password"
-                                minlength="${passwordMinLength}"${passwordMaxLengthAttr}
-                                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label for="confirm-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Confirmar nueva contraseña</label>
-                            <input
-                                id="confirm-password"
-                                name="confirmPassword"
-                                type="password"
-                                autocomplete="new-password"
-                                minlength="${passwordMinLength}"${passwordMaxLengthAttr}
-                                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
-                                required
-                            />
-                        </div>
-                        <p id="change-password-feedback" class="text-xs hidden"></p>
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p class="text-xs leading-snug text-gray-500 sm:max-w-xs">
-                                ${passwordRequirementsMessage}
-                            </p>
-                            <button
-                                id="change-password-submit"
-                                type="submit"
-                                class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-aifa-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
-                            >
-                                <span id="change-password-submit-content" class="inline-flex items-center gap-2">
-                                    <i data-lucide="key-round" class="h-4 w-4"></i>
-                                    Actualizar contraseña
-                                </span>
-                                <span id="change-password-submit-loading" class="hidden items-center gap-2">
-                                    <i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i>
-                                    Guardando...
-                                </span>
-                            </button>
-                        </div>
-                    </form>
+                    <button
+                        id="open-change-password"
+                        type="button"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-aifa-blue/30 bg-white px-4 py-2 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
+                    >
+                        <i data-lucide="key-round" class="h-4 w-4"></i>
+                        Cambiar contraseña
+                    </button>
                 </section>
                 <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
                     <p class="text-xs leading-snug text-gray-500">Gestiona tu sesión desde esta ventana.</p>
@@ -259,7 +221,6 @@ async function openUserMenu() {
             {
                 text: 'Cerrar',
                 handler: () => true
-
             }
         ]
     });
@@ -295,6 +256,111 @@ async function openUserMenu() {
                     ui.showToast('Error al cerrar sesión', 'error');
                 }
             });
+        }
+        const changePasswordTrigger = document.getElementById('open-change-password');
+        if (changePasswordTrigger) {
+            changePasswordTrigger.addEventListener('click', () => {
+                ui.hideModal(modalId);
+
+                setTimeout(() => {
+                    openChangePasswordModal({
+                        onCancel: () => openUserMenu(),
+                        onSuccess: () => openUserMenu()
+                    });
+                }, 120);
+            });
+        }
+    }, 100);
+}
+
+
+function openChangePasswordModal({ onSuccess = null, onCancel = null } = {}) {
+    const passwordRules = VALIDATION?.password || {};
+    const passwordMinLength = passwordRules?.minLength || 8;
+    const passwordMaxLengthAttr = passwordRules?.maxLength ? ` maxlength="${passwordRules.maxLength}"` : '';
+    const passwordRequirementsMessage = escapeHTML(
+        passwordRules?.message || 'La contraseña debe cumplir con los requisitos de seguridad.'
+    );
+
+    let wasSuccessful = false;
+
+    const modalId = ui.showModal({
+        title: 'Cambiar contraseña',
+        content: `
+            <form id="change-password-form" class="space-y-3" novalidate>
+                <div>
+                    <label for="current-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Contraseña actual</label>
+                    <input
+                        id="current-password"
+                        name="currentPassword"
+                        type="password"
+                        autocomplete="current-password"
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <div>
+                    <label for="new-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Nueva contraseña</label>
+                    <input
+                        id="new-password"
+                        name="newPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <div>
+                    <label for="confirm-password" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Confirmar nueva contraseña</label>
+                    <input
+                        id="confirm-password"
+                        name="confirmPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="${passwordMinLength}"${passwordMaxLengthAttr}
+                        class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/20"
+                        required
+                    />
+                </div>
+                <p id="change-password-feedback" class="text-xs hidden"></p>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs leading-snug text-gray-500 sm:max-w-xs">
+                        ${passwordRequirementsMessage}
+                    </p>
+                    <button
+                        id="change-password-submit"
+                        type="submit"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-aifa-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-aifa-blue sm:w-auto"
+                    >
+                        <span id="change-password-submit-content" class="inline-flex items-center gap-2">
+                            <i data-lucide="key-round" class="h-4 w-4"></i>
+                            Actualizar contraseña
+                        </span>
+                        <span id="change-password-submit-loading" class="hidden items-center gap-2">
+                            <i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i>
+                            Guardando...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        `,
+        actions: [
+            {
+                text: 'Cancelar',
+                handler: () => true
+            }
+        ],
+        onClose: () => {
+            if (!wasSuccessful && typeof onCancel === 'function') {
+                setTimeout(() => onCancel(), 0);
+            }
+        }
+    });
+
+    setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
         }
 
         const changePasswordForm = document.getElementById('change-password-form');
@@ -362,8 +428,6 @@ async function openUserMenu() {
                 const newPassword = newPasswordInput.value;
                 const confirmPassword = confirmPasswordInput.value;
 
-                const passwordRules = VALIDATION?.password || {};
-
                 if (!currentPassword.trim()) {
                     currentPasswordInput.classList.add('input-error');
                     currentPasswordInput.focus();
@@ -420,6 +484,14 @@ async function openUserMenu() {
                     changePasswordForm.reset();
                     inputs.forEach(input => input.classList.remove('input-error'));
                     ui.showToast('Contraseña actualizada correctamente', 'success');
+                    wasSuccessful = true;
+                    setTimeout(() => {
+                        ui.hideModal(modalId);
+                        if (typeof onSuccess === 'function') {
+                            onSuccess();
+                        }
+                    }, 600);
+
                 } catch (error) {
                     console.error('Error al cambiar contraseña:', error);
                     const message = error?.message || 'No se pudo actualizar la contraseña.';
@@ -431,6 +503,7 @@ async function openUserMenu() {
         }
     }, 100);
 }
+
 
 function setupUserMenu() {
     const button = document.getElementById('user-menu-button');
@@ -456,9 +529,11 @@ async function bootstrap() {
 
         await initSupabase();
         updateUserHeader();
+        updateNavigationVisibility();
 
         onAuthStateChange(() => {
             updateUserHeader();
+            updateNavigationVisibility();
         });
 
         if (!window.location.hash) {
