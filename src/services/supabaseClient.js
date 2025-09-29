@@ -92,6 +92,7 @@ export async function getDirectorsHighlights() {
   try {
     return await fetchFromRelations(
       ['v_indicadores_criticos', 'vw_indicadores_criticos', 'vw_indicadores_alertas', 'vw_indicadores_alerta'],
+
       relation => supabase.from(relation).select('*')
     );
   } catch (error) {
@@ -139,7 +140,6 @@ export async function getDirectorsHighlights() {
   return data ?? [];
 }
 
-export async function getIndicators() {
   return fetchFromRelations(['v_indicadores_area', 'vw_indicadores_area', 'vw_indicadores_detalle'], relation =>
     supabase
       .from(relation)
@@ -151,6 +151,7 @@ export async function getIndicators() {
 
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
+
   const data = await fetchFromRelations(['v_mediciones_historico', 'mediciones'], relation =>
     supabase
       .from(relation)
@@ -160,6 +161,7 @@ export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
       .order('mes', { ascending: true })
       .limit(limit)
   );
+
 
   return (data ?? []).map(normalizeMeasurement);
 }

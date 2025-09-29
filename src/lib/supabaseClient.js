@@ -150,6 +150,7 @@ export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
       .limit(limit)
   );
 
+
   return (data ?? []).map(normalizeMeasurement);
 }
 
