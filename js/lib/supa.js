@@ -4,11 +4,69 @@
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, isDevelopment } from '../config.js';
 
-// Usar el cliente de Supabase que fue inicializado en config.js
-export const supabase = window.supabaseClient;
+// Mantener referencia compartida del cliente Supabase
+export let supabase = typeof window !== 'undefined' ? window.supabaseClient ?? null : null;
 
-// Verificar que Supabase esté disponible
-if (!supabase) {
+let supabaseAvailabilityLogged = false;
+
+function recreateSupabaseClient(context = 'recreateSupabaseClient') {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    if (!window.supabase?.createClient) {
+        if (!supabaseAvailabilityLogged) {
+            console.error('❌ Supabase no está disponible en la ventana. Asegúrate de cargar la librería antes de inicializar.', context);
+            supabaseAvailabilityLogged = true;
+        }
+        return null;
+    }
+
+    try {
+        const authOptions = {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+            storageKey: 'aifa-auth-token',
+            flowType: 'pkce'
+        };
+
+        if (typeof window.localStorage !== 'undefined') {
+            authOptions.storage = window.localStorage;
+        }
+
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: authOptions });
+        window.supabaseClient = supabase;
+
+        if (DEBUG.enabled) {
+            console.info(`♻️ Cliente Supabase recreado (${context})`);
+        }
+
+        return supabase;
+    } catch (error) {
+        console.error('❌ Error al recrear el cliente de Supabase:', error);
+        return null;
+    }
+}
+
+export function ensureSupabaseClient(context = 'ensureSupabaseClient') {
+    if (supabase?.auth?.getSession) {
+        return supabase;
+    }
+
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    if (window.supabaseClient?.auth?.getSession) {
+        supabase = window.supabaseClient;
+        return supabase;
+    }
+
+    return recreateSupabaseClient(context);
+}
+
+if (!ensureSupabaseClient('initial-load')) {
     console.error('❌ Error: Cliente Supabase no está disponible. Verifica que config.js se haya ejecutado correctamente.');
     throw new Error('Supabase client not available');
 }
@@ -379,7 +437,14 @@ export async function callRPC(functionName, params = {}) {
  */
 async function refreshSession() {
     try {
-        const { data, error } = await supabase.auth.refreshSession();
+        const client = ensureSupabaseClient('refreshSession');
+
+        if (!client?.auth?.refreshSession) {
+            console.warn('⚠️ Cliente de Supabase no disponible para refrescar la sesión');
+            return null;
+        }
+
+        const { data, error } = await client.auth.refreshSession();
 
         if (error || !data?.session) {
             if (DEBUG.enabled) {
@@ -399,7 +464,17 @@ export async function getCurrentSession(options = {}) {
     const { allowRefresh = false, silent = false } = options;
 
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const client = ensureSupabaseClient('getCurrentSession');
+
+        if (!client?.auth?.getSession) {
+            if (!silent) {
+                console.warn('⚠️ Cliente de Supabase no disponible para obtener la sesión actual');
+            }
+            return appState.session;
+        }
+
+        const { data: { session }, error } = await client.auth.getSession();
+
 
         if (error) {
             console.error('❌ Error al obtener sesión:', error);
@@ -1536,8 +1611,14 @@ let visibilityChangeHandler = null;
 
 async function setupSupabase() {
     try {
+        const activeSupabase = ensureSupabaseClient('setupSupabase');
+
+        if (!activeSupabase) {
+            throw new Error('Supabase client not initialized');
+        }
+
         // Configurar listener de cambios de autenticación PRIMERO
-        supabase.auth.onAuthStateChange(async (event, session) => {
+        activeSupabase.auth.onAuthStateChange(async (event, session) => {
             // NO procesar eventos mientras se maneja cambio de visibilidad
             if (isHandlingVisibilityChange) {
                 if (DEBUG.enabled) console.log('⏭️ Ignorando evento de auth durante cambio de visibilidad:', event);
@@ -1673,7 +1754,6 @@ function setupVisibilityHandlers() {
                             // NO notificar a listeners para evitar re-renderizados
                         }
                         setupGlobalAutoRefresh();
-
                     } else if (previousSession) {
                         // Confirmar la pérdida real de sesión antes de notificar
                         appState.user = null;

@@ -762,6 +762,7 @@ function handlePageHide(event) {
         clearInterval(window.autoRefreshInterval);
     }
 }
+
 async function handleStorageEvent(event) {
     if (event.storageArea !== localStorage) return;
     if (event.key !== 'supabase.auth.token') return;
@@ -785,6 +786,7 @@ async function handleStorageEvent(event) {
     appState.session = null;
     appState.user = null;
     appState.profile = null;
+
 
     navigateTo('/login', {
         message: 'Sesión cerrada en otra ventana',
