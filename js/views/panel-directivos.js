@@ -6,6 +6,12 @@ import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
 import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica, normalizarSerieTemporal } from '../lib/charts.js';
 // Estado del panel de directivos
+const ESCENARIO_LABELS = {
+    bajo: 'Bajo',
+    medio: 'Mediano',
+    alto: 'Alto'
+};
+
 const panelState = {
     userProfile: null,
     indicadorSeleccionado: null,
@@ -552,12 +558,28 @@ async function cargarDatosReales(indicador) {
     }
 }
 
+function normalizarEscenarioClave(escenario, fallback = 'MEDIO') {
+    const raw = (escenario || '').toString().trim().toUpperCase();
+
+    if (!raw) {
+        return fallback;
+    }
+
+    if (raw === 'MEDIANO') {
+        return 'MEDIO';
+    }
+
+    return ['BAJO', 'MEDIO', 'ALTO'].includes(raw) ? raw : fallback;
+}
+
 async function cargarDatosMetas(indicador, escenario) {
     try {
         if (!indicador) {
+
+            const escenarioSlug = escenario ? normalizarEscenarioClave(escenario, 'MEDIO').toLowerCase() : null;
             panelState.datosMetas = [];
             panelState.metaContext = {
-                escenario: escenario ? escenario.toLowerCase() : null,
+                escenario: escenarioSlug,
                 anio: null,
                 mes: null,
                 coincideConMedicion: false
@@ -565,7 +587,8 @@ async function cargarDatosMetas(indicador, escenario) {
             return;
         }
 
-        const escenarioKey = (escenario || 'medio').toString().trim().toUpperCase();
+
+        const escenarioKey = normalizarEscenarioClave(escenario, 'MEDIO');
         const escenarioSlug = escenarioKey.toLowerCase();
 
         panelState.metaContext = {
@@ -579,7 +602,7 @@ async function cargarDatosMetas(indicador, escenario) {
             select: 'anio, mes, valor, escenario, fecha_captura, fecha_ultima_edicion',
             filters: {
                 indicador_id: indicador.id,
-                escenario: { operator: 'ilike', value: escenarioKey }
+                escenario: escenarioKey
             },
             orderBy: [
                 { column: 'anio', ascending: true },
@@ -595,7 +618,7 @@ async function cargarDatosMetas(indicador, escenario) {
 
                 return {
                     ...meta,
-                    escenario: (meta?.escenario || escenarioKey).toString().trim().toUpperCase(),
+                    escenario: normalizarEscenarioClave(meta?.escenario || escenarioKey, escenarioKey),
                     anio: Number.isFinite(anio) ? anio : null,
                     mes: Number.isFinite(mes) ? mes : null,
                     valor
@@ -649,12 +672,11 @@ async function cargarDatosMetas(indicador, escenario) {
         console.error('❌ Error al cargar metas:', error);
         panelState.datosMetas = [];
         panelState.metaContext = {
-            escenario: escenario ? escenario.toLowerCase() : null,
+            escenario: escenario ? normalizarEscenarioClave(escenario, 'MEDIO').toLowerCase() : null,
             anio: null,
             mes: null,
             coincideConMedicion: false
         };
-
         throw error;
     }
 }
@@ -945,7 +967,7 @@ function generarComparativoAnual() {
 
 function generarComparativoMeta(escenario) {
     const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const nombreEscenario = escenario.charAt(0).toUpperCase() + escenario.slice(1);
+    const nombreEscenario = ESCENARIO_LABELS[escenario] || (escenario.charAt(0).toUpperCase() + escenario.slice(1));
 
     if (!panelState.datosMetas.length) {
         return '<p class="text-gray-500">No hay metas capturadas para este escenario.</p>';
@@ -1080,9 +1102,8 @@ async function renderizarGrafica(tipo = 'comparativa') {
                 : panelState.opcionSeleccionada.includes('medio') ? 'medio'
                     : 'alto');
 
-        const escenarioNombre = escenarioSlug === 'bajo' ? 'Escenario Bajo'
-            : escenarioSlug === 'medio' ? 'Escenario Mediano'
-            : 'Escenario Alto';
+        const nombreEscenario = ESCENARIO_LABELS[escenarioSlug] || (escenarioSlug.charAt(0).toUpperCase() + escenarioSlug.slice(1));
+        const escenarioNombre = `Escenario ${nombreEscenario}`;
 
         const anioMeta = metaContext.anio ?? ultimoMes?.año ?? new Date().getFullYear();
 
@@ -1090,6 +1111,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
             anio: anioMeta,
             escenario: escenarioSlug,
             titulo: `${indicador.nombre} - Real vs Meta (${escenarioNombre})`,
+            escenarioLabel: `Meta ${escenarioNombre}`,
             unidadMedida: indicador.unidad_medida || 'Unidades',
             nombreIndicador: indicador.nombre
         });
