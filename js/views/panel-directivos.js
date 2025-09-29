@@ -852,6 +852,49 @@ function obtenerUltimoTrimestreCompleto() {
 // GENERACIÓN DE HTML DE RESULTADOS
 // =====================================================
 
+function crearSeccionGrafica(titulo, { incluirToggleAnios = true } = {}) {
+    const toggleAnios = incluirToggleAnios
+        ? `
+            <label class="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
+                <span>Mostrar últimos 4 años</span>
+            </label>
+        `
+        : '';
+
+    return `
+        <div class="border-t pt-4 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <h4 class="font-semibold text-gray-900">${titulo}</h4>
+                <div class="flex flex-wrap items-center gap-2">
+                    ${toggleAnios}
+                    <div class="inline-flex overflow-hidden rounded-lg border border-gray-200" role="group">
+                        <button type="button" data-chart-type="line" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('line')">
+                            Líneas
+                        </button>
+                        <button type="button" data-chart-type="bar" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('bar')">
+                            Barras
+                        </button>
+                    </div>
+                    <button type="button" data-action="toggle-histograma" class="toggle-hist-btn px-3 py-1 text-sm font-medium border border-gray-200 rounded-lg bg-white text-gray-700 transition-colors" onclick="window.panelDirectivos.toggleHistograma()">
+                        Histograma
+                    </button>
+                </div>
+            </div>
+            <div class="h-80">
+                <canvas id="grafica-container"></canvas>
+            </div>
+            <div id="histograma-wrapper" class="hidden border-t pt-4 space-y-3">
+                <h5 class="font-semibold text-gray-900">Histograma de distribución (todos los registros)</h5>
+                <p id="histograma-empty" class="hidden text-sm text-gray-500">No hay datos suficientes para generar el histograma.</p>
+                <div id="histograma-canvas-wrapper" class="h-64">
+                    <canvas id="histograma-container"></canvas>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function generarComparativoMensual() {
     const ultimoMes = obtenerUltimoMesConDatos();
     if (!ultimoMes) return '<p class="text-gray-500">No hay datos disponibles</p>';
@@ -898,39 +941,7 @@ function generarComparativoMensual() {
                 </table>
             </div>
             
-            <div class="border-t pt-4 space-y-4">
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Mensual</h4>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <label class="flex items-center gap-2 text-sm text-gray-600">
-                            <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                            <span>Mostrar últimos 4 años</span>
-                        </label>
-                        <div class="inline-flex overflow-hidden rounded-lg border border-gray-200" role="group">
-                            <button type="button" data-chart-type="line" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('line')">
-                                Líneas
-                            </button>
-                            <button type="button" data-chart-type="bar" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('bar')">
-                                Barras
-                            </button>
-                        </div>
-                        <button type="button" data-action="toggle-histograma" class="toggle-hist-btn px-3 py-1 text-sm font-medium border border-gray-200 rounded-lg bg-white text-gray-700 transition-colors" onclick="window.panelDirectivos.toggleHistograma()">
-                            Histograma
-                        </button>
-                    </div>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-                <div id="histograma-wrapper" class="hidden border-t pt-4 space-y-3">
-                    <h5 class="font-semibold text-gray-900">Histograma de distribución (todos los registros)</h5>
-                    <p id="histograma-empty" class="hidden text-sm text-gray-500">No hay datos suficientes para generar el histograma.</p>
-                    <div id="histograma-canvas-wrapper" class="h-64">
-                        <canvas id="histograma-container"></canvas>
-                    </div>
-                </div>
-            </div>
-            
+           ${crearSeccionGrafica('Gráfica Comparativa Mensual')}
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <i data-lucide="download" class="w-4 h-4"></i>
@@ -994,40 +1005,8 @@ function generarComparativoTrimestral() {
                 </table>
             </div>
             
-            <div class="border-t pt-4 space-y-4">
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Trimestral</h4>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <label class="flex items-center gap-2 text-sm text-gray-600">
-                            <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                            <span>Mostrar últimos 4 años</span>
-                        </label>
-                        <div class="inline-flex overflow-hidden rounded-lg border border-gray-200" role="group">
-                            <button type="button" data-chart-type="line" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('line')">
-                                Líneas
-                            </button>
-                            <button type="button" data-chart-type="bar" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('bar')">
-                                Barras
-                            </button>
-                        </div>
-                        <button type="button" data-action="toggle-histograma" class="toggle-hist-btn px-3 py-1 text-sm font-medium border border-gray-200 rounded-lg bg-white text-gray-700 transition-colors" onclick="window.panelDirectivos.toggleHistograma()">
-                            Histograma
-                        </button>
-                    </div>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-                <div id="histograma-wrapper" class="hidden border-t pt-4 space-y-3">
-                    <h5 class="font-semibold text-gray-900">Histograma de distribución (todos los registros)</h5>
-                    <p id="histograma-empty" class="hidden text-sm text-gray-500">No hay datos suficientes para generar el histograma.</p>
-                    <div id="histograma-canvas-wrapper" class="h-64">
-                        <canvas id="histograma-container"></canvas>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="flex gap-3 pt-4 border-t">
+           ${crearSeccionGrafica('Gráfica Comparativa Trimestral')}
+               <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <i data-lucide="download" class="w-4 h-4"></i>
                     Descargar
@@ -1090,38 +1069,7 @@ function generarComparativoAnual() {
                 </table>
             </div>
             
-            <div class="border-t pt-4 space-y-4">
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Anual</h4>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <label class="flex items-center gap-2 text-sm text-gray-600">
-                            <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                            <span>Mostrar últimos 4 años</span>
-                        </label>
-                        <div class="inline-flex overflow-hidden rounded-lg border border-gray-200" role="group">
-                            <button type="button" data-chart-type="line" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('line')">
-                                Líneas
-                            </button>
-                            <button type="button" data-chart-type="bar" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('bar')">
-                                Barras
-                            </button>
-                        </div>
-                        <button type="button" data-action="toggle-histograma" class="toggle-hist-btn px-3 py-1 text-sm font-medium border border-gray-200 rounded-lg bg-white text-gray-700 transition-colors" onclick="window.panelDirectivos.toggleHistograma()">
-                            Histograma
-                        </button>
-                    </div>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-                <div id="histograma-wrapper" class="hidden border-t pt-4 space-y-3">
-                    <h5 class="font-semibold text-gray-900">Histograma de distribución (todos los registros)</h5>
-                    <p id="histograma-empty" class="hidden text-sm text-gray-500">No hay datos suficientes para generar el histograma.</p>
-                    <div id="histograma-canvas-wrapper" class="h-64">
-                        <canvas id="histograma-container"></canvas>
-                    </div>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Comparativa Anual')}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -1230,12 +1178,7 @@ function generarComparativoMeta(escenario) {
                 </table>
             </div>
             
-            <div class="border-t pt-4">
-                <h4 class="font-semibold text-gray-900 mb-4">Gráfica Real vs Meta</h4>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Real vs Meta', { incluirToggleAnios: false })}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -1288,9 +1231,14 @@ async function renderizarGrafica(tipo = 'comparativa') {
             titulo: `${indicador.nombre} - Real vs Meta (${escenarioNombre})`,
             escenarioLabel: `Meta ${escenarioNombre}`,
             unidadMedida: indicador.unidad_medida || 'Unidades',
-            nombreIndicador: indicador.nombre
+            nombreIndicador: indicador.nombre,
+            tipo: panelState.chartType
         });
         actualizarControlesGrafica();
+        if (panelState.histogramaVisible) {
+            renderizarHistograma();
+        }
+
         return;
     }
 

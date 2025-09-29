@@ -271,7 +271,8 @@ async function crearGraficaMeta(canvasId, datosReales, datosMetas, opciones = {}
         anio = new Date().getFullYear(),
         escenario = 'medio',
         titulo = 'Real vs Meta',
-        escenarioLabel = null
+        escenarioLabel = null,
+        tipo = 'line'
     } = opciones;
 
     try {
@@ -301,14 +302,56 @@ async function crearGraficaMeta(canvasId, datosReales, datosMetas, opciones = {}
         const etiquetaEscenario = escenarioLabel
             || `Meta ${escenario.charAt(0).toUpperCase()}${escenario.slice(1)}`;
 
+        const chartType = tipo === 'bar' ? 'bar' : 'line';
+        const esBarra = chartType === 'bar';
+        const colorEscenario = obtenerColorEscenario(escenario);
+
+        const datasetReal = esBarra
+            ? {
+                type: 'bar',
+                label: `Real ${anio}`,
+                data: dataReal,
+                backgroundColor: obtenerColorConTransparencia('#3B82F6', 0.65),
+                borderColor: '#3B82F6',
+                borderWidth: 1
+            }
+            : {
+                label: `Real ${anio}`,
+                data: dataReal,
+                borderColor: '#3B82F6',
+                backgroundColor: obtenerColorConTransparencia('#3B82F6', 0.1),
+                borderWidth: 3,
+                tension: 0.25,
+                pointRadius: 3,
+                fill: false
+            };
+
+        const datasetMeta = esBarra
+            ? {
+                type: 'bar',
+                label: etiquetaEscenario,
+                data: dataMeta,
+                backgroundColor: obtenerColorConTransparencia(colorEscenario, 0.45),
+                borderColor: colorEscenario,
+                borderWidth: 1
+            }
+            : {
+                label: etiquetaEscenario,
+                data: dataMeta,
+                borderColor: colorEscenario,
+                backgroundColor: obtenerColorConTransparencia(colorEscenario, 0.05),
+                borderDash: [10, 5],
+                borderWidth: 2,
+                tension: 0.15,
+                pointRadius: 0,
+                fill: false
+            };
+
         chartInstances.meta = new Chart(ctx, {
-            type: 'line',
+            type: chartType,
             data: {
                 labels: MESES,
-                datasets: [
-                    { label: `Real ${anio}`, data: dataReal, borderColor: '#3B82F6', borderWidth: 3 },
-                    { label: etiquetaEscenario, data: dataMeta, borderColor: obtenerColorEscenario(escenario), borderDash: [10, 5] }
-                ]
+                datasets: [datasetReal, datasetMeta]
             },
             options: { ...CHART_CONFIGS.base, plugins: { ...CHART_CONFIGS.base.plugins, title: { display: true, text: titulo } } }
         });
