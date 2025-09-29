@@ -139,11 +139,60 @@ async function cargarDatosAnalisis() {
 
 async function cargarMetas() {
     try {
-        // TODO: Implementar cuando exista tabla de metas
-        // Por ahora usar meta_anual dividida entre 12
-        analisisState.datosMetas = [];
+        // Detectar el escenario desde la opción de análisis
+        const opcion = analisisState.opcionAnalisis;
+        let escenario = 'MEDIO'; // Default
         
-        if (analisisState.indicadorData.meta_anual && analisisState.ultimoMesDatos) {
+        if (opcion.includes('bajo')) {
+            escenario = 'BAJO';
+        } else if (opcion.includes('medio')) {
+            escenario = 'MEDIO';
+        } else if (opcion.includes('alto')) {
+            escenario = 'ALTO';
+        }
+        
+        if (DEBUG.enabled) {
+            console.log(`🎯 Cargando metas para escenario: ${escenario}`);
+        }
+        
+        // Consultar la tabla indicador_metas
+        const { data } = await selectData('indicador_metas', {
+            select: 'anio, mes, valor, escenario, fecha_captura, fecha_ultima_edicion',
+            filters: {
+                indicador_id: analisisState.indicadorId,
+                escenario: escenario
+            },
+            orderBy: [
+                { column: 'anio', ascending: true },
+                { column: 'mes', ascending: true }
+            ]
+        });
+        
+        // Normalizar y mapear los datos
+        analisisState.datosMetas = (data || [])
+            .map(meta => {
+                const anio = Number(meta?.anio);
+                const mes = Number(meta?.mes);
+                const valor = meta?.valor !== null && meta?.valor !== undefined ? Number(meta.valor) : null;
+                
+                return {
+                    ...meta,
+                    anio: Number.isFinite(anio) ? anio : null,
+                    mes: Number.isFinite(mes) ? mes : null,
+                    valor: Number.isFinite(valor) ? valor : null,
+                    fecha: `${anio}-${String(mes).padStart(2, '0')}-01`
+                };
+            })
+            .filter(meta => Number.isFinite(meta.anio) && Number.isFinite(meta.mes) && meta.valor !== null);
+        
+        if (DEBUG.enabled) {
+            console.log(`✅ ${analisisState.datosMetas.length} metas cargadas para escenario ${escenario}`);
+            console.log('Metas:', analisisState.datosMetas);
+        }
+        
+        // Si no hay metas en indicador_metas, usar meta_anual como fallback
+        if (analisisState.datosMetas.length === 0 && analisisState.indicadorData.meta_anual && analisisState.ultimoMesDatos) {
+            console.warn('⚠️ No hay metas en indicador_metas, usando meta_anual como fallback');
             const metaMensual = analisisState.indicadorData.meta_anual / 12;
             const anioActual = analisisState.ultimoMesDatos.anio;
             
@@ -152,13 +201,16 @@ async function cargarMetas() {
                     fecha: `${anioActual}-${String(mes).padStart(2, '0')}-01`,
                     valor: metaMensual,
                     mes: mes,
-                    anio: anioActual
+                    anio: anioActual,
+                    escenario: escenario
                 });
             }
         }
         
     } catch (error) {
         console.error('❌ Error al cargar metas:', error);
+        analisisState.datosMetas = [];
+        throw error;
     }
 }
 
