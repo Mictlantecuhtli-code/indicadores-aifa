@@ -18,7 +18,6 @@ export const routes = [
         name: 'home',
         loader: () => import('../views/home.js'),
         requiresAuth: true,
-        navId: 'nav-home',
         title: 'Inicio',
         default: true,
         breadcrumbs: () => [
