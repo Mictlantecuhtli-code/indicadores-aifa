@@ -266,8 +266,21 @@ async function renderRoute(route, resolved, navigationContext = {}) {
             viewModule.render(container, resolved.params, route.query, { signal })
         );
 
+        const renderTimeoutMs = typeof resolved.definition.renderTimeout === 'number'
+            ? resolved.definition.renderTimeout
+            : 20000;
+        const timeoutErrorMessage = resolved.definition.renderTimeoutMessage
+            || 'Timeout al renderizar vista';
+
+        let renderTimeoutId = null;
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout al renderizar vista')), 20000);
+            const timeoutError = new Error(timeoutErrorMessage);
+            timeoutError.name = 'RenderTimeoutError';
+
+            renderTimeoutId = setTimeout(
+                () => reject(timeoutError),
+                renderTimeoutMs
+            );
         });
 
         const abortPromise = signal
@@ -287,7 +300,11 @@ async function renderRoute(route, resolved, navigationContext = {}) {
             promises.push(abortPromise);
         }
 
-        const teardown = await Promise.race(promises);
+        const teardown = await Promise.race(promises).finally(() => {
+            if (renderTimeoutId) {
+                clearTimeout(renderTimeoutId);
+            }
+        });
 
         if (signal?.aborted) {
             if (typeof teardown === 'function') {
@@ -549,6 +566,10 @@ async function handleRouteChange(route) {
             if (DEBUG.enabled) {
                 console.log('⏹️ Navegación abortada:', error.message || error.name);
             }
+        } else if (error?.name === 'RenderTimeoutError' || error?.message?.toLowerCase?.().includes('timeout')) {
+            console.error(`❌ La vista tardó demasiado en cargar (${route.path}):`, error);
+            showToast('La vista está tardando más de lo esperado', 'warning');
+            showErrorPage('Tiempo de espera agotado', error.message || 'La vista tardó demasiado en responder.');
         } else {
             console.error('❌ Error al cambiar de ruta:', error);
             showToast('Error de navegación', 'error');
