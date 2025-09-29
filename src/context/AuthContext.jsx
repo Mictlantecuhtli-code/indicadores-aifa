@@ -34,12 +34,12 @@ export function AuthProvider({ children }) {
       try {
         const { data, error } = await supabase
           .from('perfiles')
-          .select('id, nombre, puesto, rol, avatar_url, usuario:usuarios(email)')
+          .select('id, nombre_completo, puesto, rol, avatar_url, usuario:usuarios(email)')
           .eq('usuario_id', currentSession.user.id)
           .maybeSingle();
 
         if (error) throw error;
-        setProfile(data);
+        setProfile(data ? { ...data, nombre: data.nombre_completo ?? data.nombre } : null);
       } catch (err) {
         console.error('Error cargando perfil', err);
         setProfile(null);

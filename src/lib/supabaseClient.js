@@ -12,40 +12,120 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 
+function isRelationNotFound(error) {
+  return error?.code === '42P01' || /relation .+ does not exist/i.test(error?.message ?? '');
+}
+
+function isFunctionNotFound(error) {
+  return error?.code === '42883' || /function .+ does not exist/i.test(error?.message ?? '');
+}
+
+function normalizeMeasurement(record) {
+  if (!record) return record;
+  return {
+    ...record,
+    escenario: record.escenario ? record.escenario.toUpperCase() : null,
+    fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
+    fecha_actualizacion:
+      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null
+  };
+}
+
+function normalizeTarget(record) {
+  if (!record) return record;
+  return {
+    ...record,
+    escenario: record.escenario ? record.escenario.toUpperCase() : null,
+    fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
+    fecha_actualizacion:
+      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null
+  };
+}
+
+async function fetchFromRelations(relations, builder) {
+  let lastError = null;
+  for (const relation of relations) {
+    const { data, error } = await builder(relation);
+    if (!error) {
+      return data ?? [];
+    }
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+    lastError = error;
+  }
+  if (lastError) {
+    throw lastError;
+  }
+  return [];
+}
+
+function sanitizeScenario(payload) {
+  if (!payload) return payload;
+  if ('escenario' in payload && payload.escenario) {
+    return { ...payload, escenario: payload.escenario.toUpperCase() };
+  }
+  if ('escenario' in payload) {
+    return { ...payload, escenario: null };
+  }
+  return payload;
+}
+
 export async function getDashboardSummary() {
-  const { data, error } = await supabase.from('v_dashboard_resumen').select('*');
-  if (error) throw error;
+  return fetchFromRelations(['vw_dashboard_resumen', 'v_dashboard_resumen'], relation =>
+    supabase.from(relation).select('*')
+  );
+}
+
+export async function getDirectorsHighlights() {
+  try {
+    return await fetchFromRelations(
+      ['vw_indicadores_criticos', 'vw_indicadores_alertas', 'vw_indicadores_alerta', 'v_indicadores_criticos'],
+      relation => supabase.from(relation).select('*')
+    );
+  } catch (error) {
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  const { data, error } = await supabase.rpc('kpi_resumen_directivos');
+  if (error) {
+    if (isFunctionNotFound(error)) return [];
+    throw error;
+  }
   return data ?? [];
 }
 
 export async function getIndicators() {
-  const { data, error } = await supabase
-    .from('v_indicadores_area')
-    .select('*')
-    .order('area_nombre', { ascending: true })
-    .order('nombre', { ascending: true });
-  if (error) throw error;
-  return data ?? [];
+  return fetchFromRelations(['vw_indicadores_area', 'vw_indicadores_detalle', 'v_indicadores_area'], relation =>
+    supabase
+      .from(relation)
+      .select('*')
+      .order('area_nombre', { ascending: true })
+      .order('nombre', { ascending: true })
+  );
 }
 
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
-  const query = supabase
+  if (!indicadorId) return [];
+  const { data, error } = await supabase
     .from('mediciones')
-    .select('id, indicador_id, periodo, anio, mes, valor, escenario, creado_en')
+    .select('*')
     .eq('indicador_id', indicadorId)
     .order('anio', { ascending: true })
     .order('mes', { ascending: true })
     .limit(limit);
 
-  const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(normalizeMeasurement);
 }
 
 export async function getIndicatorTargets(indicadorId, { year } = {}) {
+  if (!indicadorId) return [];
   let query = supabase
     .from('indicador_metas')
-    .select('id, indicador_id, anio, mes, escenario, valor, fecha_captura, fecha_ultima_edicion')
+    .select('*')
     .eq('indicador_id', indicadorId)
     .order('anio', { ascending: true })
     .order('mes', { ascending: true });
@@ -56,32 +136,35 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(normalizeTarget);
 }
 
 export async function saveMeasurement(payload) {
-  const { data, error } = await supabase.from('mediciones').insert(payload).select().single();
+  const sanitized = sanitizeScenario(payload);
+  const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
   if (error) throw error;
-  return data;
+  return normalizeMeasurement(data);
 }
 
 export async function updateMeasurement(id, payload) {
+  const sanitized = sanitizeScenario(payload);
   const { data, error } = await supabase
     .from('mediciones')
-    .update(payload)
+    .update(sanitized)
     .eq('id', id)
     .select()
     .single();
   if (error) throw error;
-  return data;
+  return normalizeMeasurement(data);
 }
 
 export async function upsertTarget(payload) {
+  const sanitized = sanitizeScenario(payload);
   const { data, error } = await supabase
     .from('indicador_metas')
-    .upsert(payload, { onConflict: 'indicador_id,anio,mes,escenario' })
+    .upsert(sanitized, { onConflict: 'indicador_id,anio,mes,escenario' })
     .select()
     .single();
   if (error) throw error;
-  return data;
+  return normalizeTarget(data);
 }

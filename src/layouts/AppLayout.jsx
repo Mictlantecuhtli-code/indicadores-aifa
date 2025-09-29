@@ -66,10 +66,10 @@ export default function AppLayout() {
           {profile ? (
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-aifa-light to-aifa-blue font-semibold text-white">
-                {profile.nombre?.[0] ?? 'A'}
+                {(profile.nombre_completo ?? profile.nombre ?? 'A').charAt(0) || 'A'}
               </div>
               <div className="flex-1 text-sm">
-                <p className="font-semibold text-slate-800">{profile.nombre}</p>
+                <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
                 <p className="text-xs text-slate-500">{profile.puesto ?? profile.rol}</p>
               </div>
               <button
