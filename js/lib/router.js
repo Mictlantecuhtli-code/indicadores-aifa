@@ -6,6 +6,7 @@
 import { DEBUG } from '../config.js';
 import { appState, isAuthenticated } from './supa.js';
 import { showToast, showLoading, hideLoading, resetLoadingState } from './ui.js';
+import { renderTemplate } from '../core/dom.js';
 
 export const routerState = {
     currentRoute: null,
@@ -21,6 +22,39 @@ let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
 let navigationTimeout = null;
+let activeNavigationController = null;
+let activeNavigationId = 0;
+
+function beginNavigation() {
+    if (activeNavigationController) {
+        activeNavigationController.abort('navigation:replaced');
+    }
+
+    activeNavigationController = new AbortController();
+    activeNavigationId += 1;
+
+    return {
+        controller: activeNavigationController,
+        id: activeNavigationId
+    };
+}
+
+function isActiveNavigation(id) {
+    return id === activeNavigationId;
+}
+
+function finalizeNavigation(controller, id) {
+    if (controller && controller === activeNavigationController && id === activeNavigationId) {
+        activeNavigationController = null;
+    }
+}
+
+export function cancelActiveNavigation(reason = 'navigation:cancelled') {
+    if (activeNavigationController) {
+        activeNavigationController.abort(reason);
+        activeNavigationController = null;
+    }
+}
 
 // =====================================================
 // CONFIGURACIÓN
@@ -192,11 +226,13 @@ async function cleanupActiveView() {
     activeViewModule = null;
 }
 
-async function renderRoute(route, resolved) {
+async function renderRoute(route, resolved, navigationContext = {}) {
     const container = document.getElementById('app-container');
     if (!container) {
         throw new Error('Contenedor de la aplicación no encontrado');
     }
+
+    const signal = navigationContext.controller?.signal || navigationContext.signal || null;
 
     try {
         resetLoadingState();
@@ -204,20 +240,66 @@ async function renderRoute(route, resolved) {
 
         await cleanupActiveView();
 
+        if (signal?.aborted) {
+            if (DEBUG.enabled) {
+                console.log('⏹️ Render cancelado antes de cargar vista activa');
+            }
+            return;
+        }
+
         const viewModule = await resolved.definition.loader();
+
+        if (signal?.aborted) {
+            if (DEBUG.enabled) {
+                console.log('⏹️ Render cancelado tras cargar módulo de vista');
+            }
+            return;
+        }
+
         if (!viewModule || typeof viewModule.render !== 'function') {
             throw new Error('La vista no expone una función render válida');
         }
 
         activeViewModule = viewModule;
-        
-        // Timeout para el render de la vista (20 segundos)
-        const renderPromise = viewModule.render(container, resolved.params, route.query);
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout al renderizar vista')), 20000)
+
+        const renderPromise = Promise.resolve(
+            viewModule.render(container, resolved.params, route.query, { signal })
         );
-        
-        const teardown = await Promise.race([renderPromise, timeoutPromise]);
+
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout al renderizar vista')), 20000);
+        });
+
+        const abortPromise = signal
+            ? new Promise((_, reject) => {
+                if (signal.aborted) {
+                    reject(signal.reason || new DOMException('Navigation aborted', 'AbortError'));
+                } else {
+                    signal.addEventListener('abort', () => {
+                        reject(signal.reason || new DOMException('Navigation aborted', 'AbortError'));
+                    }, { once: true });
+                }
+            })
+            : null;
+
+        const promises = [renderPromise, timeoutPromise];
+        if (abortPromise) {
+            promises.push(abortPromise);
+        }
+
+        const teardown = await Promise.race(promises);
+
+        if (signal?.aborted) {
+            if (typeof teardown === 'function') {
+                try {
+                    teardown();
+                } catch (error) {
+                    console.warn('⚠️ Error al ejecutar teardown tras abortar navegación:', error);
+                }
+            }
+            return;
+        }
+
         teardownActiveView = typeof teardown === 'function' ? teardown : null;
 
         // Recrear iconos después de renderizar
@@ -232,6 +314,12 @@ async function renderRoute(route, resolved) {
         }
     } catch (error) {
         hideLoading();
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+            if (DEBUG.enabled) {
+                console.log(`⏹️ Render abortado para ${route.path}:`, error.message || error.name);
+            }
+            return;
+        }
         console.error(`❌ Error al renderizar la ruta ${route.path}:`, error);
         showErrorPage('Error al cargar la vista', error.message || 'Ocurrió un problema al renderizar la vista.');
         throw error; // Re-lanzar el error para que lo capture handleRouteChange
@@ -242,7 +330,7 @@ function showErrorPage(title, message) {
     const container = document.getElementById('app-container');
     if (!container) return;
 
-    container.innerHTML = `
+    const template = `
         <div class="text-center py-12">
             <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
             <h2 class="text-xl font-semibold text-gray-900 mb-2">${title}</h2>
@@ -257,6 +345,8 @@ function showErrorPage(title, message) {
             </div>
         </div>
     `;
+
+    renderTemplate(container, template);
 
     if (window.lucide) {
         window.lucide.createIcons();
@@ -331,9 +421,11 @@ function forceResetRouter() {
     if (DEBUG.enabled) {
         console.warn('🔄 Forzando reset del router');
     }
-    
+
+    cancelActiveNavigation('navigation:forced-reset');
+
     routerState.isNavigating = false;
-    
+
     if (navigationTimeout) {
         clearTimeout(navigationTimeout);
         navigationTimeout = null;
@@ -381,13 +473,18 @@ async function handleRouteChange(route) {
 
     routerState.isNavigating = true;
 
+    const navigationContext = beginNavigation();
+    const { controller, id } = navigationContext;
+    const signal = controller.signal;
+
     // Timeout de seguridad: si no termina en 30 segundos, forzar reset
     if (navigationTimeout) {
         clearTimeout(navigationTimeout);
     }
-    
+
     navigationTimeout = setTimeout(() => {
         console.error('❌ Timeout de navegación alcanzado, forzando reset');
+        cancelActiveNavigation('navigation:timeout');
         forceResetRouter();
         hideLoading();
     }, 30000); // 30 segundos
@@ -421,7 +518,12 @@ async function handleRouteChange(route) {
         routerState.currentDefinition = definition;
         routerState.history.push(route.fullPath);
 
-        await renderRoute(route, resolved);
+        await renderRoute(route, resolved, navigationContext);
+
+        if (signal.aborted) {
+            return;
+        }
+
         updateActiveNavigation(definition);
         updateBreadcrumb(definition, params);
         updateDocumentTitle(definition, params);
@@ -443,20 +545,28 @@ async function handleRouteChange(route) {
             });
         }
     } catch (error) {
-        console.error('❌ Error al cambiar de ruta:', error);
-        showToast('Error de navegación', 'error');
-        showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+            if (DEBUG.enabled) {
+                console.log('⏹️ Navegación abortada:', error.message || error.name);
+            }
+        } else {
+            console.error('❌ Error al cambiar de ruta:', error);
+            showToast('Error de navegación', 'error');
+            showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
+        }
     } finally {
         // CRÍTICO: Siempre limpiar el estado
-        if (navigationTimeout) {
-            clearTimeout(navigationTimeout);
-            navigationTimeout = null;
+        if (isActiveNavigation(id)) {
+            if (navigationTimeout) {
+                clearTimeout(navigationTimeout);
+                navigationTimeout = null;
+            }
+            routerState.isNavigating = false;
+            hideLoading();
         }
-        routerState.isNavigating = false;
-        
-        // Asegurar que el loading se oculte
-        hideLoading();
-        
+
+        finalizeNavigation(controller, id);
+
         if (DEBUG.enabled) {
             console.log('✅ Navegación completada, estado limpio');
         }

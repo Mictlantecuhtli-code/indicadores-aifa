@@ -3,6 +3,7 @@
 // =====================================================
 
 import { NOTIFICATIONS, APP_CONFIG, DEBUG } from '../config.js';
+import { scheduleDOMUpdate } from '../core/dom.js';
 
 // Estado global de la UI
 export const uiState = {
@@ -64,18 +65,17 @@ export function showToast(message, type = 'info', duration = null) {
         return;
     }
     
-    // Agregar al DOM
-    container.appendChild(toastElement);
-    
-    // Recrear iconos
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
-    
-    // Animar entrada
-    setTimeout(() => {
-        toastElement.classList.add('show');
-    }, 10);
+    scheduleDOMUpdate(() => {
+        container.appendChild(toastElement);
+
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        requestAnimationFrame(() => {
+            toastElement.classList.add('show');
+        });
+    });
     
     // Auto-ocultar después del tiempo especificado
     setTimeout(() => {
@@ -99,13 +99,12 @@ export function showToast(message, type = 'info', duration = null) {
 export function hideToast(toastId) {
     const toastElement = document.getElementById(toastId);
     if (toastElement) {
-        // Animar salida
-        toastElement.classList.remove('show');
-        
-        // Remover del DOM después de la animación
-        setTimeout(() => {
-            toastElement.remove();
-        }, 300);
+        scheduleDOMUpdate(() => {
+            toastElement.classList.remove('show');
+            setTimeout(() => {
+                scheduleDOMUpdate(() => toastElement.remove());
+            }, 250);
+        });
     }
     
     // Remover del estado
@@ -142,21 +141,22 @@ export function showLoading(message = 'Cargando...') {
     if (uiState.loadingStack === 1) {
         uiState.loading = true;
         
-        const loadingContainer = document.getElementById('loading-container');
-        if (loadingContainer) {
-            const loadingText = loadingContainer.querySelector('span') || loadingContainer.querySelector('#loading-text');
-            if (loadingText) {
-                loadingText.textContent = message;
+        scheduleDOMUpdate(() => {
+            const loadingContainer = document.getElementById('loading-container');
+            if (loadingContainer) {
+                const loadingText = loadingContainer.querySelector('span') || loadingContainer.querySelector('#loading-text');
+                if (loadingText) {
+                    loadingText.textContent = message;
+                }
+                loadingContainer.classList.remove('hidden');
             }
-            loadingContainer.classList.remove('hidden');
-        }
-        
-        // Deshabilitar interacciones principales
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            appContainer.style.pointerEvents = 'none';
-            appContainer.style.opacity = '0.7';
-        }
+
+            const appContainer = document.getElementById('app-container');
+            if (appContainer) {
+                appContainer.style.pointerEvents = 'none';
+                appContainer.style.opacity = '0.7';
+            }
+        });
         
         // NUEVO: Timeout de seguridad - si después de 30 segundos sigue cargando, forzar reset
         if (uiState.loadingTimeout) {
@@ -191,17 +191,18 @@ export function hideLoading() {
             uiState.loadingTimeout = null;
         }
 
-        const loadingContainer = document.getElementById('loading-container');
-        if (loadingContainer) {
-            loadingContainer.classList.add('hidden');
-        }
+        scheduleDOMUpdate(() => {
+            const loadingContainer = document.getElementById('loading-container');
+            if (loadingContainer) {
+                loadingContainer.classList.add('hidden');
+            }
 
-        // Restaurar interacciones
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            appContainer.style.pointerEvents = '';
-            appContainer.style.opacity = '';
-        }
+            const appContainer = document.getElementById('app-container');
+            if (appContainer) {
+                appContainer.style.pointerEvents = '';
+                appContainer.style.opacity = '';
+            }
+        });
     }
     
     if (DEBUG?.enabled && uiState.loadingStack > 0) {
@@ -221,17 +222,18 @@ export function forceHideLoading() {
     uiState.loadingStack = 0;
     uiState.loading = false;
 
-    const loadingContainer = document.getElementById('loading-container');
-    if (loadingContainer) {
-        loadingContainer.classList.add('hidden');
-    }
+    scheduleDOMUpdate(() => {
+        const loadingContainer = document.getElementById('loading-container');
+        if (loadingContainer) {
+            loadingContainer.classList.add('hidden');
+        }
 
-    // Restaurar interacciones inmediatamente
-    const appContainer = document.getElementById('app-container');
-    if (appContainer) {
-        appContainer.style.pointerEvents = '';
-        appContainer.style.opacity = '';
-    }
+        const appContainer = document.getElementById('app-container');
+        if (appContainer) {
+            appContainer.style.pointerEvents = '';
+            appContainer.style.opacity = '';
+        }
+    });
     
     if (DEBUG?.enabled) {
         console.log('✅ Loading forzado a ocultar');
@@ -255,17 +257,18 @@ export function resetLoadingState() {
         uiState.loadingTimeout = null;
     }
 
-    const loadingContainer = document.getElementById('loading-container');
-    if (loadingContainer) {
-        loadingContainer.classList.add('hidden');
-    }
+    scheduleDOMUpdate(() => {
+        const loadingContainer = document.getElementById('loading-container');
+        if (loadingContainer) {
+            loadingContainer.classList.add('hidden');
+        }
 
-    // Restaurar interacciones
-    const appContainer = document.getElementById('app-container');
-    if (appContainer) {
-        appContainer.style.pointerEvents = '';
-        appContainer.style.opacity = '';
-    }
+        const appContainer = document.getElementById('app-container');
+        if (appContainer) {
+            appContainer.style.pointerEvents = '';
+            appContainer.style.opacity = '';
+        }
+    });
     
     if (DEBUG?.enabled) {
         console.log('✅ Estado de loading reseteado');

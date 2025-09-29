@@ -3,11 +3,206 @@
 // =====================================================
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, isDevelopment } from '../config.js';
+import { withCache, invalidateByTags, clearCache as clearGlobalCache } from '../core/cache.js';
 
 // Mantener referencia compartida del cliente Supabase
 export let supabase = typeof window !== 'undefined' ? window.supabaseClient ?? null : null;
 
 let supabaseAvailabilityLogged = false;
+
+const TABLE_TAG_PREFIX = 'table:';
+
+const SELECT_CACHE_DEFAULTS = new Map([
+    ['areas', { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['indicadores', { ttl: 2 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['usuario_areas', { ttl: 2 * 60 * 1000 }],
+    ['v_areas_usuario', { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['v_dashboard_resumen', { ttl: 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['v_indicadores_area', { ttl: 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['v_mediciones_historico', { ttl: 30 * 1000, staleWhileRevalidate: 30 * 1000 }],
+    ['indicador_metas', { ttl: 2 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }],
+    ['perfiles', { ttl: 5 * 60 * 1000 }]
+]);
+
+const CACHE_DEPENDENCIES = new Map([
+    ['areas', ['areas', 'v_indicadores_area', 'v_dashboard_resumen', 'v_areas_usuario']],
+    ['indicadores', ['indicadores', 'v_indicadores_area', 'v_dashboard_resumen']],
+    ['usuario_areas', ['usuario_areas', 'v_areas_usuario', 'v_dashboard_resumen']],
+    ['mediciones', ['mediciones', 'v_mediciones_historico', 'v_indicadores_area', 'v_dashboard_resumen']],
+    ['v_mediciones_historico', ['v_mediciones_historico']],
+    ['indicador_metas', ['indicador_metas', 'v_indicadores_area', 'v_dashboard_resumen']],
+    ['perfiles', ['perfiles']],
+    ['v_dashboard_resumen', ['v_dashboard_resumen']]
+]);
+
+function mergeCacheConfig(defaultConfig = {}, customConfig = {}) {
+    return {
+        ...defaultConfig,
+        ...customConfig,
+        ttl: customConfig.ttl ?? defaultConfig.ttl ?? 0,
+        staleWhileRevalidate: customConfig.staleWhileRevalidate ?? defaultConfig.staleWhileRevalidate ?? 0
+    };
+}
+
+function resolveCacheConfig(table, cacheOption) {
+    if (cacheOption === false) {
+        return null;
+    }
+
+    const defaultConfig = SELECT_CACHE_DEFAULTS.get(table) || null;
+
+    if (cacheOption === true || cacheOption === undefined) {
+        return defaultConfig;
+    }
+
+    if (typeof cacheOption === 'number') {
+        return { ttl: cacheOption };
+    }
+
+    if (typeof cacheOption === 'object' && cacheOption !== null) {
+        return mergeCacheConfig(defaultConfig || {}, cacheOption);
+    }
+
+    return defaultConfig;
+}
+
+function collectTagsForTable(table, extraTags = []) {
+    const normalizedExtras = Array.isArray(extraTags) ? extraTags : [extraTags];
+    const tags = new Set(normalizedExtras.filter(Boolean));
+    if (table) {
+        const dependents = CACHE_DEPENDENCIES.get(table) || [table];
+        dependents.forEach(name => tags.add(`${TABLE_TAG_PREFIX}${name}`));
+    }
+    return Array.from(tags);
+}
+
+function stableStringify(value) {
+    if (value === null || typeof value !== 'object') {
+        return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map(stableStringify).join(',')}]`;
+    }
+
+    const keys = Object.keys(value).sort();
+    const entries = keys.map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+    return `{${entries.join(',')}}`;
+}
+
+function normalizeFilters(filters = {}) {
+    const normalized = {};
+    Object.keys(filters).sort().forEach(key => {
+        const value = filters[key];
+        if (Array.isArray(value)) {
+            normalized[key] = value.map(item => stableStringify(item));
+        } else if (typeof value === 'object' && value !== null) {
+            normalized[key] = stableStringify(value);
+        } else {
+            normalized[key] = value;
+        }
+    });
+    return normalized;
+}
+
+function normalizeOrderBy(orderBy) {
+    if (Array.isArray(orderBy)) {
+        return orderBy.map(item => {
+            if (typeof item === 'string') {
+                return item;
+            }
+            return { column: item.column, ascending: item.ascending !== false };
+        });
+    }
+
+    if (typeof orderBy === 'string') {
+        return orderBy;
+    }
+
+    if (orderBy && typeof orderBy === 'object') {
+        return { column: orderBy.column, ascending: orderBy.ascending !== false };
+    }
+
+    return orderBy;
+}
+
+function normalizeSelectOptions(options = {}) {
+    const normalized = {};
+
+    if (options.select) {
+        normalized.select = options.select;
+    }
+
+    if (options.filters) {
+        normalized.filters = normalizeFilters(options.filters);
+    }
+
+    if (options.orderBy) {
+        normalized.orderBy = normalizeOrderBy(options.orderBy);
+    }
+
+    ['limit', 'from', 'to', 'head', 'count'].forEach(key => {
+        if (options[key] !== undefined) {
+            normalized[key] = options[key];
+        }
+    });
+
+    return normalized;
+}
+
+function buildSelectCacheKey(table, options) {
+    return `${table}::${stableStringify(options)}`;
+}
+
+function collectTagsForTables(tables = []) {
+    const tags = new Set();
+    tables.forEach(table => {
+        collectTagsForTable(table).forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags);
+}
+
+export function invalidateTableCache(table) {
+    if (!table) {
+        return;
+    }
+    const tags = collectTagsForTable(table);
+    invalidateByTags(tags);
+}
+
+export function invalidateTablesCache(tables = []) {
+    if (!tables || tables.length === 0) {
+        return;
+    }
+    const tags = collectTagsForTables(tables);
+    invalidateByTags(tags);
+}
+
+export function clearSupabaseCache() {
+    clearGlobalCache();
+}
+
+async function waitForSupabaseAvailability({ timeout = 8000, interval = 120 } = {}) {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    if (supabase?.auth?.getSession) {
+        return true;
+    }
+
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        if (window.supabase?.createClient) {
+            return true;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    return Boolean(window.supabase?.createClient);
+}
 
 function recreateSupabaseClient(context = 'recreateSupabaseClient') {
     if (typeof window === 'undefined') {
@@ -66,10 +261,8 @@ export function ensureSupabaseClient(context = 'ensureSupabaseClient') {
     return recreateSupabaseClient(context);
 }
 
-if (!ensureSupabaseClient('initial-load')) {
-    console.error('❌ Error: Cliente Supabase no está disponible. Verifica que config.js se haya ejecutado correctamente.');
-    throw new Error('Supabase client not available');
-}
+// Nota: La disponibilidad del cliente de Supabase puede variar dependiendo de la velocidad
+// con la que el script CDN se carga. La inicialización real se maneja durante initSupabase().
 
 // Estado global de la aplicación
 export const appState = {
@@ -175,14 +368,9 @@ function shouldFallbackToMock(error) {
 // HELPERS GENÉRICOS DE BASE DE DATOS
 // =====================================================
 
-/**
- * Helper genérico para SELECT con manejo de errores
- */
-export async function selectData(table, options = {}) {
+async function executeSelectQuery(table, options = {}) {
     const devMode = isDevelopment();
 
-    // Datos mock temporales solo disponibles en desarrollo
-    // Nota: intentionally no mock entry for `areas` so it always hits Supabase.
     const mockData = devMode ? {
         perfiles: [],
         usuario_areas: [],
@@ -202,70 +390,70 @@ export async function selectData(table, options = {}) {
 
         let query = supabase.from(table).select(options.select || '*');
 
-        // Aplicar filtros
-        if (options.filters) {
-            Object.entries(options.filters).forEach(([column, value]) => {
-                if (value !== null && value !== undefined) {
-                    if (Array.isArray(value)) {
-                        query = query.in(column, value);
-                    } else if (typeof value === 'object' && value.operator) {
-                        switch (value.operator) {
-                            case 'gte':
-                                query = query.gte(column, value.value);
-                                break;
-                            case 'lte':
-                                query = query.lte(column, value.value);
-                                break;
-                            case 'like':
-                                query = query.like(column, value.value);
-                                break;
-                            case 'ilike':
-                                query = query.ilike(column, value.value);
-                                break;
-                            case 'neq':
-                                query = query.neq(column, value.value);
-                                break;
-                            case 'gt':
-                                query = query.gt(column, value.value);
-                                break;
-                            case 'lt':
-                                query = query.lt(column, value.value);
-                                break;
-                            default:
-                                query = query.eq(column, value.value);
-                        }
-                    } else {
-                        query = query.eq(column, value);
+        const { filters, orderBy, limit, from, to, ascending } = options;
+
+        if (filters) {
+            Object.entries(filters).forEach(([column, value]) => {
+                if (value === null || value === undefined) {
+                    return;
+                }
+
+                if (Array.isArray(value)) {
+                    query = query.in(column, value);
+                } else if (typeof value === 'object' && value?.operator) {
+                    switch (value.operator) {
+                        case 'gte':
+                            query = query.gte(column, value.value);
+                            break;
+                        case 'lte':
+                            query = query.lte(column, value.value);
+                            break;
+                        case 'like':
+                            query = query.like(column, value.value);
+                            break;
+                        case 'ilike':
+                            query = query.ilike(column, value.value);
+                            break;
+                        case 'neq':
+                            query = query.neq(column, value.value);
+                            break;
+                        case 'gt':
+                            query = query.gt(column, value.value);
+                            break;
+                        case 'lt':
+                            query = query.lt(column, value.value);
+                            break;
+                        default:
+                            query = query.eq(column, value.value);
                     }
+                } else {
+                    query = query.eq(column, value);
                 }
             });
         }
 
-        // Aplicar ordenamiento
-        if (options.orderBy) {
-            if (Array.isArray(options.orderBy)) {
-                options.orderBy.forEach(order => {
+        if (orderBy) {
+            if (Array.isArray(orderBy)) {
+                orderBy.forEach(order => {
                     if (typeof order === 'string') {
                         query = query.order(order, { ascending: true });
                     } else {
                         query = query.order(order.column, { ascending: order.ascending !== false });
                     }
                 });
-            } else if (typeof options.orderBy === 'string') {
-                query = query.order(options.orderBy, { ascending: options.ascending !== false });
-            } else if (options.orderBy.column) {
-                query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending !== false });
+            } else if (typeof orderBy === 'string') {
+                query = query.order(orderBy, { ascending: ascending !== false });
+            } else if (orderBy.column) {
+                query = query.order(orderBy.column, { ascending: orderBy.ascending !== false });
             }
         }
 
-        // Aplicar límite
-        if (options.limit) {
-            query = query.limit(options.limit);
+        if (limit) {
+            query = query.limit(limit);
         }
 
-        // Aplicar rango (paginación)
-        if (options.from !== undefined && options.to !== undefined) {
-            query = query.range(options.from, options.to);
+        if (from !== undefined && to !== undefined) {
+            query = query.range(from, to);
         }
 
         const { data, error, count } = await query;
@@ -292,6 +480,35 @@ export async function selectData(table, options = {}) {
 }
 
 /**
+ * Helper genérico para SELECT con cache opcional y manejo de errores
+ */
+export async function selectData(table, options = {}) {
+    const { cache: cacheOption, ...queryOptions } = options || {};
+    const cacheConfig = resolveCacheConfig(table, cacheOption);
+    const normalizedOptions = normalizeSelectOptions(queryOptions);
+    const execute = () => executeSelectQuery(table, queryOptions);
+
+    if (!cacheConfig || (cacheConfig.ttl ?? 0) <= 0) {
+        return execute();
+    }
+
+    const cacheKey = cacheConfig.key ?? buildSelectCacheKey(table, normalizedOptions);
+    const tags = collectTagsForTable(table, cacheConfig.tags);
+
+    return withCache(cacheKey, execute, {
+        ttl: cacheConfig.ttl,
+        staleWhileRevalidate: cacheConfig.staleWhileRevalidate ?? 0,
+        tags,
+        forceRefresh: cacheConfig.force === true || cacheConfig.forceRefresh === true,
+        onError: (error) => {
+            if (DEBUG.enabled) {
+                console.warn(`⚠️ Error al obtener datos cacheados de ${table}:`, error);
+            }
+        }
+    });
+}
+
+/**
  * Helper genérico para INSERT con manejo de errores
  */
 export async function insertData(table, data, options = {}) {
@@ -315,7 +532,9 @@ export async function insertData(table, data, options = {}) {
         }
         
         if (DEBUG.enabled) console.log(`✅ INSERT ${table} exitoso:`, result);
-        
+
+        invalidateTableCache(table);
+
         return { data: result };
     } catch (error) {
         handleError(error, `Error al insertar en ${table}`);
@@ -356,7 +575,9 @@ export async function updateData(table, data, filters, options = {}) {
         }
         
         if (DEBUG.enabled) console.log(`✅ UPDATE ${table} exitoso:`, result);
-        
+
+        invalidateTableCache(table);
+
         return { data: result };
     } catch (error) {
         handleError(error, `Error al actualizar ${table}`);
@@ -397,7 +618,9 @@ export async function deleteData(table, filters, options = {}) {
         }
         
         if (DEBUG.enabled) console.log(`✅ DELETE ${table} exitoso:`, result);
-        
+
+        invalidateTableCache(table);
+
         return { data: result };
     } catch (error) {
         handleError(error, `Error al eliminar de ${table}`);
@@ -1637,6 +1860,17 @@ let sessionRefreshInProgress = false;
 
 async function setupSupabase() {
     try {
+        if (DEBUG.enabled) {
+            console.log('⏳ Esperando a que Supabase esté disponible...');
+        }
+
+        const isAvailable = await waitForSupabaseAvailability();
+
+        if (!isAvailable) {
+            console.error('❌ Supabase no se cargó dentro del tiempo esperado.');
+            throw new Error('Supabase client not available');
+        }
+
         const activeSupabase = ensureSupabaseClient('setupSupabase');
 
         if (!activeSupabase) {
@@ -1956,7 +2190,9 @@ export function cleanupResources() {
         document.removeEventListener('visibilitychange', visibilityChangeHandler);
         visibilityChangeHandler = null;
     }
-    
+
+    clearSupabaseCache();
+
     if (DEBUG.enabled) {
         console.log('✅ Recursos limpiados');
     }

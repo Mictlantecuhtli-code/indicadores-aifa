@@ -3,7 +3,7 @@
 // =====================================================
 
 import { DEBUG } from '../config.js';
-import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
+import { selectData, appState, getCurrentProfile, invalidateTablesCache } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber } from '../lib/ui.js';
 
 // Estado de la vista home
@@ -367,38 +367,20 @@ async function loadAreas() {
         const userRole = homeState.userProfile?.rol_principal;
         
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
-            // Roles altos ven todas las áreas
-            /*const { data } = await selectData('areas', {
+            const { data } = await selectData('areas', {
                 select: '*',
                 filters: { estado: 'ACTIVO' },
-                orderBy: { column: 'orden_visualizacion', ascending: true }
-            });*/
-
-                const data = [
-                {
-                    id: 1,
-                    clave: 'OPERACIONES',
-                    nombre: 'Operaciones Aeroportuarias',
-                    descripcion: 'Indicadores de operaciones del aeropuerto',
-                    color_hex: '#3B82F6',
-                    estado: 'ACTIVA'
-                },
-                {
-                    id: 2,
-                    clave: 'SEGURIDAD',
-                    nombre: 'Seguridad y Protección',
-                    descripcion: 'Indicadores de seguridad aeroportuaria',
-                    color_hex: '#EF4444',
-                    estado: 'ACTIVA'
-                }
-            ];
+                orderBy: { column: 'orden_visualizacion', ascending: true },
+                cache: { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }
+            });
             homeState.areas = data || [];
         } else {
             // Capturistas y jefes de área ven solo sus áreas asignadas
             const { data } = await selectData('v_areas_usuario', {
                 select: '*',
                 filters: { usuario_id: homeState.userProfile.id },
-                orderBy: { column: 'orden_visualizacion', ascending: true }
+                orderBy: { column: 'orden_visualizacion', ascending: true },
+                cache: { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }
             });
             homeState.areas = data || [];
         }
@@ -421,7 +403,8 @@ async function loadDashboardSummary() {
     try {
         const { data } = await selectData('v_dashboard_resumen', {
             select: '*',
-            orderBy: { column: 'area_nombre', ascending: true }
+            orderBy: { column: 'area_nombre', ascending: true },
+            cache: { ttl: 60 * 1000, staleWhileRevalidate: 60 * 1000 }
         });
         
         homeState.resumenDashboard = data || [];
@@ -492,6 +475,8 @@ function setupAutoRefresh() {
  */
 async function handleRefreshData() {
     try {
+        invalidateTablesCache(['areas', 'v_areas_usuario', 'v_dashboard_resumen']);
+
         const refreshBtn = document.getElementById('refresh-data-btn');
         if (refreshBtn) {
             const icon = refreshBtn.querySelector('i');
