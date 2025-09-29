@@ -575,6 +575,7 @@ function normalizarEscenarioClave(escenario, fallback = 'MEDIO') {
 async function cargarDatosMetas(indicador, escenario) {
     try {
         if (!indicador) {
+
             const escenarioSlug = escenario ? normalizarEscenarioClave(escenario, 'MEDIO').toLowerCase() : null;
             panelState.datosMetas = [];
             panelState.metaContext = {
@@ -585,6 +586,7 @@ async function cargarDatosMetas(indicador, escenario) {
             };
             return;
         }
+
 
         const escenarioKey = normalizarEscenarioClave(escenario, 'MEDIO');
         const escenarioSlug = escenarioKey.toLowerCase();
@@ -1099,6 +1101,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
             || (panelState.opcionSeleccionada.includes('bajo') ? 'bajo'
                 : panelState.opcionSeleccionada.includes('medio') ? 'medio'
                     : 'alto');
+
         const nombreEscenario = ESCENARIO_LABELS[escenarioSlug] || (escenarioSlug.charAt(0).toUpperCase() + escenarioSlug.slice(1));
         const escenarioNombre = `Escenario ${nombreEscenario}`;
 
