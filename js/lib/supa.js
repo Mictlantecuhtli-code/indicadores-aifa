@@ -377,20 +377,61 @@ export async function callRPC(functionName, params = {}) {
 /**
  * Obtener sesión actual
  */
-export async function getCurrentSession() {
+async function refreshSession() {
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-            console.error('❌ Error al obtener sesión:', error);
+        const { data, error } = await supabase.auth.refreshSession();
+
+        if (error || !data?.session) {
+            if (DEBUG.enabled) {
+                console.warn('⚠️ No se pudo refrescar la sesión automáticamente:', error);
+            }
             return null;
         }
-        
-        appState.session = session;
-        return session;
+
+        return data.session;
+    } catch (error) {
+        console.error('❌ Error al refrescar la sesión:', error);
+        return null;
+    }
+}
+
+export async function getCurrentSession(options = {}) {
+    const { allowRefresh = false, silent = false } = options;
+
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+            console.error('❌ Error al obtener sesión:', error);
+            return appState.session;
+        }
+
+        if (session) {
+            appState.session = session;
+            appState.user = session.user;
+            return session;
+        }
+
+        if (allowRefresh && appState.session) {
+            const refreshedSession = await refreshSession();
+
+            if (refreshedSession) {
+                appState.session = refreshedSession;
+                appState.user = refreshedSession.user;
+                return refreshedSession;
+            }
+        }
+
+        if (!silent && appState.session) {
+            console.warn('⚠️ Sesión no disponible después de verificar');
+        }
+
+        appState.session = null;
+        appState.user = null;
+        return null;
     } catch (error) {
         console.error('❌ Error al verificar sesión:', error);
-        return null;
+        return appState.session;
     }
 }
 
@@ -1491,6 +1532,7 @@ export function escapeSearchText(text) {
 let isHandlingVisibilityChange = false;
 let visibilityChangeTimeout = null;
 let initializationPromise = null;
+let visibilityChangeHandler = null;
 
 async function setupSupabase() {
     try {
@@ -1523,7 +1565,7 @@ async function setupSupabase() {
         });
         
         // Verificar sesión inicial
-        await getCurrentSession();
+        await getCurrentSession({ allowRefresh: true, silent: true });
         if (appState.session) {
             appState.profile = await getCurrentProfile();
         }
@@ -1582,8 +1624,13 @@ initSupabase().catch(console.error);
  * Configurar handlers de visibilidad
  */
 function setupVisibilityHandlers() {
+    // Evitar duplicar handlers si la función se llama más de una vez
+    if (visibilityChangeHandler) {
+        document.removeEventListener('visibilitychange', visibilityChangeHandler);
+    }
+
     // Handler para cambios de visibilidad
-    const handleVisibilityChange = async () => {
+    visibilityChangeHandler = async () => {
         // Limpiar timeout anterior si existe
         if (visibilityChangeTimeout) {
             clearTimeout(visibilityChangeTimeout);
@@ -1608,33 +1655,25 @@ function setupVisibilityHandlers() {
                 if (isHandlingVisibilityChange) {
                     return;
                 }
-                
+
                 isHandlingVisibilityChange = true;
                 try {
-                    // Solo verificar la sesión, NO forzar un cambio de estado
-                    const { data: { session }, error } = await supabase.auth.getSession();
-                    
-                    if (error) {
-                        if (DEBUG.enabled) {
-                            console.warn('⚠️ Error al verificar sesión:', error);
-                        }
-                        return;
-                    }
-                    
+                    const previousSession = appState.session;
+                    const session = await getCurrentSession({ allowRefresh: true, silent: true });
+
                     if (session) {
                         // Solo actualizar si realmente cambió el token
-                        if (session.access_token !== appState.session?.access_token) {
+                        if (session.access_token !== previousSession?.access_token) {
                             appState.session = session;
                             appState.user = session.user;
-                            
+
                             if (DEBUG.enabled) {
                                 console.log('✅ Sesión actualizada silenciosamente');
                             }
                             // NO notificar a listeners para evitar re-renderizados
                         }
-                    } else if (appState.session) {
-                        // Solo si realmente se perdió la sesión
-                        appState.session = null;
+                    } else if (previousSession) {
+                        // Confirmar la pérdida real de sesión antes de notificar
                         appState.user = null;
                         appState.profile = null;
                         notifyAuthListeners('SIGNED_OUT', null);
@@ -1651,7 +1690,7 @@ function setupVisibilityHandlers() {
     };
     
     // Usar solo visibilitychange
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', visibilityChangeHandler);
     
     if (DEBUG.enabled) {
         console.log('✅ Handlers de visibilidad configurados');
@@ -1673,7 +1712,7 @@ export function setupGlobalAutoRefresh() {
             // Solo hacer refresh si la ventana está visible y hay sesión
             if (document.visibilityState === 'visible' && appState.session) {
                 try {
-                    await getCurrentSession();
+                    await getCurrentSession({ allowRefresh: true, silent: true });
                 } catch (error) {
                     console.error('❌ Error en auto-refresh de sesión:', error);
                     clearInterval(window.autoRefreshInterval);
@@ -1703,11 +1742,17 @@ export function cleanupResources() {
     // Limpiar storage
     sessionStorage.removeItem('aifa-session-backup');
     sessionStorage.removeItem('aifa-last-activity');
-    
+
     // Limpiar event listeners de visibilidad si existen
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-    window.removeEventListener('pagehide', handlePageHide);
+    if (visibilityChangeTimeout) {
+        clearTimeout(visibilityChangeTimeout);
+        visibilityChangeTimeout = null;
+    }
+    isHandlingVisibilityChange = false;
+    if (visibilityChangeHandler) {
+        document.removeEventListener('visibilitychange', visibilityChangeHandler);
+        visibilityChangeHandler = null;
+    }
 }
 
 /**
@@ -1717,28 +1762,22 @@ function startTokenHealthCheck() {
     setInterval(async () => {
         if (appState.session && document.visibilityState === 'visible') {
             try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                
-                if (error || !session) {
+                const previousSession = appState.session;
+                const session = await getCurrentSession({ allowRefresh: true, silent: true });
+
+                if (!session && previousSession) {
                     console.warn('⚠️ Token expirado o inválido');
-                    
-                    // Intentar refrescar el token una vez
-                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-                    
-                    if (refreshError || !refreshData.session) {
-                        console.error('❌ No se pudo refrescar el token:', refreshError);
-                        
-                        // Limpiar estado y redirigir
-                        appState.session = null;
-                        appState.user = null;
-                        appState.profile = null;
-                        
-                        if (window.router?.navigateTo) {
-                            window.router.navigateTo('/login', { 
-                                message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.', 
-                                type: 'warning' 
-                            }, true);
-                        }
+
+                    // Limpiar estado y redirigir
+                    appState.session = null;
+                    appState.user = null;
+                    appState.profile = null;
+
+                    if (window.router?.navigateTo) {
+                        window.router.navigateTo('/login', {
+                            message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
+                            type: 'warning'
+                        }, true);
                     }
                 }
             } catch (error) {

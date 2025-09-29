@@ -784,9 +784,10 @@ async function verifySessionOnReturn() {
             
             // Si pasó más de 30 minutos, verificar sesión
             if (Date.now() - sessionData.timestamp > 30 * 60 * 1000) {
-                await getCurrentSession();
-                
-                if (!appState.session) {
+                const previousSession = appState.session;
+                const session = await getCurrentSession({ allowRefresh: true });
+
+                if (!session && previousSession) {
                     console.warn('⚠️ Sesión expirada, redirigiendo al login');
                     navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
                     return;
@@ -830,25 +831,26 @@ function setupSessionMonitoring() {
     setInterval(async () => {
         if (appState.session && document.visibilityState === 'visible') {
             try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                
-                if (error || !session) {
+                const previousSession = appState.session;
+                const session = await getCurrentSession({ allowRefresh: true, silent: true });
+
+                if (!session && previousSession) {
                     console.warn('⚠️ Sesión perdida, redirigiendo al login');
-                    
+
                     // Limpiar estado
                     appState.session = null;
                     appState.user = null;
                     appState.profile = null;
-                    
+
                     // Limpiar intervals
                     if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
                     if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
                     if (window.areaRefreshInterval) clearInterval(window.areaRefreshInterval);
-                    
+
                     // Redirigir al login
-                    navigateTo('/login', { 
-                        message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.', 
-                        type: 'warning' 
+                    navigateTo('/login', {
+                        message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
+                        type: 'warning'
                     }, true);
                 }
             } catch (error) {
@@ -867,11 +869,12 @@ function setupSessionMonitoring() {
             // Al regresar a la pestaña, verificar sesión inmediatamente
             setTimeout(async () => {
                 try {
-                    await getCurrentSession();
-                    if (!appState.session) {
-                        navigateTo('/login', { 
-                            message: 'Su sesión ha expirado', 
-                            type: 'warning' 
+                    const previousSession = appState.session;
+                    const session = await getCurrentSession({ allowRefresh: true });
+                    if (!session && previousSession) {
+                        navigateTo('/login', {
+                            message: 'Su sesión ha expirado',
+                            type: 'warning'
                         }, true);
                     }
                 } catch (error) {
@@ -906,10 +909,11 @@ window.addEventListener('focus', () => {
     // Verificar sesión al recuperar foco
     setTimeout(async () => {
         try {
-            await getCurrentSession();
-            
+            const previousSession = appState.session;
+            const session = await getCurrentSession({ allowRefresh: true });
+
             // Verificar que appState tenga sesión
-            if (!appState.session) {
+            if (!session && previousSession) {
                 console.warn('⚠️ No hay sesión después de verificar');
                 navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
                 return;
