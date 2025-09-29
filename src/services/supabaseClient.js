@@ -83,7 +83,7 @@ export async function signOut() {
 }
 
 export async function getDashboardSummary() {
-  return fetchFromRelations(['vw_dashboard_resumen', 'v_dashboard_resumen'], relation =>
+  return fetchFromRelations(['v_dashboard_resumen', 'vw_dashboard_resumen'], relation =>
     supabase.from(relation).select('*')
   );
 }
@@ -91,13 +91,45 @@ export async function getDashboardSummary() {
 export async function getDirectorsHighlights() {
   try {
     return await fetchFromRelations(
-      ['vw_indicadores_criticos', 'vw_indicadores_alertas', 'vw_indicadores_alerta', 'v_indicadores_criticos'],
+      ['v_indicadores_criticos', 'vw_indicadores_criticos', 'vw_indicadores_alertas', 'vw_indicadores_alerta'],
+
       relation => supabase.from(relation).select('*')
     );
   } catch (error) {
     if (!isRelationNotFound(error)) {
       throw error;
     }
+  }
+
+  const { data: indicators, error: indicatorsError } = await supabase
+    .from('v_indicadores_area')
+    .select('*');
+
+  if (indicatorsError) {
+    if (!isRelationNotFound(indicatorsError)) {
+      throw indicatorsError;
+    }
+  } else if (indicators?.length) {
+    const criticalIndicators = indicators.filter(record => {
+      if (record == null || typeof record !== 'object') return false;
+      if ('es_critico' in record) return Boolean(record.es_critico);
+      if ('es_alerta' in record) return Boolean(record.es_alerta);
+      if ('critico' in record) return Boolean(record.critico);
+      if ('alerta' in record) return Boolean(record.alerta);
+      const status =
+        (record.nivel_alerta ?? record.estatus ?? record.estado ?? record.estatus_alerta ?? record.color_alerta ?? '')
+          .toString()
+          .toLowerCase();
+      return ['critico', 'crítico', 'alerta', 'rojo'].includes(status);
+    });
+
+    return criticalIndicators.map(item => ({
+      ...item,
+      valor_actual: item.valor_actual ?? item.ultima_medicion_valor ?? item.valor ?? null,
+      meta: item.meta ?? item.valor_meta ?? item.meta_actual ?? null,
+      actualizado_en: item.actualizado_en ?? item.fecha_actualizacion ?? item.ultima_medicion_fecha ?? null,
+      area: item.area ?? item.area_nombre ?? null
+    }));
   }
 
   const { data, error } = await supabase.rpc('kpi_resumen_directivos');
@@ -108,8 +140,7 @@ export async function getDirectorsHighlights() {
   return data ?? [];
 }
 
-export async function getIndicators() {
-  return fetchFromRelations(['vw_indicadores_area', 'vw_indicadores_detalle', 'v_indicadores_area'], relation =>
+  return fetchFromRelations(['v_indicadores_area', 'vw_indicadores_area', 'vw_indicadores_detalle'], relation =>
     supabase
       .from(relation)
       .select('*')
@@ -120,15 +151,18 @@ export async function getIndicators() {
 
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
-  const { data, error } = await supabase
-    .from('mediciones')
-    .select('*')
-    .eq('indicador_id', indicadorId)
-    .order('anio', { ascending: true })
-    .order('mes', { ascending: true })
-    .limit(limit);
 
-  if (error) throw error;
+  const data = await fetchFromRelations(['v_mediciones_historico', 'mediciones'], relation =>
+    supabase
+      .from(relation)
+      .select('*')
+      .eq('indicador_id', indicadorId)
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .limit(limit)
+  );
+
+
   return (data ?? []).map(normalizeMeasurement);
 }
 
