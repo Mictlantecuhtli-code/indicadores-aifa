@@ -787,6 +787,7 @@ async function handleStorageEvent(event) {
     appState.user = null;
     appState.profile = null;
 
+
     navigateTo('/login', {
         message: 'Sesión cerrada en otra ventana',
         type: 'info'

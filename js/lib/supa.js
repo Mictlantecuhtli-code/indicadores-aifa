@@ -475,6 +475,7 @@ export async function getCurrentSession(options = {}) {
 
         const { data: { session }, error } = await client.auth.getSession();
 
+
         if (error) {
             console.error('❌ Error al obtener sesión:', error);
             return appState.session;
