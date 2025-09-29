@@ -3,10 +3,17 @@
 // =====================================================
 
 import { DEBUG } from '../config.js';
-import { selectData, insertData, updateData, getCurrentProfile } from '../lib/supa.js';
+import { selectData, insertData, updateData, deleteData, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber } from '../lib/ui.js';
 
 // Estado del módulo de captura
+const META_ESCENARIOS = ['BAJO', 'MEDIO', 'ALTO'];
+const ESCENARIO_COLOR_CLASSES = {
+    BAJO: 'focus:ring-sky-500 focus:border-sky-500',
+    MEDIO: 'focus:ring-amber-500 focus:border-amber-500',
+    ALTO: 'focus:ring-rose-500 focus:border-rose-500'
+};
+
 const capturaState = {
     userProfile: null,
     availableAreas: [],
@@ -15,8 +22,74 @@ const capturaState = {
     selectedIndicador: null,
     selectedYear: new Date().getFullYear(),
     mediciones: [],
-    editingMedicion: null
+    editingMedicion: null,
+    metas: {
+        BAJO: {},
+        MEDIO: {},
+        ALTO: {}
+    },
+    canEditMetas: false
 };
+
+function resetMetasState() {
+    capturaState.metas = META_ESCENARIOS.reduce((acc, escenario) => {
+        acc[escenario] = {};
+        return acc;
+    }, {});
+}
+
+function normalizarEscenario(escenario) {
+    return (escenario || '').toString().trim().toUpperCase();
+}
+
+function setMetaRecord(escenario, mes, meta) {
+    const key = normalizarEscenario(escenario);
+    if (!META_ESCENARIOS.includes(key)) return;
+
+    if (!capturaState.metas[key]) {
+        capturaState.metas[key] = {};
+    }
+
+    if (!meta) {
+        delete capturaState.metas[key][mes];
+        return;
+    }
+
+    const valor = meta.valor === null || meta.valor === undefined
+        ? null
+        : Number(meta.valor);
+
+    capturaState.metas[key][mes] = {
+        ...meta,
+        valor: Number.isFinite(valor) ? valor : null
+    };
+}
+
+function getMetaRecord(escenario, mes) {
+    const key = normalizarEscenario(escenario);
+    return capturaState.metas?.[key]?.[mes] || null;
+}
+
+function getMetaValue(escenario, mes) {
+    const record = getMetaRecord(escenario, mes);
+    if (!record) return null;
+    const valor = Number(record.valor);
+    return Number.isFinite(valor) ? valor : null;
+}
+
+function getEscenarioDisplayName(escenario) {
+    const key = normalizarEscenario(escenario);
+    switch (key) {
+        case 'BAJO':
+            return 'Bajo';
+        case 'MEDIO':
+            return 'Mediano';
+        case 'ALTO':
+            return 'Alto';
+        default:
+            return key;
+    }
+}
 
 // =====================================================
 // RENDERIZADO PRINCIPAL
@@ -33,7 +106,12 @@ export async function render(container, params = {}, query = {}) {
         if (!capturaState.userProfile) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
-        
+
+        capturaState.canEditMetas = ['ADMIN', 'SUBDIRECTOR'].includes(
+            capturaState.userProfile.rol_principal
+        );
+        resetMetasState();
+
         // Cargar áreas donde el usuario puede capturar
         await loadUserCaptureAreas();
         
@@ -146,7 +224,7 @@ async function loadAreaIndicadores(areaId) {
 async function loadMediciones(indicadorId, year) {
     try {
         if (DEBUG.enabled) console.log(`📈 Cargando mediciones de ${indicadorId} para ${year}...`);
-        
+
         const { data } = await selectData('mediciones', {
             select: `
                 id, mes, valor, meta_mensual, observaciones,
@@ -159,17 +237,54 @@ async function loadMediciones(indicadorId, year) {
             },
             orderBy: { column: 'mes', ascending: true }
         });
-        
+
         capturaState.mediciones = data || [];
-        
+
         if (DEBUG.enabled) {
             console.log(`✅ ${capturaState.mediciones.length} mediciones encontradas`);
         }
-        
+
     } catch (error) {
         console.error('❌ Error al cargar mediciones:', error);
         capturaState.mediciones = [];
         showToast('Error al cargar mediciones existentes', 'error');
+    }
+}
+
+async function loadMetas(indicadorId, year) {
+    try {
+        if (DEBUG.enabled) {
+            console.log(`🎯 Cargando metas de ${indicadorId} para ${year}...`);
+        }
+
+        resetMetasState();
+
+        const { data } = await selectData('indicador_metas', {
+            select: `id, indicador_id, anio, mes, escenario, valor, observaciones, fecha_captura, fecha_ultima_edicion`,
+            filters: {
+                indicador_id: indicadorId,
+                anio: year
+            },
+            orderBy: [
+                { column: 'escenario', ascending: true },
+                { column: 'mes', ascending: true }
+            ]
+        });
+
+        (data || []).forEach(meta => {
+            setMetaRecord(meta.escenario, meta.mes, meta);
+        });
+
+        if (DEBUG.enabled) {
+            const totalMetas = META_ESCENARIOS.reduce((acc, escenario) => {
+                return acc + Object.keys(capturaState.metas[escenario]).length;
+            }, 0);
+            console.log(`✅ ${totalMetas} metas cargadas para el año ${year}`);
+        }
+    } catch (error) {
+        console.error('❌ Error al cargar metas:', error);
+        resetMetasState();
+        showToast('Error al cargar metas del indicador', 'error');
     }
 }
 // =====================================================
@@ -335,27 +450,38 @@ function createCapturaTableHTML() {
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
-    
-    const indicador = capturaState.selectedIndicador;
-    const metaMensual = indicador.meta_anual ? (indicador.meta_anual / 12) : null;
-    
+
+    const metaHeaders = META_ESCENARIOS.map(escenario => `
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Meta ${getEscenarioDisplayName(escenario)}
+        </th>
+    `).join('');
+
     return `
         <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
             <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between gap-4 flex-wrap">
                     <h3 class="text-lg font-semibold text-gray-900">
                         Captura de Mediciones - ${capturaState.selectedYear}
                     </h3>
-                    <button 
-                        id="guardar-todos-btn"
-                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                    >
-                        <i data-lucide="save" class="w-4 h-4"></i>
-                        <span>Guardar Todo</span>
-                    </button>
+                    <div class="flex items-center gap-3">
+                        ${capturaState.canEditMetas ? `
+                            <span class="inline-flex items-center gap-2 text-sm text-gray-500">
+                                <i data-lucide="target" class="w-4 h-4"></i>
+                                Solo Subdirectores y Administradores pueden editar metas
+                            </span>
+                        ` : ''}
+                        <button
+                            id="guardar-todos-btn"
+                            class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                        >
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            <span>Guardar Todo</span>
+                        </button>
+                    </div>
                 </div>
             </div>
-            
+
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -366,11 +492,10 @@ function createCapturaTableHTML() {
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Valor Real
                             </th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Meta Mensual
-                            </th>
+                            ${metaHeaders}
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 % Cumplimiento
+                                <span class="block text-[11px] text-gray-400 normal-case">vs Meta Escenario Mediano</span>
                             </th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Observaciones
@@ -384,17 +509,51 @@ function createCapturaTableHTML() {
                         ${meses.map((mes, index) => {
                             const mesNum = index + 1;
                             const medicion = capturaState.mediciones.find(m => m.mes === mesNum);
-                            const valor = medicion?.valor || '';
+                            const valor = medicion?.valor ?? '';
                             const observaciones = medicion?.observaciones || '';
-                            const cumplimiento = calcularCumplimiento(valor, metaMensual);
-                            
+
+                            const metaCells = META_ESCENARIOS.map(escenario => {
+                                const valorMeta = getMetaValue(escenario, mesNum);
+                                const metaId = `meta-${escenario}-${mesNum}`;
+                                const colorClasses = ESCENARIO_COLOR_CLASSES[escenario] || 'focus:ring-green-500 focus:border-green-500';
+                                const baseClasses = `w-32 border border-gray-300 rounded px-3 py-2 text-sm ${colorClasses}`;
+                                const disabledAttrs = capturaState.canEditMetas ? '' : 'disabled readonly tabindex="-1"';
+                                const visualClasses = capturaState.canEditMetas ? baseClasses : `${baseClasses} bg-gray-100 cursor-not-allowed`;
+                                const placeholder = capturaState.canEditMetas ? '0.00' : 'Sin meta';
+
+                                return `
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            id="${metaId}"
+                                            value="${valorMeta ?? ''}"
+                                            class="${visualClasses}"
+                                            placeholder="${placeholder}"
+                                            ${disabledAttrs}
+                                            data-escenario="${escenario}"
+                                        />
+                                    </td>
+                                `;
+                            }).join('');
+
+                            const metaReferencia = (() => {
+                                const metaMedio = getMetaValue('MEDIO', mesNum);
+                                if (metaMedio !== null) return metaMedio;
+                                if (medicion?.meta_mensual) return Number(medicion.meta_mensual);
+                                const indicador = capturaState.selectedIndicador;
+                                return indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+                            })();
+
+                            const cumplimiento = calcularCumplimiento(valor, metaReferencia);
+
                             return `
                                 <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         ${mes}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <input 
+                                        <input
                                             type="number"
                                             step="0.01"
                                             id="valor-${mesNum}"
@@ -403,16 +562,14 @@ function createCapturaTableHTML() {
                                             placeholder="0.00"
                                         />
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        ${metaMensual ? formatNumber(metaMensual) : 'N/A'}
-                                    </td>
+                                    ${metaCells}
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span id="cumplimiento-${mesNum}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCumplimientoClass(cumplimiento)}">
                                             ${cumplimiento !== null ? cumplimiento + '%' : '-'}
                                         </span>
                                     </td>
                                     <td class="px-6 py-4">
-                                        <textarea 
+                                        <textarea
                                             id="observaciones-${mesNum}"
                                             rows="2"
                                             class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
@@ -420,13 +577,24 @@ function createCapturaTableHTML() {
                                         >${observaciones}</textarea>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                        <button 
-                                            onclick="guardarMedicion(${mesNum})"
-                                            class="text-green-600 hover:text-green-900 transition-colors"
-                                            title="Guardar mes"
-                                        >
-                                            <i data-lucide="check-circle" class="w-5 h-5"></i>
-                                        </button>
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button
+                                                onclick="guardarMedicion(${mesNum})"
+                                                class="text-green-600 hover:text-green-900 transition-colors"
+                                                title="Guardar medición"
+                                            >
+                                                <i data-lucide="check-circle" class="w-5 h-5"></i>
+                                            </button>
+                                            ${capturaState.canEditMetas ? `
+                                                <button
+                                                    onclick="guardarMetas(${mesNum})"
+                                                    class="text-blue-600 hover:text-blue-900 transition-colors"
+                                                    title="Guardar metas del mes"
+                                                >
+                                                    <i data-lucide="target" class="w-5 h-5"></i>
+                                                </button>
+                                            ` : ''}
+                                        </div>
                                     </td>
                                 </tr>
                             `;
@@ -475,9 +643,12 @@ function createHistorialHTML() {
                 ${capturaState.mediciones.map(medicion => {
                     const mesNombre = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][medicion.mes - 1];
                     const indicador = capturaState.selectedIndicador;
-                    const metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+                    let metaMensual = getMetaValue('MEDIO', medicion.mes);
+                    if (metaMensual === null) {
+                        metaMensual = medicion.meta_mensual ?? (indicador?.meta_anual ? indicador.meta_anual / 12 : null);
+                    }
                     const cumplimiento = calcularCumplimiento(medicion.valor, metaMensual);
-                    
+
                     return `
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                             <div class="flex items-center space-x-4">
@@ -545,6 +716,11 @@ function setupEventListeners() {
         if (valorInput) {
             valorInput.addEventListener('input', () => updateCumplimiento(mes));
         }
+
+        const metaMedioInput = document.getElementById(`meta-MEDIO-${mes}`);
+        if (metaMedioInput) {
+            metaMedioInput.addEventListener('input', () => updateCumplimiento(mes));
+        }
     }
 }
 
@@ -558,7 +734,8 @@ async function handleAreaChange(e) {
         capturaState.selectedArea = null;
         capturaState.selectedIndicador = null;
         capturaState.availableIndicadores = [];
-        
+        resetMetasState();
+
         const indicadorSelector = document.getElementById('indicador-selector');
         if (indicadorSelector) {
             indicadorSelector.disabled = true;
@@ -605,20 +782,22 @@ async function handleIndicadorChange(e) {
     if (!indicadorId) {
         capturaState.selectedIndicador = null;
         capturaState.mediciones = [];
+        resetMetasState();
         refreshCapturaContent();
         return;
     }
-    
+
     try {
         showLoading('Cargando datos del indicador...');
-        
+
         const indicador = capturaState.availableIndicadores.find(ind => ind.id === indicadorId);
         capturaState.selectedIndicador = indicador;
-        
+
         await loadMediciones(indicadorId, capturaState.selectedYear);
-        
+        await loadMetas(indicadorId, capturaState.selectedYear);
+
         refreshCapturaContent();
-        
+
         hideLoading();
         
     } catch (error) {
@@ -639,6 +818,7 @@ async function handleYearChange(e) {
         try {
             showLoading('Cargando mediciones del año...');
             await loadMediciones(capturaState.selectedIndicador.id, year);
+            await loadMetas(capturaState.selectedIndicador.id, year);
             refreshCapturaContent();
             hideLoading();
         } catch (error) {
@@ -655,15 +835,39 @@ async function handleYearChange(e) {
 function updateCumplimiento(mes) {
     const valorInput = document.getElementById(`valor-${mes}`);
     const cumplimientoSpan = document.getElementById(`cumplimiento-${mes}`);
-    
+
     if (!valorInput || !cumplimientoSpan) return;
-    
+
     const valor = parseFloat(valorInput.value);
-    const indicador = capturaState.selectedIndicador;
-    const metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
-    
+    const metaInput = document.getElementById(`meta-MEDIO-${mes}`);
+    let metaMensual = null;
+
+    if (metaInput) {
+        const rawMeta = metaInput.value.trim();
+        if (rawMeta !== '') {
+            const parsedMeta = parseFloat(rawMeta);
+            metaMensual = Number.isFinite(parsedMeta) ? parsedMeta : null;
+        }
+    }
+
+    if (metaMensual === null) {
+        metaMensual = getMetaValue('MEDIO', mes);
+    }
+
+    if (metaMensual === null) {
+        const medicion = capturaState.mediciones.find(m => m.mes === mes);
+        if (medicion?.meta_mensual) {
+            metaMensual = Number(medicion.meta_mensual);
+        }
+    }
+
+    if (metaMensual === null) {
+        const indicador = capturaState.selectedIndicador;
+        metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+    }
+
     const cumplimiento = calcularCumplimiento(valor, metaMensual);
-    
+
     if (cumplimiento !== null) {
         cumplimientoSpan.textContent = cumplimiento + '%';
         cumplimientoSpan.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCumplimientoClass(cumplimiento)}`;
@@ -722,9 +926,12 @@ window.guardarMedicion = async function(mes) {
         }
         
         showLoading('Guardando medición...');
-        
+
         const indicador = capturaState.selectedIndicador;
-        const metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+        let metaMensual = getMetaValue('MEDIO', mes);
+        if (metaMensual === null) {
+            metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+        }
         const observaciones = observacionesInput?.value || null;
         
         // Verificar si ya existe una medición para este mes
@@ -776,6 +983,110 @@ window.guardarMedicion = async function(mes) {
     }
 };
 
+window.guardarMetas = async function(mes) {
+    if (!capturaState.canEditMetas) {
+        showToast('No cuenta con permisos para editar metas', 'error');
+        return;
+    }
+
+    if (!capturaState.selectedIndicador) {
+        showToast('Seleccione un indicador para capturar metas', 'warning');
+        return;
+    }
+
+    try {
+        const metasCapturadas = [];
+
+        for (const escenario of META_ESCENARIOS) {
+            const input = document.getElementById(`meta-${escenario}-${mes}`);
+            if (!input) continue;
+
+            const rawValor = input.value.trim();
+            let valor = null;
+
+            if (rawValor !== '') {
+                const parsed = parseFloat(rawValor);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    showToast(`Ingrese una meta válida para el escenario ${getEscenarioDisplayName(escenario)}`, 'warning');
+                    input.focus();
+                    return;
+                }
+                valor = parsed;
+            }
+
+            metasCapturadas.push({ escenario, valor });
+        }
+
+        const hayCambios = metasCapturadas.some(meta => {
+            const registroActual = getMetaRecord(meta.escenario, mes);
+            const valorActual = registroActual ? getMetaValue(meta.escenario, mes) : null;
+            return meta.valor !== valorActual;
+        });
+
+        if (!hayCambios) {
+            showToast('No hay cambios en las metas para este mes', 'info');
+            return;
+        }
+
+        showLoading('Guardando metas...');
+
+        for (const meta of metasCapturadas) {
+            const actual = getMetaRecord(meta.escenario, mes);
+
+            if (actual && meta.valor === null) {
+                await deleteData('indicador_metas', { id: actual.id });
+            } else if (actual) {
+                await updateData('indicador_metas',
+                    {
+                        valor: meta.valor,
+                        editado_por: capturaState.userProfile.id,
+                        fecha_ultima_edicion: new Date().toISOString()
+                    },
+                    { id: actual.id }
+                );
+            } else if (meta.valor !== null) {
+                await insertData('indicador_metas', {
+                    indicador_id: capturaState.selectedIndicador.id,
+                    anio: capturaState.selectedYear,
+                    mes: mes,
+                    escenario: meta.escenario,
+                    valor: meta.valor,
+                    capturado_por: capturaState.userProfile.id,
+                    fecha_captura: new Date().toISOString()
+                });
+            }
+        }
+
+        await loadMetas(capturaState.selectedIndicador.id, capturaState.selectedYear);
+
+        const metaMedioFinal = getMetaValue('MEDIO', mes);
+        const medicionExistente = capturaState.mediciones.find(m => m.mes === mes);
+
+        if (medicionExistente) {
+            await updateData('mediciones',
+                {
+                    meta_mensual: metaMedioFinal,
+                    editado_por: capturaState.userProfile.id,
+                    fecha_ultima_edicion: new Date().toISOString()
+                },
+                { id: medicionExistente.id }
+            );
+
+            await loadMediciones(capturaState.selectedIndicador.id, capturaState.selectedYear);
+        }
+
+        refreshCapturaContent();
+
+        hideLoading();
+        showToast(`Metas de ${getMesNombre(mes)} actualizadas correctamente`, 'success');
+
+    } catch (error) {
+        hideLoading();
+        console.error('Error al guardar metas:', error);
+        showToast('Error al guardar las metas: ' + error.message, 'error');
+    }
+};
+
 /**
  * Guardar todas las mediciones del año
  */
@@ -820,17 +1131,21 @@ async function handleGuardarTodos() {
         }
         
         showLoading(`Guardando ${medicionesAGuardar.length} mediciones...`);
-        
+
         const indicador = capturaState.selectedIndicador;
-        const metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
-        
+
         let guardadas = 0;
         let actualizadas = 0;
-        
+
         // Procesar cada medición
         for (const medicion of medicionesAGuardar) {
             const medicionExistente = capturaState.mediciones.find(m => m.mes === medicion.mes);
-            
+
+            let metaMensual = getMetaValue('MEDIO', medicion.mes);
+            if (metaMensual === null) {
+                metaMensual = indicador?.meta_anual ? indicador.meta_anual / 12 : null;
+            }
+
             if (medicionExistente) {
                 // Actualizar
                 await updateData('mediciones',

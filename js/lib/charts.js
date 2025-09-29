@@ -218,7 +218,8 @@ async function crearGraficaMeta(canvasId, datosReales, datosMetas, opciones = {}
     const {
         anio = new Date().getFullYear(),
         escenario = 'medio',
-        titulo = 'Real vs Meta'
+        titulo = 'Real vs Meta',
+        escenarioLabel = null
     } = opciones;
 
     try {
@@ -245,13 +246,16 @@ async function crearGraficaMeta(canvasId, datosReales, datosMetas, opciones = {}
                 dataMeta[d.mes - 1] = d.valor;
             });
 
+        const etiquetaEscenario = escenarioLabel
+            || `Meta ${escenario.charAt(0).toUpperCase()}${escenario.slice(1)}`;
+
         chartInstances.meta = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: MESES,
                 datasets: [
                     { label: `Real ${anio}`, data: dataReal, borderColor: '#3B82F6', borderWidth: 3 },
-                    { label: `Meta ${escenario}`, data: dataMeta, borderColor: obtenerColorEscenario(escenario), borderDash: [10, 5] }
+                    { label: etiquetaEscenario, data: dataMeta, borderColor: obtenerColorEscenario(escenario), borderDash: [10, 5] }
                 ]
             },
             options: { ...CHART_CONFIGS.base, plugins: { ...CHART_CONFIGS.base.plugins, title: { display: true, text: titulo } } }
