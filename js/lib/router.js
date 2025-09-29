@@ -4,9 +4,10 @@
 // =====================================================
 
 import { DEBUG } from '../config.js';
-import { appState, isAuthenticated } from './supa.js';
+import { appState, appStore, isAuthenticated } from './supa.js';
 import { showToast, showLoading, hideLoading, resetLoadingState } from './ui.js';
 import { renderTemplate } from '../core/dom.js';
+import { abortRequestsByContext } from './network.js';
 
 export const routerState = {
     currentRoute: null,
@@ -29,6 +30,8 @@ function beginNavigation() {
     if (activeNavigationController) {
         activeNavigationController.abort('navigation:replaced');
     }
+
+    abortRequestsByContext(null, 'navigation:replaced');
 
     activeNavigationController = new AbortController();
     activeNavigationId += 1;
@@ -54,6 +57,8 @@ export function cancelActiveNavigation(reason = 'navigation:cancelled') {
         activeNavigationController.abort(reason);
         activeNavigationController = null;
     }
+
+    abortRequestsByContext(null, reason);
 }
 
 // =====================================================
@@ -544,6 +549,16 @@ async function handleRouteChange(route) {
         updateActiveNavigation(definition);
         updateBreadcrumb(definition, params);
         updateDocumentTitle(definition, params);
+
+        appStore.setState(() => ({
+            route: {
+                path: route.path,
+                params,
+                query: route.query,
+                name: definition?.name || null,
+                timestamp: Date.now()
+            }
+        }));
 
         window.dispatchEvent(new CustomEvent('router:route-changed', {
             detail: {
