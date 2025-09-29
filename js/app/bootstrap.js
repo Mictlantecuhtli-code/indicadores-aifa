@@ -634,7 +634,7 @@ function setupUserMenu() {
             closeUserMenuDropdown();
 
             try {
-                const confirmed = await ui.showConfirm('¿Estás seguro de cerrar sesión?', {
+                const confirmed = await ui.showConfirmModal('¿Estás seguro de cerrar sesión?', {
                     title: 'Confirmar cierre de sesión',
                     confirmText: 'Cerrar sesión',
                     cancelText: 'Cancelar',

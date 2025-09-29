@@ -654,6 +654,7 @@ async function cargarDatosMetas(indicador, escenario) {
             mes: null,
             coincideConMedicion: false
         };
+
         throw error;
     }
 }
@@ -1078,6 +1079,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
             || (panelState.opcionSeleccionada.includes('bajo') ? 'bajo'
                 : panelState.opcionSeleccionada.includes('medio') ? 'medio'
                     : 'alto');
+
         const escenarioNombre = escenarioSlug === 'bajo' ? 'Escenario Bajo'
             : escenarioSlug === 'medio' ? 'Escenario Mediano'
             : 'Escenario Alto';
