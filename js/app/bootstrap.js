@@ -762,7 +762,6 @@ function handlePageHide(event) {
         clearInterval(window.autoRefreshInterval);
     }
 }
-
 async function handleStorageEvent(event) {
     if (event.storageArea !== localStorage) return;
     if (event.key !== 'supabase.auth.token') return;
