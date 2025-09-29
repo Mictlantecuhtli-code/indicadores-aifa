@@ -1672,6 +1672,8 @@ function setupVisibilityHandlers() {
                             }
                             // NO notificar a listeners para evitar re-renderizados
                         }
+                        setupGlobalAutoRefresh();
+
                     } else if (previousSession) {
                         // Confirmar la pérdida real de sesión antes de notificar
                         appState.user = null;

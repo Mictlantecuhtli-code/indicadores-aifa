@@ -7,9 +7,7 @@ import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
 import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
-import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword, getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
-//import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword } from '../lib/supa.js';
-//import { getCurrentSession, setupGlobalAutoRefresh } from '../lib/supa.js';
+import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword, getCurrentSession } from '../lib/supa.js';
 
 // =====================================================
 // UTILIDADES
@@ -49,15 +47,8 @@ function exposeGlobals() {
 }
 
 function setupGlobalErrorHandlers() {
-        // Manejar eventos de visibilidad para prevenir pérdida de sesión
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        
-        // Manejar eventos de foco de ventana
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        window.addEventListener('pagehide', handlePageHide);
-        
-        // Manejar errores no capturados
-        window.addEventListener('error', (event) => {
+    // Manejar errores no capturados
+    window.addEventListener('error', (event) => {
         console.error('❌ Error global capturado:', event.error);
         if (window.ui?.showToast) {
             window.ui.showToast('Ha ocurrido un error inesperado', 'error');
@@ -138,6 +129,8 @@ function updateUserHeader() {
 const ROLE_NAVIGATION_RULES = {
     DIRECTOR: new Set(['nav-visualizacion', 'nav-panel-directivos'])
 };
+
+let sessionMonitoringConfigured = false;
 
 function applyRoleNavigationRestrictions() {
     const navigation = document.getElementById('main-nav');
@@ -751,60 +744,6 @@ if (document.readyState === 'loading') {
     bootstrap();
 }
 /**
- * Manejar cambios de visibilidad
- */
-function handleVisibilityChange() {
-    if (document.visibilityState === 'hidden') {
-        // Cuando se oculta la página, guardar estado
-        if (appState.session) {
-            sessionStorage.setItem('aifa-session-backup', JSON.stringify({
-                timestamp: Date.now(),
-                userId: appState.user?.id,
-                email: appState.user?.email
-            }));
-        }
-    } else if (document.visibilityState === 'visible') {
-        // Cuando regresa, verificar sesión
-        setTimeout(async () => {
-            await verifySessionOnReturn();
-        }, 200);
-    }
-}
-
-/**
- * Verificar sesión al regresar a la ventana
- */
-async function verifySessionOnReturn() {
-    try {
-        const { getCurrentSession, appState } = await import('../lib/supa.js');
-        
-        const backup = sessionStorage.getItem('aifa-session-backup');
-        if (backup) {
-            const sessionData = JSON.parse(backup);
-            
-            // Si pasó más de 30 minutos, verificar sesión
-            if (Date.now() - sessionData.timestamp > 30 * 60 * 1000) {
-                const previousSession = appState.session;
-                const session = await getCurrentSession({ allowRefresh: true });
-
-                if (!session && previousSession) {
-                    console.warn('⚠️ Sesión expirada, redirigiendo al login');
-                    navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
-                    return;
-                }
-            }
-        }
-        
-        // Actualizar header de usuario
-        updateUserHeader();
-        
-    } catch (error) {
-        console.error('❌ Error al verificar sesión:', error);
-        navigateTo('/login', { message: 'Error de sesión', type: 'error' }, true);
-    }
-}
-
-/**
  * Manejar antes de cerrar ventana
  */
 function handleBeforeUnload(event) {
@@ -823,117 +762,49 @@ function handlePageHide(event) {
         clearInterval(window.autoRefreshInterval);
     }
 }
+async function handleStorageEvent(event) {
+    if (event.storageArea !== localStorage) return;
+    if (event.key !== 'supabase.auth.token') return;
+    if (event.newValue || !appState.session) return;
+
+    if (DEBUG.enabled) {
+        console.warn('⚠️ Sesión posiblemente cerrada en otra pestaña');
+    }
+
+    try {
+        const session = await getCurrentSession({ allowRefresh: true, silent: true });
+        if (session) {
+            return;
+        }
+    } catch (error) {
+        if (DEBUG.enabled) {
+            console.warn('⚠️ Error al confirmar cierre de sesión desde storage event:', error);
+        }
+    }
+
+    appState.session = null;
+    appState.user = null;
+    appState.profile = null;
+
+    navigateTo('/login', {
+        message: 'Sesión cerrada en otra ventana',
+        type: 'info'
+    }, true);
+}
 /**
  * Configurar monitoreo de sesión
  */
 function setupSessionMonitoring() {
-    // Verificar sesión cada minuto
-    setInterval(async () => {
-        if (appState.session && document.visibilityState === 'visible') {
-            try {
-                const previousSession = appState.session;
-                const session = await getCurrentSession({ allowRefresh: true, silent: true });
-
-                if (!session && previousSession) {
-                    console.warn('⚠️ Sesión perdida, redirigiendo al login');
-
-                    // Limpiar estado
-                    appState.session = null;
-                    appState.user = null;
-                    appState.profile = null;
-
-                    // Limpiar intervals
-                    if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
-                    if (window.homeRefreshInterval) clearInterval(window.homeRefreshInterval);
-                    if (window.areaRefreshInterval) clearInterval(window.areaRefreshInterval);
-
-                    // Redirigir al login
-                    navigateTo('/login', {
-                        message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
-                        type: 'warning'
-                    }, true);
-                }
-            } catch (error) {
-                console.error('❌ Error al verificar sesión:', error);
-            }
-        }
-    }, 60000); // Cada minuto
-    
-    // Detectar cambios de pestaña/ventana con más precisión
-    let isTabActive = true;
-    
-    document.addEventListener('visibilitychange', () => {
-        isTabActive = !document.hidden;
-        
-        if (isTabActive && appState.session) {
-            // Al regresar a la pestaña, verificar sesión inmediatamente
-            setTimeout(async () => {
-                try {
-                    const previousSession = appState.session;
-                    const session = await getCurrentSession({ allowRefresh: true });
-                    if (!session && previousSession) {
-                        navigateTo('/login', {
-                            message: 'Su sesión ha expirado',
-                            type: 'warning'
-                        }, true);
-                    }
-                } catch (error) {
-                    console.error('❌ Error al verificar sesión al regresar:', error);
-                }
-            }, 500);
-        }
-    });
-    
-    // Detectar eventos de almacenamiento (útil para múltiples pestañas)
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'supabase.auth.token' && !e.newValue && appState.session) {
-            // Sesión cerrada en otra pestaña
-            console.warn('⚠️ Sesión cerrada en otra pestaña');
-            appState.session = null;
-            appState.user = null;
-            appState.profile = null;
-            
-            navigateTo('/login', { 
-                message: 'Sesión cerrada en otra ventana', 
-                type: 'info' 
-            }, true);
-        }
-    });
-}
-
-/**
- * Manejar eventos de foco de ventana
- */
-window.addEventListener('focus', () => {
-    if (DEBUG.enabled) console.log('🔍 Ventana recuperó el foco');
-    // Verificar sesión al recuperar foco
-    setTimeout(async () => {
-        try {
-            const previousSession = appState.session;
-            const session = await getCurrentSession({ allowRefresh: true });
-
-            // Verificar que appState tenga sesión
-            if (!session && previousSession) {
-                console.warn('⚠️ No hay sesión después de verificar');
-                navigateTo('/login', { message: 'Su sesión ha expirado', type: 'warning' }, true);
-                return;
-            }
-            
-            // Reanudar auto-refresh si existe
-            setupGlobalAutoRefresh();
-        } catch (error) {
-            console.error('❌ Error al verificar sesión al recuperar foco:', error);
-        }
-    }, 100);
-});
-
-window.addEventListener('blur', () => {
-    if (DEBUG.enabled) console.log('🔍 Ventana perdió el foco');
-    // Pausar auto-refresh cuando se pierde el foco
-    if (window.autoRefreshInterval) {
-        clearInterval(window.autoRefreshInterval);
+    if (sessionMonitoringConfigured) {
+        return;
     }
-});
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('storage', handleStorageEvent);
+
+    sessionMonitoringConfigured = true;
+}
 /**
  * Limpiar recursos al cerrar/recargar la página
  */
