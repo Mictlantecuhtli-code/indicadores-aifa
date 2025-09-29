@@ -1,8 +1,10 @@
 {
   "name": "indicadores-aifa",
-  "version": "1.0.0",
-  "description": "Proyecto de indicadores AIFA",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Panel estratégico y módulos de consulta/captura para indicadores del AIFA en un bundle estático sin dependencias de build.",
+  "type": "module",
   "scripts": {
-    "test": "echo \"No hay pruebas definidas\""
+    "start": "echo 'Esta aplicación es estática. Sirve el directorio con cualquier servidor web.'"
   }
 }
