@@ -1,12 +1,13 @@
 import { DEBUG } from '../../config.js';
-import { navigateTo } from '../../lib/router.js';
-import { appState, getCurrentSession } from '../../lib/supa.js';
+import { appState, getCurrentSession, redirectToLogin } from '../../lib/supa.js';
+
 
 const INTERVAL_KEYS = [
     'autoRefreshInterval',
     'homeRefreshInterval',
     'areaRefreshInterval',
-    'visualizacionRefreshInterval'
+    'visualizacionRefreshInterval',
+    'tokenHealthCheckInterval'
 ];
 
 let monitoringConfigured = false;
@@ -60,7 +61,7 @@ async function handleStorageEvent(event) {
     appState.user = null;
     appState.profile = null;
 
-    navigateTo('/login', {
+    redirectToLogin({
         message: 'Sesión cerrada en otra ventana',
         type: 'info'
     }, true);

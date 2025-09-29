@@ -1,6 +1,6 @@
 import { VALIDATION } from '../../config.js';
 import { navigateTo, parseCurrentRoute } from '../../lib/router.js';
-import { appState, changePassword, isAuthenticated, signOut } from '../../lib/supa.js';
+import { appState, changePassword, isAuthenticated, signOut, redirectToLogin } from '../../lib/supa.js';
 import * as ui from '../../lib/ui.js';
 import { clearAppIntervals } from './session.js';
 
@@ -104,7 +104,7 @@ function openUserMenuDropdown() {
     }
 
     if (!appState.user) {
-        navigateTo('/login');
+        redirectToLogin({}, true);
         return;
     }
 
@@ -159,7 +159,7 @@ function closeUserMenuDropdown({ focusButton = false } = {}) {
 
 function toggleUserMenuDropdown() {
     if (!appState.session) {
-        navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
+        redirectToLogin({ message: 'Sesión expirada', type: 'warning' }, true);
         return;
     }
 
@@ -500,7 +500,8 @@ function bindSignOutAction() {
             ui.showToast('Sesión cerrada correctamente', 'success');
 
             setTimeout(() => {
-                navigateTo('/login', {}, true);
+                redirectToLogin({}, true);
+
                 window.location.reload();
             }, 300);
         } catch (error) {

@@ -4,56 +4,13 @@
 // =====================================================
 
 import { DEBUG, APP_CONFIG } from '../config.js';
-import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
+import { selectData, appState, getCurrentProfile, redirectToLogin } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber, formatPercentage, exportToCSV } from '../lib/ui.js';
 
 const MAX_INDICADORES_SELECTION = 4;
 
 const CHART_COLORS = [ '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4','#84CC16', '#F97316', '#EC4899', '#6B7280', '#14B8A6', '#A855F7'];
-
-
-        /**
-         * Limpiar nombre de área removiendo "Dirección General" y prefijos similares
-         */
-        function cleanAreaName(nombre) {
-            if (!nombre) return nombre;
-            
-            // Lista de prefijos a remover (en orden de prioridad)
-            const prefixesToRemove = [
-                'Dirección General ',
-                'Dirección General de ',
-                'Dirección General del ',
-                'Dirección General de la ',
-                'Dirección General de las ',
-                'Dirección General de los ',
-                'Dirección ',
-                'Subdirección ',
-                'Subdirección General ',
-                'Subdirección General de ',
-                'Subdirección General del ',
-                'Subdirección General de la ',
-                'Subdirección General de las ',
-                'Subdirección General de los '
-            ];
-            
-            let cleanedName = nombre.trim();
-            
-            // Remover prefijos uno por uno
-            for (const prefix of prefixesToRemove) {
-                if (cleanedName.startsWith(prefix)) {
-                    cleanedName = cleanedName.substring(prefix.length).trim();
-                    break; // Solo remover el primer prefijo encontrado
-                }
-            }
-            
-            // Capitalizar primera letra si es necesario
-            if (cleanedName.length > 0) {
-                cleanedName = cleanedName.charAt(0).toUpperCase() + cleanedName.slice(1);
-            }
-            
-            return cleanedName || nombre; // Fallback al nombre original si queda vacío
-        }
-const visualizacionState = {
+const defaultVisualizacionState = {
     userProfile: null,
     availableAreas: [],
     availableIndicadores: [],
@@ -63,10 +20,114 @@ const visualizacionState = {
     availableYears: [],
     chartData: [],
     chartInstances: {},
-    viewMode: 'comparative', // 'comparative', 'dashboard', 'trends'
+    viewMode: 'comparative',
     loading: false,
     lastRefresh: null
 };
+
+const visualizacionState = { ...defaultVisualizacionState };
+
+let pendingChartSetupTimeout = null;
+
+function clearPendingChartSetup() {
+    if (!pendingChartSetupTimeout) {
+        return;
+    }
+
+    clearTimeout(pendingChartSetupTimeout);
+    pendingChartSetupTimeout = null;
+}
+
+function resetVisualizacionState() {
+    destroyAllCharts();
+    clearPendingChartSetup();
+
+    Object.assign(visualizacionState, {
+        userProfile: null,
+        availableAreas: [],
+        availableIndicadores: [],
+        selectedAreas: [],
+        selectedIndicadores: [],
+        selectedYears: [],
+        availableYears: [],
+        chartData: [],
+        chartInstances: {},
+        viewMode: 'comparative',
+        loading: false,
+        lastRefresh: null
+    });
+}
+
+function renderLoadingPlaceholder(container, message = 'Preparando visualización...') {
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="min-h-[60vh] flex flex-col items-center justify-center text-center text-gray-500 space-y-3">
+            <i data-lucide="loader-2" class="w-10 h-10 animate-spin text-aifa-blue"></i>
+            <p class="text-sm font-medium text-gray-700">${message}</p>
+            <p class="text-xs text-gray-400">Estamos cargando los datos de visualización, esto puede tardar unos segundos.</p>
+        </div>
+    `;
+
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}
+
+function linkAbortSignals(externalSignal, controller) {
+    if (!externalSignal) {
+        return;
+    }
+
+    if (externalSignal.aborted && !controller.signal.aborted) {
+        controller.abort(externalSignal.reason || 'navigation:aborted');
+        return;
+    }
+
+    externalSignal.addEventListener('abort', () => {
+        if (!controller.signal.aborted) {
+            controller.abort(externalSignal.reason || 'navigation:aborted');
+        }
+    }, { once: true });
+}
+
+function cleanAreaName(nombre) {
+    if (!nombre) return nombre;
+
+    const prefixesToRemove = [
+        'Dirección General ',
+        'Dirección General de ',
+        'Dirección General del ',
+        'Dirección General de la ',
+        'Dirección General de las ',
+        'Dirección General de los ',
+        'Dirección ',
+        'Subdirección ',
+        'Subdirección General ',
+        'Subdirección General de ',
+        'Subdirección General del ',
+        'Subdirección General de la ',
+        'Subdirección General de las ',
+        'Subdirección General de los '
+    ];
+
+    let cleanedName = nombre.trim();
+
+    for (const prefix of prefixesToRemove) {
+        if (cleanedName.startsWith(prefix)) {
+            cleanedName = cleanedName.substring(prefix.length).trim();
+            break;
+        }
+    }
+
+    if (cleanedName.length > 0) {
+        cleanedName = cleanedName.charAt(0).toUpperCase() + cleanedName.slice(1);
+    }
+
+    return cleanedName || nombre;
+}
 
 // =====================================================
 // RENDERIZADO DE LA VISTA PRINCIPAL
@@ -75,113 +136,191 @@ const visualizacionState = {
 /**
  * Renderizar vista de visualización
  */
-export async function render(container, params = {}, query = {}) {
-    try {
-        if (DEBUG.enabled) console.log('📊 Renderizando vista de visualización');
-        
-        // Verificar sesión antes de renderizar
-        if (!appState.session) {
-            console.warn('⚠️ No hay sesión activa en visualización');
-            navigateTo('/login', { message: 'Sesión requerida', type: 'warning' }, true);
-            return;
-        }
-        
-     // Obtener perfil del usuario
-        visualizacionState.userProfile = await getCurrentProfile();
-        if (!visualizacionState.userProfile) {
-            throw new Error('No se pudo obtener el perfil del usuario');
-        }
-        
-        // Procesar parámetros de query (si esta función existe)
-        if (typeof processQueryParams === 'function') {
-            processQueryParams(query);
-        }
-        
-        // CAMBIO CRÍTICO: Cargar datos EN SECUENCIA, no en paralelo
-        console.log('🔄 Cargando áreas primero...');
-        await loadAvailableAreas();
-        
-        console.log('🔄 Cargando indicadores después de las áreas...');
-        await loadAvailableIndicadores();
-        
-        console.log('🔄 Cargando años disponibles...');
-        await loadAvailableYears();
-        
-        // Configurar selecciones por defecto (si esta función existe)
-        if (typeof setupDefaultSelections === 'function') {
-            setupDefaultSelections();
-        }
-        
-        // Cargar datos de gráficas si hay selecciones
-        if (visualizacionState.selectedIndicadores.length > 0) {
-            await loadChartData();
-        }
-        
-        // Renderizar HTML (busca la función que ya tienes)
-        if (typeof createVisualizacionHTML === 'function') {
-            container.innerHTML = createVisualizacionHTML();
-        } else {
-            // HTML básico si la función no existe
+export async function render(container, params = {}, query = {}, options = {}) {
+    const navigationSignal = options?.signal || null;
+    const viewController = new AbortController();
+
+    linkAbortSignals(navigationSignal, viewController);
+
+    const isAborted = () => Boolean(navigationSignal?.aborted || viewController.signal.aborted);
+
+    if (DEBUG.enabled) {
+        console.log('📊 Renderizando vista de visualización');
+    }
+
+    resetVisualizacionState();
+    renderLoadingPlaceholder(container);
+
+    visualizacionState.loading = true;
+
+    const initializeVisualization = async () => {
+        showLoading('Preparando visualización...');
+
+        try {
+            if (!appState.session) {
+                if (DEBUG.enabled) {
+                    console.warn('⚠️ No hay sesión activa en visualización');
+                }
+                redirectToLogin({ message: 'Sesión requerida', type: 'warning' }, true);
+                return;
+            }
+
+            const profile = await getCurrentProfile();
+            if (isAborted()) return;
+
+            if (!profile) {
+                throw new Error('No se pudo obtener el perfil del usuario');
+            }
+
+            visualizacionState.userProfile = profile;
+
+            if (typeof processQueryParams === 'function') {
+                processQueryParams(query || {});
+            }
+
+            await loadAvailableAreas();
+            if (isAborted()) return;
+
+            await loadAvailableIndicadores();
+            if (isAborted()) return;
+
+            await loadAvailableYears();
+            if (isAborted()) return;
+
+            if (typeof setupDefaultSelections === 'function') {
+                setupDefaultSelections();
+            }
+
+            if (isAborted()) return;
+
+            if (visualizacionState.selectedIndicadores.length > 0) {
+                await loadChartData();
+                if (isAborted()) return;
+            }
+
+            if (isAborted()) return;
+
+            if (typeof createVisualizacionHTML === 'function') {
+                container.innerHTML = createVisualizacionHTML();
+            } else {
+                container.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h1 class="text-2xl font-bold mb-4">Visualización de Indicadores</h1>
+                            <p>Áreas cargadas: ${visualizacionState.availableAreas?.length || 0}</p>
+                            <p>Indicadores cargados: ${visualizacionState.availableIndicadores?.length || 0}</p>
+                            <p>Años disponibles: ${visualizacionState.availableYears?.join(', ') || 'Ninguno'}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+
+            if (typeof setupEventListeners === 'function') {
+                setupEventListeners();
+            }
+
+            if (typeof setupAutoRefresh === 'function') {
+                setupAutoRefresh();
+            }
+
+            visualizacionState.lastRefresh = new Date();
+
+            if (typeof updateStatsDisplay === 'function') {
+                updateStatsDisplay();
+            }
+
+            clearPendingChartSetup();
+            pendingChartSetupTimeout = setTimeout(() => {
+                if (isAborted()) {
+                    return;
+                }
+
+                if (typeof createCharts === 'function') {
+                    createCharts();
+                }
+
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+
+                pendingChartSetupTimeout = null;
+            }, 60);
+
+            if (DEBUG.enabled) {
+                console.log('✅ Vista de visualización lista (carga diferida)');
+            }
+        } catch (error) {
+            if (isAborted()) {
+                return;
+            }
+
+            console.error('❌ Error al renderizar vista de visualización:', error);
+
+            if (error.message?.includes('auth') || error.code === 'PGRST301') {
+                redirectToLogin({ message: 'Sesión expirada', type: 'warning' }, true);
+                return;
+            }
+
             container.innerHTML = `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-lg shadow">
-                        <h1 class="text-2xl font-bold mb-4">Visualización de Indicadores</h1>
-                        <p>Áreas cargadas: ${visualizacionState.availableAreas?.length || 0}</p>
-                        <p>Indicadores cargados: ${visualizacionState.availableIndicadores?.length || 0}</p>
-                        <p>Años disponibles: ${visualizacionState.availableYears?.join(', ') || 'Ninguno'}</p>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-6 m-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="text-red-500">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-red-800">Error al cargar la visualización</h3>
+                            <p class="text-red-600 mt-1">${error.message}</p>
+                            <button
+                                onclick="window.location.reload()"
+                                class="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                            >
+                                Recargar página
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
+
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+
+            showToast('Error al cargar la visualización', 'error');
+        } finally {
+            visualizacionState.loading = false;
+
+            if (isAborted()) {
+                clearPendingChartSetup();
+            }
+
+            hideLoading();
         }
-        
-        // Configurar event listeners (si esta función existe)
-        if (typeof setupEventListeners === 'function') {
-            setupEventListeners();
+    };
+
+    initializeVisualization();
+
+    const teardown = () => {
+        if (!viewController.signal.aborted) {
+            viewController.abort('view:destroyed');
         }
-        
-        // Configurar auto-refresh
-        setupAutoRefresh();
-        
-        // Marcar tiempo de carga
-        visualizacionState.lastRefresh = new Date();
-        
-        hideLoading();
-        
-        if (DEBUG.enabled) console.log('✅ Vista de visualización renderizada correctamente');
-        
-    } catch (error) {
-        hideLoading();
-        console.error('❌ Error al renderizar vista de visualización:', error);
-        
-        // Si es error de autenticación, redirigir
-        if (error.message?.includes('auth') || error.code === 'PGRST301') {
-            navigateTo('/login', { message: 'Sesión expirada', type: 'warning' }, true);
-            return;
+
+        clearPendingChartSetup();
+
+        if (window.visualizacionRefreshInterval) {
+            clearInterval(window.visualizacionRefreshInterval);
+            window.visualizacionRefreshInterval = null;
         }
-        
-        // HTML de error simple
-        container.innerHTML = `
-            <div class="bg-red-50 border border-red-200 rounded-lg p-6 m-4">
-                <div class="flex items-center space-x-3">
-                    <div class="text-red-500">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-medium text-red-800">Error al cargar la visualización</h3>
-                        <p class="text-red-600 mt-1">${error.message}</p>
-                        <button 
-                            onclick="window.location.reload()" 
-                            class="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                        >
-                            Recargar página
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+
+        destroyAllCharts();
+    };
+
+    return teardown;
 }
 
 /**

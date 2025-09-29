@@ -10,6 +10,48 @@ export let supabase = typeof window !== 'undefined' ? window.supabaseClient ?? n
 
 let supabaseAvailabilityLogged = false;
 
+function getCurrentHashPath() {
+    if (typeof window === 'undefined') {
+        return '/';
+    }
+
+    return window.location.hash.replace(/^#/, '') || '/';
+}
+
+function isLoginRoute(path = getCurrentHashPath()) {
+    return path === '/login' || path.startsWith('/login?');
+}
+
+function showToastOnLoginRoute(options = {}) {
+    if (!options?.message) {
+        return;
+    }
+
+    if (typeof window === 'undefined' || !window.ui?.showToast) {
+        return;
+    }
+
+    const type = options.type || 'info';
+    window.ui.showToast(options.message, type);
+}
+
+export function redirectToLogin(options = {}, replace = true, { toastOnSameRoute = true } = {}) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (isLoginRoute()) {
+        if (toastOnSameRoute) {
+            showToastOnLoginRoute(options);
+        }
+        return;
+    }
+
+    if (window.router?.navigateTo) {
+        window.router.navigateTo('/login', options, replace);
+    }
+}
+
 const TABLE_TAG_PREFIX = 'table:';
 
 const SELECT_CACHE_DEFAULTS = new Map([
@@ -2049,12 +2091,10 @@ function setupVisibilityHandlers() {
                     notifyAuthListeners('SIGNED_OUT', null);
                     
                     // Redirigir al login
-                    if (window.router?.navigateTo) {
-                        window.router.navigateTo('/login', {
-                            message: 'Su sesión ha expirado',
-                            type: 'warning'
-                        }, true);
-                    }
+                    redirectToLogin({
+                        message: 'Su sesión ha expirado',
+                        type: 'warning'
+                    }, true);
                 }
             } catch (error) {
                 console.error('❌ Error al manejar cambio de visibilidad:', error);
@@ -2166,6 +2206,10 @@ export function cleanupResources() {
         clearInterval(window.areaRefreshInterval);
         window.areaRefreshInterval = null;
     }
+    if (window.tokenHealthCheckInterval) {
+        clearInterval(window.tokenHealthCheckInterval);
+        window.tokenHealthCheckInterval = null;
+    }
     
     // Limpiar storage
     try {
@@ -2202,30 +2246,44 @@ export function cleanupResources() {
  * Verificar estado del token periódicamente
  */
 function startTokenHealthCheck() {
-    setInterval(async () => {
-        if (appState.session && document.visibilityState === 'visible') {
-            try {
-                const previousSession = appState.session;
-                const session = await getCurrentSession({ allowRefresh: true, silent: true });
+    if (typeof window === 'undefined') {
+        return;
+    }
 
-                if (!session && previousSession) {
-                    console.warn('⚠️ Token expirado o inválido');
+    if (window.tokenHealthCheckInterval) {
+        clearInterval(window.tokenHealthCheckInterval);
+    }
 
-                    // Limpiar estado y redirigir
-                    appState.session = null;
-                    appState.user = null;
-                    appState.profile = null;
+    window.tokenHealthCheckInterval = setInterval(async () => {
+        if (!appState.session) {
+            clearInterval(window.tokenHealthCheckInterval);
+            window.tokenHealthCheckInterval = null;
+            return;
+        }
 
-                    if (window.router?.navigateTo) {
-                        window.router.navigateTo('/login', {
-                            message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
-                            type: 'warning'
-                        }, true);
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Error en verificación de token:', error);
+        if (document.visibilityState !== 'visible') {
+            return;
+        }
+
+        try {
+            const previousSession = appState.session;
+            const session = await getCurrentSession({ allowRefresh: true, silent: true });
+
+            if (!session && previousSession) {
+                console.warn('⚠️ Token expirado o inválido');
+
+                // Limpiar estado y redirigir
+                appState.session = null;
+                appState.user = null;
+                appState.profile = null;
+
+                redirectToLogin({
+                    message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
+                    type: 'warning'
+                }, true);
             }
+        } catch (error) {
+            console.error('❌ Error en verificación de token:', error);
         }
     }, 2 * 60 * 1000); // Cada 2 minutos
 }
