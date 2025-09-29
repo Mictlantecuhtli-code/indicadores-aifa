@@ -182,6 +182,28 @@ export function clearSupabaseCache() {
     clearGlobalCache();
 }
 
+async function waitForSupabaseAvailability({ timeout = 8000, interval = 120 } = {}) {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    if (supabase?.auth?.getSession) {
+        return true;
+    }
+
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        if (window.supabase?.createClient) {
+            return true;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    return Boolean(window.supabase?.createClient);
+}
+
 function recreateSupabaseClient(context = 'recreateSupabaseClient') {
     if (typeof window === 'undefined') {
         return null;
@@ -239,10 +261,8 @@ export function ensureSupabaseClient(context = 'ensureSupabaseClient') {
     return recreateSupabaseClient(context);
 }
 
-if (!ensureSupabaseClient('initial-load')) {
-    console.error('❌ Error: Cliente Supabase no está disponible. Verifica que config.js se haya ejecutado correctamente.');
-    throw new Error('Supabase client not available');
-}
+// Nota: La disponibilidad del cliente de Supabase puede variar dependiendo de la velocidad
+// con la que el script CDN se carga. La inicialización real se maneja durante initSupabase().
 
 // Estado global de la aplicación
 export const appState = {
@@ -1840,6 +1860,17 @@ let sessionRefreshInProgress = false;
 
 async function setupSupabase() {
     try {
+        if (DEBUG.enabled) {
+            console.log('⏳ Esperando a que Supabase esté disponible...');
+        }
+
+        const isAvailable = await waitForSupabaseAvailability();
+
+        if (!isAvailable) {
+            console.error('❌ Supabase no se cargó dentro del tiempo esperado.');
+            throw new Error('Supabase client not available');
+        }
+
         const activeSupabase = ensureSupabaseClient('setupSupabase');
 
         if (!activeSupabase) {
