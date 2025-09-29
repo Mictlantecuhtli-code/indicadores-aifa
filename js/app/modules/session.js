@@ -1,6 +1,7 @@
 import { DEBUG } from '../../config.js';
 import { appState, getCurrentSession, redirectToLogin } from '../../lib/supa.js';
 
+
 const INTERVAL_KEYS = [
     'autoRefreshInterval',
     'homeRefreshInterval',

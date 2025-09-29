@@ -501,6 +501,7 @@ function bindSignOutAction() {
 
             setTimeout(() => {
                 redirectToLogin({}, true);
+
                 window.location.reload();
             }, 300);
         } catch (error) {
