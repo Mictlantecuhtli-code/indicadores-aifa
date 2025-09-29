@@ -53,6 +53,8 @@ export const routes = [
         requiresAuth: true,
         navId: 'nav-admin',
         title: 'Administración',
+        renderTimeout: 45000,
+        renderTimeoutMessage: 'El panel de administración tardó demasiado en responder.',
         breadcrumbs: () => [
             { label: 'Administración', path: '/admin', icon: 'settings' }
         ]
