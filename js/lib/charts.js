@@ -28,7 +28,8 @@ const chartInstances = {
     comparativa: null,
     meta: null,
     trimestral: null,
-    panelDirectivos: null
+    panelDirectivos: null,
+    panelDirectivosHistograma: null
 };
 
 const CHART_CONFIGS = {
@@ -130,6 +131,57 @@ function obtenerColorEscenario(escenario) {
 
 function obtenerColorConTransparencia(color, alpha = 0.2) {
     return color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
+function obtenerOpcionesBase(titulo = null) {
+    const base = CHART_CONFIGS.base || {};
+    const legendBase = base.plugins?.legend || null;
+    const tooltipBase = base.plugins?.tooltip || null;
+
+    const legend = legendBase
+        ? {
+            ...legendBase,
+            labels: legendBase.labels ? { ...legendBase.labels } : legendBase.labels
+        }
+        : undefined;
+
+    const tooltip = tooltipBase
+        ? {
+            ...tooltipBase,
+            callbacks: tooltipBase.callbacks ? { ...tooltipBase.callbacks } : tooltipBase.callbacks
+        }
+        : undefined;
+
+    const options = {
+        responsive: base.responsive !== undefined ? base.responsive : true,
+        maintainAspectRatio: base.maintainAspectRatio !== undefined ? base.maintainAspectRatio : false,
+        plugins: {},
+        scales: {
+            y: base.scales?.y ? { ...base.scales.y } : {}
+        },
+        elements: {
+            point: base.elements?.point ? { ...base.elements.point } : {},
+            line: base.elements?.line ? { ...base.elements.line } : {}
+        }
+    };
+
+    if (legend) {
+        options.plugins.legend = legend;
+    }
+
+    if (tooltip) {
+        options.plugins.tooltip = tooltip;
+    }
+
+    if (titulo) {
+        options.plugins.title = {
+            display: true,
+            text: titulo,
+            font: { size: 16, weight: 'bold' }
+        };
+    }
+
+    return options;
 }
 
 function crearArrayMeses(valorDefault = null) {
@@ -301,6 +353,256 @@ async function crearGraficaHistorica(canvasId, datos, opciones = {}) {
         console.error('❌ Error:', error);
         return null;
     }
+}
+
+function obtenerColorDeDataset(tipo, colorBase, transparenciaLinea = 0.15, transparenciaBarra = 0.65) {
+    if (tipo === 'bar') {
+        return obtenerColorConTransparencia(colorBase, transparenciaBarra);
+    }
+
+    return obtenerColorConTransparencia(colorBase, transparenciaLinea);
+}
+
+async function crearGraficaPanelComparativa(canvasId, datos, opciones = {}) {
+    const {
+        periodo = 'mensual',
+        aniosSeleccionados = [],
+        titulo = 'Comparativo',
+        tipo = 'line',
+        limiteMes = 12,
+        limiteTrimestre = 4
+    } = opciones;
+
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+
+    destruirGrafica('panelDirectivos');
+    const ctx = canvas.getContext('2d');
+
+    const registrosNormalizados = normalizarSerieTemporal(datos);
+    if (!registrosNormalizados || registrosNormalizados.length === 0) {
+        return null;
+    }
+
+    const aniosDisponibles = Array.from(new Set(registrosNormalizados.map(d => d.anio))).sort((a, b) => a - b);
+    const anios = aniosSeleccionados && aniosSeleccionados.length > 0 ? aniosSeleccionados : aniosDisponibles;
+
+    let labels = [];
+    let datasets = [];
+
+    if (periodo === 'trimestral') {
+        const maxTrimestre = Math.max(1, Math.min(limiteTrimestre, 4));
+        labels = Array.from({ length: maxTrimestre }, (_, index) => `T${index + 1}`);
+
+        datasets = anios.map(anio => {
+            const color = obtenerColorPorAnio(anio);
+            const data = labels.map((_, idx) => {
+                const trimestre = idx + 1;
+                const mesesTrimestre = [
+                    (trimestre - 1) * 3 + 1,
+                    (trimestre - 1) * 3 + 2,
+                    (trimestre - 1) * 3 + 3
+                ];
+
+                const valores = registrosNormalizados
+                    .filter(registro => registro.anio === anio && mesesTrimestre.includes(registro.mes))
+                    .map(registro => registro.valor)
+                    .filter(valor => valor !== null && valor !== undefined);
+
+                if (valores.length === 0) {
+                    return null;
+                }
+
+                return valores.reduce((acumulado, valor) => acumulado + valor, 0);
+            });
+
+            return {
+                label: anio.toString(),
+                data,
+                borderColor: color,
+                backgroundColor: obtenerColorDeDataset(tipo, color),
+                borderWidth: tipo === 'bar' ? 1 : 3,
+                tension: 0.25,
+                fill: false,
+                spanGaps: true,
+                borderRadius: tipo === 'bar' ? 6 : undefined
+            };
+        });
+    } else if (periodo === 'anual') {
+        const maxMes = Math.max(1, Math.min(limiteMes, 12));
+        labels = anios.map(anio => anio.toString());
+
+        const colorBase = '#3B82F6';
+        const data = anios.map(anio => {
+            const valores = registrosNormalizados
+                .filter(registro => registro.anio === anio && registro.mes <= maxMes)
+                .map(registro => registro.valor)
+                .filter(valor => valor !== null && valor !== undefined);
+
+            if (valores.length === 0) {
+                return null;
+            }
+
+            return valores.reduce((acumulado, valor) => acumulado + valor, 0);
+        });
+
+        datasets = [
+            {
+                label: 'Acumulado',
+                data,
+                borderColor: colorBase,
+                backgroundColor: obtenerColorDeDataset(tipo, colorBase, 0.25, 0.55),
+                borderWidth: tipo === 'bar' ? 1 : 3,
+                tension: 0.25,
+                fill: false,
+                spanGaps: true,
+                borderRadius: tipo === 'bar' ? 6 : undefined
+            }
+        ];
+    } else {
+        const maxMes = Math.max(1, Math.min(limiteMes, 12));
+        labels = MESES.slice(0, maxMes);
+
+        datasets = anios.map(anio => {
+            const color = obtenerColorPorAnio(anio);
+            const data = Array.from({ length: maxMes }, (_, idx) => {
+                const mes = idx + 1;
+                const registro = registrosNormalizados.find(d => d.anio === anio && d.mes === mes);
+                return registro ? registro.valor : null;
+            });
+
+            return {
+                label: anio.toString(),
+                data,
+                borderColor: color,
+                backgroundColor: obtenerColorDeDataset(tipo, color),
+                borderWidth: tipo === 'bar' ? 1 : 3,
+                tension: 0.25,
+                fill: false,
+                spanGaps: true,
+                borderRadius: tipo === 'bar' ? 6 : undefined
+            };
+        });
+    }
+
+    const opcionesGrafica = obtenerOpcionesBase(titulo);
+    opcionesGrafica.scales = opcionesGrafica.scales || {};
+    opcionesGrafica.scales.x = {
+        ...(opcionesGrafica.scales.x || {}),
+        grid: { display: false }
+    };
+
+    if (tipo === 'bar') {
+        if (opcionesGrafica.elements?.point) {
+            opcionesGrafica.elements.point.radius = 0;
+            opcionesGrafica.elements.point.hoverRadius = 0;
+        }
+        opcionesGrafica.elements = {
+            ...opcionesGrafica.elements,
+            bar: {
+                borderWidth: 1,
+                borderRadius: 6
+            }
+        };
+    }
+
+    chartInstances.panelDirectivos = new Chart(ctx, {
+        type: tipo === 'bar' ? 'bar' : 'line',
+        data: { labels, datasets },
+        options: opcionesGrafica
+    });
+
+    return chartInstances.panelDirectivos;
+}
+
+async function crearHistogramaSimple(canvasId, valores, opciones = {}) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+
+    const valoresNumericos = (valores || [])
+        .map(valor => Number(valor))
+        .filter(valor => Number.isFinite(valor));
+
+    destruirGrafica('panelDirectivosHistograma');
+
+    if (valoresNumericos.length === 0) {
+        return null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const colorBase = opciones.color || '#4F46E5';
+    const binsDeseados = opciones.bins || 10;
+
+    const minimo = Math.min(...valoresNumericos);
+    const maximo = Math.max(...valoresNumericos);
+
+    let labels = [];
+    let datos = [];
+
+    if (minimo === maximo) {
+        labels = [formatNumber(minimo)];
+        datos = [valoresNumericos.length];
+    } else {
+        const bins = Math.max(1, Math.min(binsDeseados, valoresNumericos.length));
+        const rango = maximo - minimo;
+        const paso = rango / bins;
+        labels = [];
+        datos = Array(bins).fill(0);
+
+        for (let i = 0; i < bins; i++) {
+            const inicio = minimo + paso * i;
+            const fin = i === bins - 1 ? maximo : inicio + paso;
+            labels.push(`${formatNumber(inicio)} - ${formatNumber(fin)}`);
+        }
+
+        valoresNumericos.forEach(valor => {
+            let indice = paso === 0 ? 0 : Math.floor((valor - minimo) / paso);
+            if (indice >= datos.length) indice = datos.length - 1;
+            if (indice < 0) indice = 0;
+            datos[indice] += 1;
+        });
+    }
+
+    const opcionesGrafica = obtenerOpcionesBase(opciones.titulo || 'Histograma');
+    opcionesGrafica.plugins = opcionesGrafica.plugins || {};
+    opcionesGrafica.plugins.legend = { display: false };
+    opcionesGrafica.scales = opcionesGrafica.scales || {};
+    opcionesGrafica.scales.x = {
+        ...(opcionesGrafica.scales.x || {}),
+        ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }
+    };
+
+    if (opcionesGrafica.elements?.point) {
+        opcionesGrafica.elements.point.radius = 0;
+        opcionesGrafica.elements.point.hoverRadius = 0;
+    }
+
+    opcionesGrafica.plugins.tooltip = opcionesGrafica.plugins.tooltip || {};
+    opcionesGrafica.plugins.tooltip.callbacks = opcionesGrafica.plugins.tooltip.callbacks || {};
+    opcionesGrafica.plugins.tooltip.callbacks.label = context => {
+        const valor = context.parsed.y;
+        return `${valor} registros`;
+    };
+
+    chartInstances.panelDirectivosHistograma = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: opciones.datasetLabel || 'Frecuencia',
+                    data: datos,
+                    backgroundColor: obtenerColorConTransparencia(colorBase, 0.55),
+                    borderColor: colorBase,
+                    borderWidth: 1,
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: opcionesGrafica
+    });
+
+    return chartInstances.panelDirectivosHistograma;
 }
 
 function normalizarValorNumerico(valorOriginal) {
@@ -493,6 +795,8 @@ export {
     crearGraficaComparativa,
     crearGraficaMeta,
     crearGraficaHistorica,
+    crearGraficaPanelComparativa,
+    crearHistogramaSimple,
     destruirGrafica,
     CHART_CONFIGS,
     MESES,
