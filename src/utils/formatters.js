@@ -1,22 +1,40 @@
-export function formatNumber(value, { style = 'decimal', minimumFractionDigits = 0, maximumFractionDigits = 2 } = {}) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return '—';
-  }
-  return new Intl.NumberFormat('es-MX', {
-    style,
-    minimumFractionDigits,
-    maximumFractionDigits
-  }).format(Number(value));
+export function formatNumber(value, { decimals = 2 } = {}) {
+  if (value === null || value === undefined) return '—';
+  return Number(value).toLocaleString('es-MX', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
 }
 
 export function formatPercentage(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return '—';
-  }
-  return `${formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  if (value === null || value === undefined) return '—';
+  return `${formatNumber(value * 100, { decimals: 1 })}%`;
 }
 
-export function formatMonth(year, month) {
-  const date = new Date(year, month - 1);
-  return date.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
+export function monthName(month) {
+  const months = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre'
+  ];
+  return months[month - 1] ?? '';
+}
+
+export function formatDate(date) {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('es-MX', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
 }

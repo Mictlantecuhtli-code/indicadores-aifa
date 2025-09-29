@@ -4,10 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sistema de Indicadores AIFA</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css"
+      integrity="sha384-dK+7w0kbOg2BGicDH/ZcYv7a3ah0Fub3XTcz6zqaWWhqa79gr7nJxXoakD5OXJ0N"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      integrity="sha512-d4s9HcvAGP82afgAvFp8Z64Kbjsgg7sWXBJgp7wa9u0edPFsKnzGWx/89ZbduCMsZ/HXXdK5vC41JStk9KpVAQ=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+      integrity="sha384-+WwNVL9KvYnkQoOkx/IMB8Rdp/Wpbz18iAjEXOWmgR8gmXxnDzOGr7QaSl06kS0H"
+      crossorigin="anonymous"
+    ></script>
   </head>
-  <body class="bg-slate-100">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+  <body class="bg-slate-100 min-h-screen">
+    <noscript class="block text-center p-4 bg-red-100 text-red-600">
+      Es necesario habilitar JavaScript para utilizar el sistema de indicadores.
+    </noscript>
+    <div id="app" class="min-h-screen"></div>
+    <script type="module" src="./src/main.js"></script>
+
   </body>
 </html>
