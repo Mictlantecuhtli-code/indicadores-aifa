@@ -9,7 +9,8 @@ export const uiState = {
     toasts: [],
     modals: [],
     loading: false,
-    loadingStack: 0
+    loadingStack: 0,
+    loadingTimeout: null
 };
 
 // =====================================================
@@ -129,12 +130,24 @@ export function clearAllToasts() {
 export function showLoading(message = 'Cargando...') {
     uiState.loadingStack++;
     
+    // Protección: Si el stack es demasiado alto, algo está mal
+    if (uiState.loadingStack > 10) {
+        console.error('❌ Loading stack demasiado alto:', uiState.loadingStack);
+        console.trace('Stack trace del problema:');
+        
+        // Forzar reset
+        uiState.loadingStack = 1;
+    }
+    
     if (uiState.loadingStack === 1) {
         uiState.loading = true;
         
         const loadingContainer = document.getElementById('loading-container');
         if (loadingContainer) {
-            loadingContainer.querySelector('span').textContent = message;
+            const loadingText = loadingContainer.querySelector('span') || loadingContainer.querySelector('#loading-text');
+            if (loadingText) {
+                loadingText.textContent = message;
+            }
             loadingContainer.classList.remove('hidden');
         }
         
@@ -144,6 +157,22 @@ export function showLoading(message = 'Cargando...') {
             appContainer.style.pointerEvents = 'none';
             appContainer.style.opacity = '0.7';
         }
+        
+        // NUEVO: Timeout de seguridad - si después de 30 segundos sigue cargando, forzar reset
+        if (uiState.loadingTimeout) {
+            clearTimeout(uiState.loadingTimeout);
+        }
+        
+        uiState.loadingTimeout = setTimeout(() => {
+            if (uiState.loading) {
+                console.error('❌ Loading timeout alcanzado (30s), forzando ocultación');
+                forceHideLoading();
+            }
+        }, 30000); // 30 segundos
+    }
+    
+    if (DEBUG?.enabled && uiState.loadingStack > 1) {
+        console.log(`📊 Loading stack: ${uiState.loadingStack}`);
     }
 }
 
@@ -155,6 +184,12 @@ export function hideLoading() {
 
     if (uiState.loadingStack === 0) {
         uiState.loading = false;
+
+        // Limpiar timeout de seguridad
+        if (uiState.loadingTimeout) {
+            clearTimeout(uiState.loadingTimeout);
+            uiState.loadingTimeout = null;
+        }
 
         const loadingContainer = document.getElementById('loading-container');
         if (loadingContainer) {
@@ -168,12 +203,21 @@ export function hideLoading() {
             appContainer.style.opacity = '';
         }
     }
+    
+    if (DEBUG?.enabled && uiState.loadingStack > 0) {
+        console.log(`📊 Loading stack restante: ${uiState.loadingStack}`);
+    }
 }
-
 /**
- * Reiniciar el estado del indicador de carga
+ * Forzar ocultación del indicador de carga (emergencia)
+ * USO: Solo cuando el sistema se bloquea y el loading no desaparece
  */
-export function resetLoadingState() {
+export function forceHideLoading() {
+    if (DEBUG?.enabled) {
+        console.warn('🔄 FORZANDO OCULTACIÓN DE LOADING');
+    }
+    
+    // Resetear completamente el stack
     uiState.loadingStack = 0;
     uiState.loading = false;
 
@@ -182,10 +226,49 @@ export function resetLoadingState() {
         loadingContainer.classList.add('hidden');
     }
 
+    // Restaurar interacciones inmediatamente
     const appContainer = document.getElementById('app-container');
     if (appContainer) {
         appContainer.style.pointerEvents = '';
         appContainer.style.opacity = '';
+    }
+    
+    if (DEBUG?.enabled) {
+        console.log('✅ Loading forzado a ocultar');
+    }
+}
+
+/**
+ * Reiniciar el estado del indicador de carga
+ */
+export function resetLoadingState() {
+    if (DEBUG?.enabled) {
+        console.log('🔄 Reseteando estado de loading');
+    }
+    
+    uiState.loadingStack = 0;
+    uiState.loading = false;
+    
+    // Limpiar timeout
+    if (uiState.loadingTimeout) {
+        clearTimeout(uiState.loadingTimeout);
+        uiState.loadingTimeout = null;
+    }
+
+    const loadingContainer = document.getElementById('loading-container');
+    if (loadingContainer) {
+        loadingContainer.classList.add('hidden');
+    }
+
+    // Restaurar interacciones
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        appContainer.style.pointerEvents = '';
+        appContainer.style.opacity = '';
+    }
+    
+    if (DEBUG?.enabled) {
+        console.log('✅ Estado de loading reseteado');
     }
 }
 
@@ -681,6 +764,42 @@ export function exportToCSV(data, filename = 'export.csv', columns = null) {
     
     showToast('Archivo exportado correctamente', 'success');
 }
+// =====================================================
+// DIAGNÓSTICO Y DEBUG
+// =====================================================
+
+/**
+ * Obtener estado actual del sistema de loading
+ * USO: Para debug cuando algo no funciona
+ */
+export function getLoadingState() {
+    return {
+        loading: uiState.loading,
+        loadingStack: uiState.loadingStack,
+        hasTimeout: uiState.loadingTimeout !== null,
+        loadingContainerVisible: !document.getElementById('loading-container')?.classList.contains('hidden')
+    };
+}
+
+/**
+ * Diagnóstico completo del estado de la UI
+ */
+export function diagnoseUIState() {
+    const state = getLoadingState();
+    
+    console.group('🔍 Diagnóstico de UI');
+    console.log('Estado de loading:', state);
+    console.log('Loading container:', document.getElementById('loading-container'));
+    console.log('App container:', document.getElementById('app-container'));
+    console.groupEnd();
+    
+    // Si está bloqueado, ofrecer solución
+    if (state.loading && state.loadingStack > 0) {
+        console.warn('⚠️ Sistema bloqueado. Para forzar reset, ejecuta: window.ui.forceHideLoading()');
+    }
+    
+    return state;
+}
 
 // =====================================================
 // INICIALIZACIÓN Y CONFIGURACIÓN GLOBAL
@@ -708,7 +827,10 @@ export function initUI() {
         formatNumber,
         formatPercentage,
         formatDate,
-        formatText,
+        formatText,        
+        forceHideLoading,
+        getLoadingState,
+        diagnoseUIState,
         exportToCSV
     };
     

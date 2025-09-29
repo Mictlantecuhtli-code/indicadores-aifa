@@ -63,28 +63,45 @@ let adminContainerRef = null;
 
 export async function render(container) {
     adminContainerRef = container;
-    container.innerHTML = renderLayout();
-    setupStaticListeners(container);
-
+    
     try {
+        // PASO 1: Mostrar loading ANTES de renderizar layout
         showLoading('Cargando panel de administración...');
-
+        
+        // PASO 2: Verificar permisos primero
         const isAdmin = await ensureAdminProfile();
         if (!isAdmin) {
-            renderAccessDenied();
+            hideLoading(); // ✅ CRÍTICO: hideLoading AQUÍ
+            renderAccessDenied(container);
             return;
         }
-
+        
+        // PASO 3: Renderizar layout vacío (rápido)
+        container.innerHTML = renderLayout();
+        setupStaticListeners(container);
+        
+        // PASO 4: Dar tiempo al navegador para pintar
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        // PASO 5: Cargar datos
         await loadInitialData();
-        renderUsersTable();
-        renderUserDetail();
-        refreshIcons();
+        
+        // PASO 6: Renderizar usuarios de forma progresiva
+        await renderUsersTableProgressive();
+        await renderUserDetailProgressive();
+        
+        // PASO 7: Recrear iconos al final
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+        
+        hideLoading();
+        
     } catch (error) {
         console.error('❌ Error al renderizar panel de administración:', error);
+        hideLoading(); // ✅ SIEMPRE ocultar loading
         container.innerHTML = renderErrorState(error);
         showToast('No se pudo cargar el panel de administración', 'error');
-    } finally {
-        hideLoading();
     }
 }
 
@@ -295,6 +312,152 @@ function renderUsersTable() {
     }
 
     tbody.innerHTML = filteredUsers.map(user => renderUserRow(user)).join('');
+}
+
+// =====================================================
+// RENDER PROGRESIVO (NO BLOQUEANTE)
+// =====================================================
+
+async function renderUsersTableProgressive() {
+    if (!adminContainerRef) return;
+    const tbody = adminContainerRef.querySelector('#user-table-body');
+    if (!tbody) return;
+
+    if (adminState.users.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="py-8 text-center text-sm text-gray-500">
+                    No hay usuarios registrados. Crea el primero para comenzar.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const filteredUsers = getFilteredUsers();
+
+    if (filteredUsers.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="py-8 text-center text-sm text-gray-500">
+                    No se encontraron usuarios con los filtros aplicados.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (!filteredUsers.some(user => user.id === adminState.selectedUserId)) {
+        adminState.selectedUserId = filteredUsers[0].id;
+    }
+
+    // Renderizar usuarios en lotes de 10 para no bloquear
+    const BATCH_SIZE = 10;
+    let html = '';
+    
+    for (let i = 0; i < filteredUsers.length; i += BATCH_SIZE) {
+        const batch = filteredUsers.slice(i, i + BATCH_SIZE);
+        html += batch.map(user => renderUserRow(user)).join('');
+        
+        // Actualizar DOM progresivamente
+        tbody.innerHTML = html;
+        
+        // Dar tiempo al navegador cada 10 usuarios
+        if (i + BATCH_SIZE < filteredUsers.length) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+}
+
+async function renderUserDetailProgressive() {
+    if (!adminContainerRef) return;
+    const container = adminContainerRef.querySelector('#user-detail');
+    if (!container) return;
+
+    const user = getSelectedUser();
+
+    if (!user) {
+        container.innerHTML = `
+            <div class="text-center text-sm text-gray-500">
+                Selecciona un usuario para ver sus detalles y permisos.
+            </div>
+        `;
+        return;
+    }
+
+    // Renderizar en partes
+    const ultimoAcceso = user.ultimo_acceso ? formatDate(user.ultimo_acceso, 'long') : 'Sin registro';
+    const fechaCreacion = user.fecha_creacion ? formatDate(user.fecha_creacion, 'long') : 'Sin registro';
+
+    // Parte 1: Header
+    container.innerHTML = `
+        <div class="space-y-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">${escapeHTML(user.nombre_completo || 'Sin nombre')}</h3>
+                    <p class="text-sm text-gray-600">${escapeHTML(user.email)}</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.adminEditUser('${user.id}')" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-gray-50">
+                        <i data-lucide="edit-2" class="mr-1 inline w-3 h-3"></i>Editar
+                    </button>
+                    <button onclick="window.adminDeleteUser('${user.id}')" class="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50">
+                        <i data-lucide="trash-2" class="mr-1 inline w-3 h-3"></i>Desactivar
+                    </button>
+                </div>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" id="user-summary">
+                <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Cargando...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Dar tiempo al navegador
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Parte 2: Summary fields
+    const summaryContainer = container.querySelector('#user-summary');
+    if (summaryContainer) {
+        summaryContainer.innerHTML = `
+            ${renderSummaryField('Rol principal', getRoleLabel(user.rol_principal))}
+            ${renderSummaryField('Teléfono', user.telefono || 'No especificado')}
+            ${renderSummaryField('Puesto', user.puesto || 'No especificado')}
+            ${renderSummaryField('Último acceso', ultimoAcceso)}
+        `;
+    }
+    
+    // Parte 3: Assignments (más pesado)
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    const assignmentsHTML = `
+        <div class="mt-6 space-y-4">
+            <div class="rounded-lg border border-gray-200 bg-white p-6">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h4 class="font-semibold text-gray-900">Áreas asignadas</h4>
+                        <p class="text-xs text-gray-500">Gestiona roles y permisos por área.</p>
+                    </div>
+                    <button
+                        id="add-assignment-button"
+                        class="inline-flex items-center gap-2 rounded-lg bg-aifa-blue px-3 py-2 text-xs font-semibold text-white transition hover:bg-aifa-dark"
+                    >
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        Asignar área
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    ${renderAssignmentsTable(user)}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML += assignmentsHTML;
+    
+    // Re-attach listeners
+    attachDetailListeners(user);
 }
 
 function renderUserRow(user) {
@@ -1135,7 +1298,14 @@ function escapeAttribute(value) {
 
 function refreshIcons() {
     if (window.lucide) {
-        window.lucide.createIcons();
+        // Usar requestAnimationFrame para no bloquear
+        requestAnimationFrame(() => {
+            try {
+                window.lucide.createIcons();
+            } catch (error) {
+                console.warn('⚠️ Error al recrear iconos:', error);
+            }
+        });
     }
 }
 

@@ -941,8 +941,7 @@ function generarComparativoMensual() {
                 </table>
             </div>
             
-            ${crearSeccionGrafica('Gráfica Comparativa Mensual')}
-            
+           ${crearSeccionGrafica('Gráfica Comparativa Mensual')}
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <i data-lucide="download" class="w-4 h-4"></i>
@@ -1006,9 +1005,8 @@ function generarComparativoTrimestral() {
                 </table>
             </div>
             
-            ${crearSeccionGrafica('Gráfica Comparativa Trimestral')}
-            
-            <div class="flex gap-3 pt-4 border-t">
+           ${crearSeccionGrafica('Gráfica Comparativa Trimestral')}
+               <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     <i data-lucide="download" class="w-4 h-4"></i>
                     Descargar
@@ -1240,6 +1238,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
         if (panelState.histogramaVisible) {
             renderizarHistograma();
         }
+
         return;
     }
 

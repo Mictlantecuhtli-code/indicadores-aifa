@@ -20,6 +20,7 @@ export const routerState = {
 let routeDefinitions = [];
 let activeViewModule = null;
 let teardownActiveView = null;
+let navigationTimeout = null;
 
 // =====================================================
 // CONFIGURACIÓN
@@ -209,7 +210,14 @@ async function renderRoute(route, resolved) {
         }
 
         activeViewModule = viewModule;
-        const teardown = await viewModule.render(container, resolved.params, route.query);
+        
+        // Timeout para el render de la vista (20 segundos)
+        const renderPromise = viewModule.render(container, resolved.params, route.query);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout al renderizar vista')), 20000)
+        );
+        
+        const teardown = await Promise.race([renderPromise, timeoutPromise]);
         teardownActiveView = typeof teardown === 'function' ? teardown : null;
 
         // Recrear iconos después de renderizar
@@ -226,6 +234,7 @@ async function renderRoute(route, resolved) {
         hideLoading();
         console.error(`❌ Error al renderizar la ruta ${route.path}:`, error);
         showErrorPage('Error al cargar la vista', error.message || 'Ocurrió un problema al renderizar la vista.');
+        throw error; // Re-lanzar el error para que lo capture handleRouteChange
     }
 }
 
@@ -315,15 +324,73 @@ function updateDocumentTitle(definition, params) {
 }
 
 // =====================================================
-// CONTROLADOR PRINCIPAL DE RUTA
+// RESET DE EMERGENCIA
 // =====================================================
 
+function forceResetRouter() {
+    if (DEBUG.enabled) {
+        console.warn('🔄 Forzando reset del router');
+    }
+    
+    routerState.isNavigating = false;
+    
+    if (navigationTimeout) {
+        clearTimeout(navigationTimeout);
+        navigationTimeout = null;
+    }
+    
+    // Limpiar también el estado de loading
+    resetLoadingState();
+    hideLoading();
+    
+    // Limpiar vista activa si existe
+    if (activeViewModule && typeof activeViewModule.destroy === 'function') {
+        try {
+            activeViewModule.destroy();
+        } catch (error) {
+            console.warn('⚠️ Error al limpiar vista activa:', error);
+        }
+    }
+    
+    activeViewModule = null;
+    teardownActiveView = null;
+}
+
+// Exportar para uso externo si es necesario
+export { forceResetRouter };
+
+// =====================================================
+// CONTROLADOR PRINCIPAL DE RUTA
+// =====================================================
 async function handleRouteChange(route) {
+    // Si ya hay una navegación en progreso, esperar un momento
     if (routerState.isNavigating) {
-        return;
+        if (DEBUG.enabled) {
+            console.warn('⚠️ Navegación en progreso, esperando...');
+        }
+        
+        // Esperar máximo 5 segundos, luego forzar reset
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Si después de 5 segundos sigue bloqueado, forzar reset
+        if (routerState.isNavigating) {
+            console.error('❌ Navegación bloqueada, forzando reset');
+            forceResetRouter();
+        }
     }
 
     routerState.isNavigating = true;
+
+    // Timeout de seguridad: si no termina en 30 segundos, forzar reset
+    if (navigationTimeout) {
+        clearTimeout(navigationTimeout);
+    }
+    
+    navigationTimeout = setTimeout(() => {
+        console.error('❌ Timeout de navegación alcanzado, forzando reset');
+        forceResetRouter();
+        hideLoading();
+    }, 30000); // 30 segundos
 
     try {
         const resolved = resolveDefinition(route.path);
@@ -380,10 +447,21 @@ async function handleRouteChange(route) {
         showToast('Error de navegación', 'error');
         showErrorPage('Error de navegación', error.message || 'No fue posible completar la navegación.');
     } finally {
+        // CRÍTICO: Siempre limpiar el estado
+        if (navigationTimeout) {
+            clearTimeout(navigationTimeout);
+            navigationTimeout = null;
+        }
         routerState.isNavigating = false;
+        
+        // Asegurar que el loading se oculte
+        hideLoading();
+        
+        if (DEBUG.enabled) {
+            console.log('✅ Navegación completada, estado limpio');
+        }
     }
 }
-
 // =====================================================
 // INICIALIZACIÓN
 // =====================================================
