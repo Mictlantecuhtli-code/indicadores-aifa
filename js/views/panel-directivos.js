@@ -548,28 +548,37 @@ async function cargarDatosReales(indicador) {
 
 async function cargarDatosMetas(indicador, escenario) {
     try {
-        // TODO: Implementar cuando exista tabla de metas
-        // Por ahora usar meta_anual del indicador dividida entre 12
-        panelState.datosMetas = [];
-        
-        if (indicador.meta_anual) {
-            const metaMensual = indicador.meta_anual / 12;
-            const anioActual = new Date().getFullYear();
-            
-            for (let mes = 1; mes <= 12; mes++) {
-                panelState.datosMetas.push({
-                    fecha: `${anioActual}-${String(mes).padStart(2, '0')}-01`,
-                    valor: metaMensual,
-                    mes: mes,
-                    anio: anioActual
-                });
-            }
+        if (!indicador) {
+            panelState.datosMetas = [];
+            return;
         }
-        
-        if (DEBUG.enabled) console.log('🎯 Datos de metas cargados:', panelState.datosMetas.length);
-        
+
+        const escenarioKey = (escenario || 'medio').toString().toUpperCase();
+
+        const { data } = await selectData('indicador_metas', {
+            select: 'anio, mes, valor, escenario, fecha_captura, fecha_ultima_edicion',
+            filters: {
+                indicador_id: indicador.id,
+                escenario: escenarioKey
+            },
+            orderBy: [
+                { column: 'anio', ascending: true },
+                { column: 'mes', ascending: true }
+            ]
+        });
+
+        panelState.datosMetas = (data || []).map(meta => ({
+            ...meta,
+            valor: meta?.valor !== null && meta?.valor !== undefined ? Number(meta.valor) : null
+        }));
+
+        if (DEBUG.enabled) {
+            console.log(`🎯 Metas cargadas: ${panelState.datosMetas.length} registros para ${indicador.nombre} (${escenarioKey})`);
+        }
+
     } catch (error) {
         console.error('❌ Error al cargar metas:', error);
+        panelState.datosMetas = [];
         throw error;
     }
 }
@@ -861,9 +870,13 @@ function generarComparativoAnual() {
 function generarComparativoMeta(escenario) {
     const ultimoMes = obtenerUltimoMesConDatos();
     if (!ultimoMes || panelState.datosMetas.length === 0) return '<p class="text-gray-500">No hay datos disponibles</p>';
-    
+
     const metaMes = panelState.datosMetas.find(d => d.mes === ultimoMes.mes && d.anio === ultimoMes.año);
-    
+
+    if (!metaMes || metaMes.valor === null || metaMes.valor === undefined) {
+        return '<p class="text-gray-500">No hay metas capturadas para este escenario en el mes seleccionado.</p>';
+    }
+
     const meta = metaMes?.valor || 0;
     const diferencia = ultimoMes.valor - meta;
     const cumplimiento = meta > 0 ? ((ultimoMes.valor / meta) * 100).toFixed(2) : 0;
@@ -946,11 +959,17 @@ async function renderizarGrafica(tipo = 'comparativa') {
     const indicador = panelState.indicadorSeleccionado;
     
     if (tipo === 'meta') {
+        const escenarioSlug = panelState.opcionSeleccionada.includes('bajo') ? 'bajo'
+            : panelState.opcionSeleccionada.includes('medio') ? 'medio'
+            : 'alto';
+        const escenarioNombre = escenarioSlug === 'bajo' ? 'Escenario Bajo'
+            : escenarioSlug === 'medio' ? 'Escenario Mediano'
+            : 'Escenario Alto';
+
         await crearGraficaMeta('grafica-container', panelState.datosReales, panelState.datosMetas, {
             anio: ultimoMes.año,
-            escenario: panelState.opcionSeleccionada.includes('bajo') ? 'bajo' : 
-                      panelState.opcionSeleccionada.includes('medio') ? 'medio' : 'alto',
-            titulo: `${indicador.nombre} - Real vs Meta`,
+            escenario: escenarioSlug,
+            titulo: `${indicador.nombre} - Real vs Meta (${escenarioNombre})`,
             unidadMedida: indicador.unidad_medida || 'Unidades',
             nombreIndicador: indicador.nombre
         });

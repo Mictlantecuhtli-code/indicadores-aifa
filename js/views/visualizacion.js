@@ -1430,7 +1430,7 @@ function prepareComparativeChartData() {
                     label: `${indicador.nombre} (${year})`,
                     data: data,
                     borderColor: colors[colorIndex % colors.length],
-                    backgroundColor: colors[colorIndex % colors.length] + '20',
+                    backgroundColor: colors[colorIndex % colors.length] + 'CC',
                     fill: false,
                     spanGaps: false,
                     tension: 0.1
@@ -1472,7 +1472,7 @@ function prepareDashboardChartData(indicadorId) {
             label: `${year}`,
             data: data,
             borderColor: colors[colorIndex % colors.length],
-            backgroundColor: colors[colorIndex % colors.length] + '20',
+            backgroundColor: colors[colorIndex % colors.length] + 'CC',
             fill: false,
             spanGaps: false,
             tension: 0.1
@@ -1530,7 +1530,7 @@ function prepareTrendsChartData() {
             label: indicador.nombre,
             data: normalizedData,
             borderColor: colors[colorIndex % colors.length],
-            backgroundColor: colors[colorIndex % colors.length] + '20',
+            backgroundColor: colors[colorIndex % colors.length] + 'CC',
             fill: false,
             tension: 0.1
         });
