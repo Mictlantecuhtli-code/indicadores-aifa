@@ -5,6 +5,7 @@
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile, invalidateTablesCache } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatDate, formatNumber } from '../lib/ui.js';
+import { withAbortSignal, throwIfAborted, isAbortError, createCleanupBag } from '../lib/async.js';
 
 // Estado de la vista home
 const homeState = {
@@ -15,6 +16,8 @@ const homeState = {
     lastRefresh: null
 };
 
+let renderAbortSignal = null;
+
 // =====================================================
 // RENDERIZADO DE LA VISTA
 // =====================================================
@@ -22,48 +25,73 @@ const homeState = {
 /**
  * Renderizar vista principal
  */
-export async function render(container, params = {}, query = {}) {
+export async function render(container, params = {}, query = {}, context = {}) {
+    const { signal } = context || {};
+    renderAbortSignal = signal || null;
+    const { register, run } = createCleanupBag();
+
+    const cleanup = () => {
+        run();
+        if (window.homeRefreshInterval) {
+            clearInterval(window.homeRefreshInterval);
+            window.homeRefreshInterval = null;
+        }
+        renderAbortSignal = null;
+    };
+
     try {
         if (DEBUG.enabled) console.log('🏠 Renderizando vista home');
-        // Obtener perfil del usuario actual
-        homeState.userProfile = await getCurrentProfile();
+
+        throwIfAborted(signal);
+        homeState.userProfile = await withAbortSignal(getCurrentProfile(), signal);
         if (!homeState.userProfile) {
             throw new Error('No se pudo obtener el perfil del usuario');
         }
-        
-        // Cargar datos necesarios
-        await Promise.all([
-            loadAreas(),
-            loadDashboardSummary()
-        ]);
-        
+
+        throwIfAborted(signal);
+
+        await withAbortSignal(Promise.all([
+            loadAreas({ signal }),
+            loadDashboardSummary({ signal })
+        ]), signal);
+
+        throwIfAborted(signal);
+
         // Renderizar HTML
         container.innerHTML = createHomeHTML();
-        
+
         // Configurar event listeners
-        setupEventListeners();
-        
+        setupEventListeners(register);
+
         // Actualizar información del usuario en header
         updateUserInfo();
-        
+
         // Configurar auto-refresh
-        setupAutoRefresh();
-        
+        setupAutoRefresh(register);
+
         hideLoading();
-        
+
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
         }
-        
+
         homeState.lastRefresh = new Date();
-        
+
         if (DEBUG.enabled) console.log('✅ Vista home renderizada correctamente');
-        
+
+        return cleanup;
     } catch (error) {
+        if (isAbortError(error)) {
+            if (DEBUG.enabled) {
+                console.log('⏹️ Render de home cancelado:', error);
+            }
+            return cleanup;
+        }
+
         console.error('❌ Error al renderizar home:', error);
         hideLoading();
-        
+
         container.innerHTML = `
             <div class="text-center py-12">
                 <i data-lucide="home" class="w-16 h-16 text-gray-400 mx-auto mb-4"></i>
@@ -79,10 +107,12 @@ export async function render(container, params = {}, query = {}) {
                 </div>
             </div>
         `;
-        
+
         if (window.lucide) {
             window.lucide.createIcons();
         }
+
+        return cleanup;
     }
 }
 
@@ -362,34 +392,42 @@ function createAreaCardHTML(area) {
 /**
  * Cargar áreas disponibles para el usuario
  */
-async function loadAreas() {
+async function loadAreas(options = {}) {
+    const { signal } = options;
     try {
         const userRole = homeState.userProfile?.rol_principal;
-        
+
         if (['ADMIN', 'DIRECTOR', 'SUBDIRECTOR'].includes(userRole)) {
-            const { data } = await selectData('areas', {
+            throwIfAborted(signal);
+            const { data } = await withAbortSignal(selectData('areas', {
                 select: '*',
                 filters: { estado: 'ACTIVO' },
                 orderBy: { column: 'orden_visualizacion', ascending: true },
                 cache: { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }
-            });
+            }), signal);
             homeState.areas = data || [];
         } else {
             // Capturistas y jefes de área ven solo sus áreas asignadas
-            const { data } = await selectData('v_areas_usuario', {
+            throwIfAborted(signal);
+            const { data } = await withAbortSignal(selectData('v_areas_usuario', {
                 select: '*',
                 filters: { usuario_id: homeState.userProfile.id },
                 orderBy: { column: 'orden_visualizacion', ascending: true },
                 cache: { ttl: 5 * 60 * 1000, staleWhileRevalidate: 60 * 1000 }
-            });
+            }), signal);
             homeState.areas = data || [];
         }
-        
+
+        throwIfAborted(signal);
+
         if (DEBUG.enabled) {
             console.log(`📁 Cargadas ${homeState.areas.length} áreas para rol ${userRole}`);
         }
-        
+
     } catch (error) {
+        if (isAbortError(error)) {
+            throw error;
+        }
         console.error('❌ Error al cargar áreas:', error);
         homeState.areas = [];
         showToast('Error al cargar las áreas', 'error');
@@ -399,21 +437,28 @@ async function loadAreas() {
 /**
  * Cargar resumen del dashboard
  */
-async function loadDashboardSummary() {
+async function loadDashboardSummary(options = {}) {
+    const { signal } = options;
     try {
-        const { data } = await selectData('v_dashboard_resumen', {
+        throwIfAborted(signal);
+        const { data } = await withAbortSignal(selectData('v_dashboard_resumen', {
             select: '*',
             orderBy: { column: 'area_nombre', ascending: true },
             cache: { ttl: 60 * 1000, staleWhileRevalidate: 60 * 1000 }
-        });
-        
+        }), signal);
+
         homeState.resumenDashboard = data || [];
-        
+
+        throwIfAborted(signal);
+
         if (DEBUG.enabled) {
             console.log(`📊 Cargado resumen de ${homeState.resumenDashboard.length} áreas`);
         }
-        
+
     } catch (error) {
+        if (isAbortError(error)) {
+            throw error;
+        }
         console.error('❌ Error al cargar resumen del dashboard:', error);
         homeState.resumenDashboard = [];
         // No mostrar error al usuario para esto, es información adicional
@@ -427,31 +472,51 @@ async function loadDashboardSummary() {
 /**
  * Configurar event listeners
  */
-function setupEventListeners() {
+function setupEventListeners(registerCleanup = () => {}) {
     // Botón de refresh
     const refreshBtn = document.getElementById('refresh-data-btn');
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', handleRefreshData);
+        const handler = () => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            handleRefreshData();
+        };
+        refreshBtn.addEventListener('click', handler);
+        registerCleanup(() => refreshBtn.removeEventListener('click', handler));
     }
-    
+
     // Botón de captura rápida
     const quickCaptureBtn = document.getElementById('quick-capture-btn');
     if (quickCaptureBtn) {
-        quickCaptureBtn.addEventListener('click', handleQuickCapture);
+        const handler = () => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            handleQuickCapture();
+        };
+        quickCaptureBtn.addEventListener('click', handler);
+        registerCleanup(() => quickCaptureBtn.removeEventListener('click', handler));
     }
 }
 
 /**
  * Configurar auto-refresh de datos
  */
-function setupAutoRefresh() {
+function setupAutoRefresh(registerCleanup = () => {}) {
     // Limpiar interval anterior si existe
     if (window.homeRefreshInterval) {
         clearInterval(window.homeRefreshInterval);
     }
-    
+
     // Refresh automático cada 5 minutos, solo si hay sesión y ventana visible
     window.homeRefreshInterval = setInterval(async () => {
+        if (renderAbortSignal?.aborted) {
+            clearInterval(window.homeRefreshInterval);
+            window.homeRefreshInterval = null;
+            return;
+        }
+
         if (document.visibilityState === 'visible' && appState.session) {
             try {
                 await refreshDataSilently();
@@ -460,10 +525,18 @@ function setupAutoRefresh() {
                 // Si hay error de autenticación, detener refresh
                 if (error.message?.includes('auth') || error.code === 'PGRST301') {
                     clearInterval(window.homeRefreshInterval);
+                    window.homeRefreshInterval = null;
                 }
             }
         }
     }, 5 * 60 * 1000);
+
+    registerCleanup(() => {
+        if (window.homeRefreshInterval) {
+            clearInterval(window.homeRefreshInterval);
+            window.homeRefreshInterval = null;
+        }
+    });
 }
 
 // =====================================================
@@ -475,6 +548,9 @@ function setupAutoRefresh() {
  */
 async function handleRefreshData() {
     try {
+        if (renderAbortSignal?.aborted) {
+            return;
+        }
         invalidateTablesCache(['areas', 'v_areas_usuario', 'v_dashboard_resumen']);
 
         const refreshBtn = document.getElementById('refresh-data-btn');
@@ -482,12 +558,12 @@ async function handleRefreshData() {
             const icon = refreshBtn.querySelector('i');
             icon.classList.add('animate-spin');
         }
-        
+
         await Promise.all([
-            loadAreas(),
-            loadDashboardSummary()
+            loadAreas({ signal: renderAbortSignal }),
+            loadDashboardSummary({ signal: renderAbortSignal })
         ]);
-        
+
         // Re-renderizar solo el contenido dinámico
         /*const container = document.getElementById('app-container');
         if (container) {
@@ -522,12 +598,16 @@ async function refreshDataSilently() {
             console.warn('⚠️ No hay sesión activa para refresh silencioso');
             return;
         }
-        
+
+        if (renderAbortSignal?.aborted) {
+            return;
+        }
+
         await Promise.all([
-            loadAreas(),
-            loadDashboardSummary()
+            loadAreas({ signal: renderAbortSignal }),
+            loadDashboardSummary({ signal: renderAbortSignal })
         ]);
-        
+
         updateAreasDisplay();
         updateDashboardSummary();
         

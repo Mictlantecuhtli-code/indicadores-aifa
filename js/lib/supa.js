@@ -4,11 +4,22 @@
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEBUG, MESSAGES, isDevelopment } from '../config.js';
 import { withCache, invalidateByTags, clearCache as clearGlobalCache } from '../core/cache.js';
+import { createStore } from './store.js';
+import { createTrackedFetch, abortRequestsByContext } from './network.js';
 
 // Mantener referencia compartida del cliente Supabase
 export let supabase = typeof window !== 'undefined' ? window.supabaseClient ?? null : null;
 
 let supabaseAvailabilityLogged = false;
+
+const supabaseFetch = createTrackedFetch({ context: 'supabase', defaultRetries: 2, timeoutMs: 45000 });
+
+function emitLifecycleEvent(name, detail = {}) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+}
 
 function getCurrentHashPath() {
     if (typeof window === 'undefined') {
@@ -272,7 +283,14 @@ function recreateSupabaseClient(context = 'recreateSupabaseClient') {
             authOptions.storage = window.localStorage;
         }
 
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: authOptions });
+        const clientOptions = {
+            auth: authOptions,
+            global: {
+                fetch: supabaseFetch
+            }
+        };
+
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, clientOptions);
         window.supabaseClient = supabase;
 
         if (DEBUG.enabled) {
@@ -306,14 +324,64 @@ export function ensureSupabaseClient(context = 'ensureSupabaseClient') {
 // Nota: La disponibilidad del cliente de Supabase puede variar dependiendo de la velocidad
 // con la que el script CDN se carga. La inicialización real se maneja durante initSupabase().
 
-// Estado global de la aplicación
-export const appState = {
-    user: null,
-    profile: null,
-    session: null,
-    loading: false,
-    initialized: false
-};
+// Estado global de la aplicación con store centralizado
+let sessionStorageAvailable = null;
+try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorageAvailable = window.sessionStorage;
+    }
+} catch (storageError) {
+    if (DEBUG.enabled) {
+        console.warn('⚠️ SessionStorage no disponible, la persistencia será en memoria.', storageError);
+    }
+    sessionStorageAvailable = null;
+}
+
+export const appStore = createStore({
+    key: 'aifa-app-store',
+    version: 2,
+    storage: sessionStorageAvailable,
+    initialState: {
+        user: null,
+        profile: null,
+        session: null,
+        loading: false,
+        initialized: false,
+        route: {
+            path: '/',
+            params: {},
+            query: {},
+            name: null,
+            timestamp: null
+        },
+        lifecycle: {
+            lastHiddenAt: null,
+            lastVisibleAt: null,
+            isRestoring: false
+        }
+    },
+    sanitize: (state) => ({
+        user: state.user ? { id: state.user.id, email: state.user.email } : null,
+        profile: state.profile
+            ? {
+                id: state.profile.id,
+                nombre_completo: state.profile.nombre_completo,
+                rol_principal: state.profile.rol_principal,
+                usuario_areas: Array.isArray(state.profile.usuario_areas)
+                    ? state.profile.usuario_areas.map(area => ({
+                        id: area.id,
+                        area_id: area.area_id,
+                        rol: area.rol || area.rol_principal || null
+                    }))
+                    : []
+            }
+            : null,
+        route: state.route,
+        lifecycle: state.lifecycle
+    })
+});
+
+export const appState = appStore.state;
 
 const authListeners = new Set();
 
@@ -2003,9 +2071,6 @@ initSupabase().catch(console.error);
 /**
  * Configurar handlers de visibilidad
  */
-/**
- * Configurar handlers de visibilidad
- */
 function setupVisibilityHandlers() {
     if (visibilityChangeHandler) {
         document.removeEventListener('visibilitychange', visibilityChangeHandler);
@@ -2013,16 +2078,48 @@ function setupVisibilityHandlers() {
 
     visibilityChangeHandler = async () => {
         const isVisible = document.visibilityState === 'visible';
-        
+
         if (DEBUG.enabled) {
             console.log(isVisible ? '👁️ Ventana recuperó el foco' : '🔍 Ventana perdió el foco');
         }
-        
-        // Solo procesar si la ventana está visible Y tenemos sesión
-        if (!isVisible || !appState.session) {
+
+        if (!isVisible) {
+            abortRequestsByContext(null, 'visibility:hidden');
+            appStore.setState(state => ({
+                lifecycle: {
+                    ...state.lifecycle,
+                    lastHiddenAt: Date.now(),
+                    isRestoring: true
+                }
+            }));
+            emitLifecycleEvent('app:visibility-hidden', {
+                reason: 'visibility:hidden'
+            });
             return;
         }
-        
+
+        appStore.setState(state => ({
+            lifecycle: {
+                ...state.lifecycle,
+                lastVisibleAt: Date.now(),
+                isRestoring: true
+            }
+        }));
+
+        if (!appState.session) {
+            emitLifecycleEvent('app:visibility-restored', {
+                sessionActive: false,
+                reason: 'visibility:visible'
+            });
+            appStore.setState(state => ({
+                lifecycle: {
+                    ...state.lifecycle,
+                    isRestoring: false
+                }
+            }));
+            return;
+        }
+
         // DEBOUNCE: Ignorar si el último cambio fue hace menos de 2 segundos
         const now = Date.now();
         if (now - lastVisibilityChange < 2000) {
@@ -2082,14 +2179,19 @@ function setupVisibilityHandlers() {
                     if (DEBUG.enabled) {
                         console.warn('⚠️ Sesión perdida, limpiando estado');
                     }
-                    
+
                     appState.session = null;
                     appState.user = null;
                     appState.profile = null;
-                    
+
                     cleanupResources();
                     notifyAuthListeners('SIGNED_OUT', null);
-                    
+
+                    emitLifecycleEvent('app:session-expired', {
+                        reason: 'visibility:refresh',
+                        route: appState?.route?.path || null
+                    });
+
                     // Redirigir al login
                     redirectToLogin({
                         message: 'Su sesión ha expirado',
@@ -2115,7 +2217,19 @@ function setupVisibilityHandlers() {
             } finally {
                 isHandlingVisibilityChange = false;
                 sessionRefreshInProgress = false;
-                
+
+                appStore.setState(state => ({
+                    lifecycle: {
+                        ...state.lifecycle,
+                        isRestoring: false
+                    }
+                }));
+
+                emitLifecycleEvent('app:visibility-restored', {
+                    sessionActive: !!appState.session,
+                    reason: 'visibility:visible'
+                });
+
                 if (DEBUG.enabled) {
                     console.log('✅ Manejo de visibilidad completado');
                 }
@@ -2192,7 +2306,9 @@ export function cleanupResources() {
     if (DEBUG.enabled) {
         console.log('🧹 Limpiando recursos...');
     }
-    
+
+    abortRequestsByContext(null, 'auth:cleanup');
+
     // Limpiar intervals
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);

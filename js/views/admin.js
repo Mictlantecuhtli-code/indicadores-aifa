@@ -24,6 +24,7 @@ import {
     getFormData,
     formatDate
 } from '../lib/ui.js';
+import { withAbortSignal, throwIfAborted, isAbortError, createCleanupBag } from '../lib/async.js';
 
 const ROLE_OPTIONS = [
     { value: 'ADMIN', label: 'Administrador' },
@@ -57,51 +58,81 @@ const adminState = {
 };
 let adminContainerRef = null;
 
+let renderAbortSignal = null;
+
 // =====================================================
 // RENDER PRINCIPAL
 // =====================================================
 
-export async function render(container) {
+export async function render(container, params = {}, query = {}, context = {}) {
     adminContainerRef = container;
-    
+    const { signal } = context || {};
+    renderAbortSignal = signal || null;
+    const { register, run } = createCleanupBag();
+
+    const cleanup = () => {
+        run();
+        renderAbortSignal = null;
+        adminContainerRef = null;
+    };
+
     try {
         // PASO 1: Mostrar loading ANTES de renderizar layout
         showLoading('Cargando panel de administración...');
-        
+
+        throwIfAborted(signal);
+
         // PASO 2: Verificar permisos primero
-        const isAdmin = await ensureAdminProfile();
+        const isAdmin = await withAbortSignal(ensureAdminProfile(signal), signal);
+        throwIfAborted(signal);
+
         if (!isAdmin) {
-            hideLoading(); // ✅ CRÍTICO: hideLoading AQUÍ
+            hideLoading();
             renderAccessDenied(container);
-            return;
+            return cleanup;
         }
-        
+
         // PASO 3: Renderizar layout vacío (rápido)
         container.innerHTML = renderLayout();
-        setupStaticListeners(container);
-        
+        setupStaticListeners(container, register);
+
         // PASO 4: Dar tiempo al navegador para pintar
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
+        await withAbortSignal(new Promise(resolve => setTimeout(resolve, 0)), signal);
+        throwIfAborted(signal);
+
         // PASO 5: Cargar datos
-        await loadInitialData();
-        
+        await withAbortSignal(loadInitialData(signal), signal);
+        throwIfAborted(signal);
+
         // PASO 6: Renderizar usuarios de forma progresiva
-        await renderUsersTableProgressive();
-        await renderUserDetailProgressive();
-        
+        await withAbortSignal(renderUsersTableProgressive(signal), signal);
+        throwIfAborted(signal);
+
+        await withAbortSignal(renderUserDetailProgressive(signal), signal);
+        throwIfAborted(signal);
+
         // PASO 7: Recrear iconos al final
         if (window.lucide) {
             window.lucide.createIcons();
         }
-        
+
         hideLoading();
-        
+
+        return cleanup;
+
     } catch (error) {
+        if (isAbortError(error)) {
+            if (DEBUG.enabled) {
+                console.log('⏹️ Render de administración cancelado:', error);
+            }
+            return cleanup;
+        }
+
         console.error('❌ Error al renderizar panel de administración:', error);
-        hideLoading(); // ✅ SIEMPRE ocultar loading
+        hideLoading();
         container.innerHTML = renderErrorState(error);
         showToast('No se pudo cargar el panel de administración', 'error');
+        return cleanup;
     }
 }
 
@@ -190,42 +221,82 @@ function renderLayout() {
     `;
 }
 
-function setupStaticListeners(container) {
-    container.querySelector('#user-search')?.addEventListener('input', (event) => {
-        adminState.filters.search = event.target.value;
-        renderUsersTable();
-        renderUserDetail();
-        refreshIcons();
-    });
+function setupStaticListeners(container, registerCleanup = () => {}) {
+    const searchInput = container.querySelector('#user-search');
+    if (searchInput) {
+        const handler = (event) => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            adminState.filters.search = event.target.value;
+            renderUsersTable();
+            renderUserDetail();
+            refreshIcons();
+        };
+        searchInput.addEventListener('input', handler);
+        registerCleanup(() => searchInput.removeEventListener('input', handler));
+    }
 
-    container.querySelector('#filter-estado')?.addEventListener('change', (event) => {
-        adminState.filters.estado = event.target.value;
-        renderUsersTable();
-        renderUserDetail();
-        refreshIcons();
-    });
+    const estadoSelect = container.querySelector('#filter-estado');
+    if (estadoSelect) {
+        const handler = (event) => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            adminState.filters.estado = event.target.value;
+            renderUsersTable();
+            renderUserDetail();
+            refreshIcons();
+        };
+        estadoSelect.addEventListener('change', handler);
+        registerCleanup(() => estadoSelect.removeEventListener('change', handler));
+    }
 
-    container.querySelector('#filter-rol')?.addEventListener('change', (event) => {
-        adminState.filters.rol = event.target.value;
-        renderUsersTable();
-        renderUserDetail();
-        refreshIcons();
-    });
+    const rolSelect = container.querySelector('#filter-rol');
+    if (rolSelect) {
+        const handler = (event) => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            adminState.filters.rol = event.target.value;
+            renderUsersTable();
+            renderUserDetail();
+            refreshIcons();
+        };
+        rolSelect.addEventListener('change', handler);
+        registerCleanup(() => rolSelect.removeEventListener('change', handler));
+    }
 
-    container.querySelector('#create-user-button')?.addEventListener('click', () => {
-        openCreateUserModal();
-    });
+    const createButton = container.querySelector('#create-user-button');
+    if (createButton) {
+        const handler = () => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            openCreateUserModal();
+        };
+        createButton.addEventListener('click', handler);
+        registerCleanup(() => createButton.removeEventListener('click', handler));
+    }
 
-    container.querySelector('#user-table-body')?.addEventListener('click', (event) => {
-        const row = event.target.closest('tr[data-user-id]');
-        if (!row) return;
-        const userId = row.getAttribute('data-user-id');
-        if (!userId || userId === adminState.selectedUserId) return;
-        adminState.selectedUserId = userId;
-        renderUsersTable();
-        renderUserDetail();
-        refreshIcons();
-    });
+    const tableBody = container.querySelector('#user-table-body');
+    if (tableBody) {
+        const handler = (event) => {
+            if (renderAbortSignal?.aborted) {
+                return;
+            }
+            const row = event.target.closest('tr[data-user-id]');
+            if (!row) return;
+            const userId = row.getAttribute('data-user-id');
+            if (!userId || userId === adminState.selectedUserId) return;
+            adminState.selectedUserId = userId;
+            renderUsersTable();
+            renderUserDetail();
+            refreshIcons();
+        };
+        tableBody.addEventListener('click', handler);
+        registerCleanup(() => tableBody.removeEventListener('click', handler));
+    }
 }
 
 // =====================================================
@@ -233,11 +304,14 @@ function setupStaticListeners(container) {
 // =====================================================
 
 
-async function ensureAdminProfile() {
-    if (!appState.profile) {
-        await getCurrentProfile();
+async function ensureAdminProfile(signal = renderAbortSignal) {
+    throwIfAborted(signal);
 
+    if (!appState.profile) {
+        await withAbortSignal(getCurrentProfile(), signal);
     }
+
+    throwIfAborted(signal);
 
     if (appState.profile?.rol_principal === 'ADMIN') {
         return true;
@@ -250,11 +324,13 @@ async function ensureAdminProfile() {
     return false;
 }
 
-async function loadInitialData() {
-    const [areas, users] = await Promise.all([
+async function loadInitialData(signal = renderAbortSignal) {
+    const [areas, users] = await withAbortSignal(Promise.all([
         fetchAdminAreas(),
         fetchAdminUsers()
-    ]);
+    ]), signal);
+
+    throwIfAborted(signal);
 
     adminState.areas = (areas || []).filter(area => area.estado !== 'ELIMINADO');
     adminState.users = (users || []).map(user => ({
@@ -318,10 +394,12 @@ function renderUsersTable() {
 // RENDER PROGRESIVO (NO BLOQUEANTE)
 // =====================================================
 
-async function renderUsersTableProgressive() {
+async function renderUsersTableProgressive(signal = renderAbortSignal) {
     if (!adminContainerRef) return;
     const tbody = adminContainerRef.querySelector('#user-table-body');
     if (!tbody) return;
+
+    throwIfAborted(signal);
 
     if (adminState.users.length === 0) {
         tbody.innerHTML = `
@@ -354,25 +432,28 @@ async function renderUsersTableProgressive() {
     // Renderizar usuarios en lotes de 10 para no bloquear
     const BATCH_SIZE = 10;
     let html = '';
-    
+
     for (let i = 0; i < filteredUsers.length; i += BATCH_SIZE) {
+        throwIfAborted(signal);
         const batch = filteredUsers.slice(i, i + BATCH_SIZE);
         html += batch.map(user => renderUserRow(user)).join('');
-        
+
         // Actualizar DOM progresivamente
         tbody.innerHTML = html;
-        
+
         // Dar tiempo al navegador cada 10 usuarios
         if (i + BATCH_SIZE < filteredUsers.length) {
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await withAbortSignal(new Promise(resolve => setTimeout(resolve, 0)), signal);
         }
     }
 }
 
-async function renderUserDetailProgressive() {
+async function renderUserDetailProgressive(signal = renderAbortSignal) {
     if (!adminContainerRef) return;
     const container = adminContainerRef.querySelector('#user-detail');
     if (!container) return;
+
+    throwIfAborted(signal);
 
     const user = getSelectedUser();
 
@@ -413,10 +494,11 @@ async function renderUserDetailProgressive() {
             </div>
         </div>
     `;
-    
+
     // Dar tiempo al navegador
-    await new Promise(resolve => setTimeout(resolve, 0));
-    
+    await withAbortSignal(new Promise(resolve => setTimeout(resolve, 0)), signal);
+    throwIfAborted(signal);
+
     // Parte 2: Summary fields
     const summaryContainer = container.querySelector('#user-summary');
     if (summaryContainer) {
@@ -427,10 +509,11 @@ async function renderUserDetailProgressive() {
             ${renderSummaryField('Último acceso', ultimoAcceso)}
         `;
     }
-    
+
     // Parte 3: Assignments (más pesado)
-    await new Promise(resolve => setTimeout(resolve, 0));
-    
+    await withAbortSignal(new Promise(resolve => setTimeout(resolve, 0)), signal);
+    throwIfAborted(signal);
+
     const assignmentsHTML = `
         <div class="mt-6 space-y-4">
             <div class="rounded-lg border border-gray-200 bg-white p-6">

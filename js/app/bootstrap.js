@@ -18,6 +18,7 @@ import * as ui from '../lib/ui.js';
 import {
     initSupabase,
     appState,
+    appStore,
     onAuthStateChange,
     isAuthenticated
 } from '../lib/supa.js';
@@ -29,6 +30,8 @@ import {
 } from './modules/header.js';
 import { initSessionMonitoring } from './modules/session.js';
 import { initGlobalErrorHandlers } from './modules/errors.js';
+import { initLifecycleModule } from './modules/lifecycle.js';
+import { registerServiceWorker } from './modules/pwa.js';
 
 function exposeGlobals() {
     window.ui = ui;
@@ -47,6 +50,7 @@ async function bootstrap() {
         exposeGlobals();
         initGlobalErrorHandlers();
         initSessionMonitoring();
+        registerServiceWorker();
 
         const navigationBindings = getNavigationBindings();
         initHeaderModule({ routes, navigationMap: navigationBindings });
@@ -56,6 +60,7 @@ async function bootstrap() {
         }
 
         await initSupabase();
+        initLifecycleModule();
 
         updateUserHeader();
         syncProtectedHeaderVisibility();
@@ -71,10 +76,15 @@ async function bootstrap() {
         });
 
         if (!window.location.hash) {
-            const defaultRoute = isAuthenticated()
-                ? getDefaultRouteForUser(appState.profile)
-                : '/';
-            navigateTo(defaultRoute, {}, true);
+            const storedRoute = appStore.getState().route;
+            if (storedRoute?.path && storedRoute.path !== '/login') {
+                navigateTo(storedRoute.path, storedRoute.query || {}, true);
+            } else {
+                const defaultRoute = isAuthenticated()
+                    ? getDefaultRouteForUser(appState.profile)
+                    : '/';
+                navigateTo(defaultRoute, {}, true);
+            }
         }
 
         initRouter({ routes });
