@@ -436,12 +436,26 @@ export async function callRPC(functionName, params = {}) {
  * Obtener sesión actual
  */
 async function refreshSession() {
+    // Evitar refresh simultáneos
+    if (sessionRefreshInProgress) {
+        if (DEBUG.enabled) {
+            console.log('⏭️ Refresh de sesión ya en progreso');
+        }
+        return appState.session;
+    }
+    
+    sessionRefreshInProgress = true;
+    
     try {
         const client = ensureSupabaseClient('refreshSession');
 
         if (!client?.auth?.refreshSession) {
             console.warn('⚠️ Cliente de Supabase no disponible para refrescar la sesión');
             return null;
+        }
+
+        if (DEBUG.enabled) {
+            console.log('🔄 Intentando refrescar sesión...');
         }
 
         const { data, error } = await client.auth.refreshSession();
@@ -453,10 +467,16 @@ async function refreshSession() {
             return null;
         }
 
+        if (DEBUG.enabled) {
+            console.log('✅ Sesión refrescada exitosamente');
+        }
+
         return data.session;
     } catch (error) {
         console.error('❌ Error al refrescar la sesión:', error);
         return null;
+    } finally {
+        sessionRefreshInProgress = false;
     }
 }
 
@@ -475,7 +495,6 @@ export async function getCurrentSession(options = {}) {
 
         const { data: { session }, error } = await client.auth.getSession();
 
-
         if (error) {
             console.error('❌ Error al obtener sesión:', error);
             return appState.session;
@@ -487,7 +506,12 @@ export async function getCurrentSession(options = {}) {
             return session;
         }
 
-        if (allowRefresh && appState.session) {
+        // Si no hay sesión y se permite refresh, intentar refrescar
+        if (allowRefresh && appState.session && !sessionRefreshInProgress) {
+            if (!silent && DEBUG.enabled) {
+                console.log('🔄 Sesión no encontrada, intentando refresh...');
+            }
+            
             const refreshedSession = await refreshSession();
 
             if (refreshedSession) {
@@ -1608,6 +1632,8 @@ let isHandlingVisibilityChange = false;
 let visibilityChangeTimeout = null;
 let initializationPromise = null;
 let visibilityChangeHandler = null;
+let lastVisibilityChange = 0;
+let sessionRefreshInProgress = false;
 
 async function setupSupabase() {
     try {
@@ -1705,73 +1731,124 @@ initSupabase().catch(console.error);
  * Configurar handlers de visibilidad
  */
 function setupVisibilityHandlers() {
-    // Evitar duplicar handlers si la función se llama más de una vez
     if (visibilityChangeHandler) {
         document.removeEventListener('visibilitychange', visibilityChangeHandler);
     }
 
-    // Handler para cambios de visibilidad
     visibilityChangeHandler = async () => {
+        const isVisible = document.visibilityState === 'visible';
+        
+        if (DEBUG.enabled) {
+            console.log(isVisible ? '👁️ Ventana recuperó el foco' : '🔍 Ventana perdió el foco');
+        }
+        
+        // Solo procesar si la ventana está visible Y tenemos sesión
+        if (!isVisible || !appState.session) {
+            return;
+        }
+        
+        // DEBOUNCE: Ignorar si el último cambio fue hace menos de 2 segundos
+        const now = Date.now();
+        if (now - lastVisibilityChange < 2000) {
+            if (DEBUG.enabled) {
+                console.log('⏭️ Ignorando cambio de visibilidad (debounce)');
+            }
+            return;
+        }
+        lastVisibilityChange = now;
+        
+        // Evitar ejecuciones simultáneas
+        if (isHandlingVisibilityChange || sessionRefreshInProgress) {
+            if (DEBUG.enabled) {
+                console.log('⏭️ Ya hay un refresh en progreso, ignorando');
+            }
+            return;
+        }
+
         // Limpiar timeout anterior si existe
         if (visibilityChangeTimeout) {
             clearTimeout(visibilityChangeTimeout);
             visibilityChangeTimeout = null;
         }
-        
-        const isVisible = document.visibilityState === 'visible';
-        
-        if (DEBUG.enabled) {
-            if (isVisible) {
-                console.log('🔍 Ventana recuperó el foco');
-            } else {
-                console.log('🔍 Ventana perdió el foco');
-            }
-        }
-        
-        // Solo refrescar la sesión si la ventana está visible Y tenemos sesión
-        if (isVisible && appState.session) {
-            // Agregar un pequeño delay para evitar múltiples disparos
-            visibilityChangeTimeout = setTimeout(async () => {
-                // Evitar ejecuciones simultáneas
-                if (isHandlingVisibilityChange) {
-                    return;
+
+        // Delay de 500ms para evitar múltiples disparos
+        visibilityChangeTimeout = setTimeout(async () => {
+            isHandlingVisibilityChange = true;
+            sessionRefreshInProgress = true;
+            
+            try {
+                const previousSession = appState.session;
+                
+                if (DEBUG.enabled) {
+                    console.log('🔄 Verificando sesión después de cambio de visibilidad...');
                 }
+                
+                const session = await getCurrentSession({ allowRefresh: true, silent: true });
 
-                isHandlingVisibilityChange = true;
-                try {
-                    const previousSession = appState.session;
-                    const session = await getCurrentSession({ allowRefresh: true, silent: true });
+                if (session) {
+                    // Solo actualizar si realmente cambió el token
+                    if (session.access_token !== previousSession?.access_token) {
+                        appState.session = session;
+                        appState.user = session.user;
 
-                    if (session) {
-                        // Solo actualizar si realmente cambió el token
-                        if (session.access_token !== previousSession?.access_token) {
-                            appState.session = session;
-                            appState.user = session.user;
-
-                            if (DEBUG.enabled) {
-                                console.log('✅ Sesión actualizada silenciosamente');
-                            }
-                            // NO notificar a listeners para evitar re-renderizados
+                        if (DEBUG.enabled) {
+                            console.log('✅ Sesión actualizada silenciosamente');
                         }
-                        setupGlobalAutoRefresh();
-                    } else if (previousSession) {
-                        // Confirmar la pérdida real de sesión antes de notificar
+                        // NO notificar a listeners para evitar re-renderizados
+                    } else {
+                        if (DEBUG.enabled) {
+                            console.log('ℹ️ Sesión sin cambios');
+                        }
+                    }
+                    setupGlobalAutoRefresh();
+                } else if (previousSession) {
+                    // Sesión perdida - limpiar y redirigir
+                    if (DEBUG.enabled) {
+                        console.warn('⚠️ Sesión perdida, limpiando estado');
+                    }
+                    
+                    appState.session = null;
+                    appState.user = null;
+                    appState.profile = null;
+                    
+                    cleanupResources();
+                    notifyAuthListeners('SIGNED_OUT', null);
+                    
+                    // Redirigir al login
+                    if (window.router?.navigateTo) {
+                        window.router.navigateTo('/login', {
+                            message: 'Su sesión ha expirado',
+                            type: 'warning'
+                        }, true);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error al manejar cambio de visibilidad:', error);
+                
+                // En caso de error, intentar recuperar la sesión una vez más
+                try {
+                    const recoverySession = await getCurrentSession({ allowRefresh: false, silent: true });
+                    if (!recoverySession) {
+                        // Sin sesión después de error - limpiar todo
+                        appState.session = null;
                         appState.user = null;
                         appState.profile = null;
-                        notifyAuthListeners('SIGNED_OUT', null);
+                        cleanupResources();
                     }
-                } catch (error) {
-                    if (DEBUG.enabled) {
-                        console.warn('⚠️ Error al verificar sesión en visibility change:', error);
-                    }
-                } finally {
-                    isHandlingVisibilityChange = false;
+                } catch (recoveryError) {
+                    console.error('❌ Error en recuperación de sesión:', recoveryError);
                 }
-            }, 200); // Delay aumentado para mayor estabilidad
-        }
+            } finally {
+                isHandlingVisibilityChange = false;
+                sessionRefreshInProgress = false;
+                
+                if (DEBUG.enabled) {
+                    console.log('✅ Manejo de visibilidad completado');
+                }
+            }
+        }, 500); // 500ms de delay
     };
-    
-    // Usar solo visibilitychange
+
     document.addEventListener('visibilitychange', visibilityChangeHandler);
     
     if (DEBUG.enabled) {
@@ -1803,10 +1880,45 @@ export function setupGlobalAutoRefresh() {
         }, 60000); // Cada minuto
     }
 }
+// =====================================================
+// RESET DE EMERGENCIA
+// =====================================================
+
+/**
+ * Forzar reset completo del estado de autenticación
+ * USO: Solo en caso de emergencia cuando el sistema se bloquea
+ */
+export function forceResetAuthState() {
+    if (DEBUG.enabled) {
+        console.warn('🔄 FORZANDO RESET COMPLETO DE AUTENTICACIÓN');
+    }
+    
+    // Resetear flags
+    isHandlingVisibilityChange = false;
+    sessionRefreshInProgress = false;
+    lastVisibilityChange = 0;
+    
+    // Limpiar timeouts
+    if (visibilityChangeTimeout) {
+        clearTimeout(visibilityChangeTimeout);
+        visibilityChangeTimeout = null;
+    }
+    
+    // Limpiar recursos
+    cleanupResources();
+    
+    if (DEBUG.enabled) {
+        console.log('✅ Reset de autenticación completado');
+    }
+}
 /**
  * Limpiar recursos al cerrar sesión
  */
 export function cleanupResources() {
+    if (DEBUG.enabled) {
+        console.log('🧹 Limpiando recursos...');
+    }
+    
     // Limpiar intervals
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);
@@ -1822,18 +1934,31 @@ export function cleanupResources() {
     }
     
     // Limpiar storage
-    sessionStorage.removeItem('aifa-session-backup');
-    sessionStorage.removeItem('aifa-last-activity');
+    try {
+        sessionStorage.removeItem('aifa-session-backup');
+        sessionStorage.removeItem('aifa-last-activity');
+    } catch (error) {
+        console.warn('⚠️ Error al limpiar sessionStorage:', error);
+    }
 
-    // Limpiar event listeners de visibilidad si existen
+    // Limpiar event listeners de visibilidad
     if (visibilityChangeTimeout) {
         clearTimeout(visibilityChangeTimeout);
         visibilityChangeTimeout = null;
     }
+    
+    // Resetear flags
     isHandlingVisibilityChange = false;
+    sessionRefreshInProgress = false;
+    lastVisibilityChange = 0;
+    
     if (visibilityChangeHandler) {
         document.removeEventListener('visibilitychange', visibilityChangeHandler);
         visibilityChangeHandler = null;
+    }
+    
+    if (DEBUG.enabled) {
+        console.log('✅ Recursos limpiados');
     }
 }
 
