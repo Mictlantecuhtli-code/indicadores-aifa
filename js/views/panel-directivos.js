@@ -14,6 +14,12 @@ const panelState = {
     indicadoresFBO: [],
     datosReales: [],
     datosMetas: [],
+    metaContext: {
+        escenario: null,
+        anio: null,
+        mes: null,
+        coincideConMedicion: false
+    },
     subdirecciones: new Map(), // Map<parentAreaId, subdirecciones[]>
     expandedDirecciones: new Set(), // Set de IDs de direcciones expandidas
     loading: false
@@ -550,16 +556,30 @@ async function cargarDatosMetas(indicador, escenario) {
     try {
         if (!indicador) {
             panelState.datosMetas = [];
+            panelState.metaContext = {
+                escenario: escenario ? escenario.toLowerCase() : null,
+                anio: null,
+                mes: null,
+                coincideConMedicion: false
+            };
             return;
         }
 
-        const escenarioKey = (escenario || 'medio').toString().toUpperCase();
+        const escenarioKey = (escenario || 'medio').toString().trim().toUpperCase();
+        const escenarioSlug = escenarioKey.toLowerCase();
+
+        panelState.metaContext = {
+            escenario: escenarioSlug,
+            anio: null,
+            mes: null,
+            coincideConMedicion: false
+        };
 
         const { data } = await selectData('indicador_metas', {
             select: 'anio, mes, valor, escenario, fecha_captura, fecha_ultima_edicion',
             filters: {
                 indicador_id: indicador.id,
-                escenario: escenarioKey
+                escenario: { operator: 'ilike', value: escenarioKey }
             },
             orderBy: [
                 { column: 'anio', ascending: true },
@@ -567,18 +587,74 @@ async function cargarDatosMetas(indicador, escenario) {
             ]
         });
 
-        panelState.datosMetas = (data || []).map(meta => ({
-            ...meta,
-            valor: meta?.valor !== null && meta?.valor !== undefined ? Number(meta.valor) : null
-        }));
+        const metasNormalizadas = (data || [])
+            .map(meta => {
+                const anio = Number(meta?.anio);
+                const mes = Number(meta?.mes);
+                const valor = meta?.valor !== null && meta?.valor !== undefined ? Number(meta.valor) : null;
+
+                return {
+                    ...meta,
+                    escenario: (meta?.escenario || escenarioKey).toString().trim().toUpperCase(),
+                    anio: Number.isFinite(anio) ? anio : null,
+                    mes: Number.isFinite(mes) ? mes : null,
+                    valor
+                };
+            })
+            .filter(meta => Number.isFinite(meta.anio) && Number.isFinite(meta.mes))
+            .sort((a, b) => {
+                if (a.anio !== b.anio) return a.anio - b.anio;
+                return a.mes - b.mes;
+            });
+
+        panelState.datosMetas = metasNormalizadas;
+
+        const metasConValor = metasNormalizadas.filter(meta => meta.valor !== null);
+        const ultimoMes = obtenerUltimoMesConDatos();
+
+        let metaReferencia = null;
+
+        if (ultimoMes) {
+            metaReferencia = metasConValor.find(meta => meta.anio === ultimoMes.año && meta.mes === ultimoMes.mes) || null;
+        }
+
+        if (!metaReferencia && metasConValor.length > 0) {
+            metaReferencia = metasConValor[metasConValor.length - 1];
+        }
+
+        panelState.metaContext = {
+            escenario: escenarioSlug,
+            anio: metaReferencia?.anio ?? ultimoMes?.año ?? null,
+            mes: metaReferencia?.mes ?? ultimoMes?.mes ?? null,
+            coincideConMedicion: Boolean(
+                metaReferencia &&
+                ultimoMes &&
+                metaReferencia.anio === ultimoMes.año &&
+                metaReferencia.mes === ultimoMes.mes
+            )
+        };
 
         if (DEBUG.enabled) {
-            console.log(`🎯 Metas cargadas: ${panelState.datosMetas.length} registros para ${indicador.nombre} (${escenarioKey})`);
+            console.log(
+                `🎯 Metas cargadas: ${panelState.datosMetas.length} registros para ${indicador.nombre} (${escenarioKey})`
+            );
+            if (panelState.metaContext.anio && panelState.metaContext.mes) {
+                console.log(
+                    `   ➜ Meta de referencia: ${panelState.metaContext.anio}-${panelState.metaContext.mes} (coincide con medición: ${panelState.metaContext.coincideConMedicion})`
+                );
+            }
         }
 
     } catch (error) {
         console.error('❌ Error al cargar metas:', error);
         panelState.datosMetas = [];
+        panelState.metaContext = {
+            escenario: escenario ? escenario.toLowerCase() : null,
+            anio: null,
+            mes: null,
+            coincideConMedicion: false
+        };
+
         throw error;
     }
 }
@@ -868,30 +944,68 @@ function generarComparativoAnual() {
 // =====================================================
 
 function generarComparativoMeta(escenario) {
-    const ultimoMes = obtenerUltimoMesConDatos();
-    if (!ultimoMes || panelState.datosMetas.length === 0) return '<p class="text-gray-500">No hay datos disponibles</p>';
-
-    const metaMes = panelState.datosMetas.find(d => d.mes === ultimoMes.mes && d.anio === ultimoMes.año);
-
-    if (!metaMes || metaMes.valor === null || metaMes.valor === undefined) {
-        return '<p class="text-gray-500">No hay metas capturadas para este escenario en el mes seleccionado.</p>';
-    }
-
-    const meta = metaMes?.valor || 0;
-    const diferencia = ultimoMes.valor - meta;
-    const cumplimiento = meta > 0 ? ((ultimoMes.valor / meta) * 100).toFixed(2) : 0;
-    
     const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const nombreEscenario = escenario.charAt(0).toUpperCase() + escenario.slice(1);
-    
+
+    if (!panelState.datosMetas.length) {
+        return '<p class="text-gray-500">No hay metas capturadas para este escenario.</p>';
+    }
+
+    const metaContext = panelState.metaContext || {};
+    const metaAnio = metaContext.anio;
+    const metaMesNumero = metaContext.mes;
+
+    if (!Number.isFinite(metaAnio) || !Number.isFinite(metaMesNumero)) {
+        return '<p class="text-gray-500">No hay metas capturadas para este escenario.</p>';
+    }
+
+    const metaMes = panelState.datosMetas.find(meta => meta.anio === metaAnio && meta.mes === metaMesNumero && meta.valor !== null);
+
+    if (!metaMes) {
+        return '<p class="text-gray-500">No hay metas capturadas para este escenario en el periodo seleccionado.</p>';
+    }
+
+    const registroReal = panelState.datosReales.find(d => d.anio === metaMes.anio && d.mes === metaMes.mes) || null;
+    const valorReal = registroReal?.valor ?? null;
+    const meta = metaMes.valor ?? null;
+
+    const diferencia = valorReal !== null && meta !== null ? valorReal - meta : null;
+    const cumplimiento = valorReal !== null && meta > 0 ? ((valorReal / meta) * 100).toFixed(2) : null;
+
+    const etiquetaPeriodo = `${nombresMeses[metaMes.mes - 1]} ${metaMes.anio}`;
+    const valorRealTexto = valorReal !== null
+        ? formatNumber(valorReal)
+        : '<span class="text-gray-400 italic">Sin medición</span>';
+
+    const diferenciaTexto = diferencia !== null
+        ? `${diferencia >= 0 ? '+' : ''}${formatNumber(diferencia)}`
+        : '<span class="text-gray-400">—</span>';
+
+    const cumplimientoTexto = cumplimiento !== null
+        ? `${cumplimiento}%`
+        : '<span class="text-gray-400">—</span>';
+
+    const diferenciaClase = diferencia !== null
+        ? (diferencia >= 0 ? 'text-green-600' : 'text-red-600')
+        : 'text-gray-500';
+
+    const cumplimientoValor = cumplimiento !== null ? parseFloat(cumplimiento) : null;
+    const cumplimientoClase = cumplimientoValor !== null
+        ? (cumplimientoValor >= 100 ? 'text-green-600' : cumplimientoValor >= 90 ? 'text-yellow-600' : 'text-red-600')
+        : 'text-gray-500';
+
+    const notaPeriodo = metaContext.coincideConMedicion
+        ? `Último mes con datos: ${etiquetaPeriodo}`
+        : `Última meta capturada: ${etiquetaPeriodo}${valorReal === null ? ' (sin medición capturada en ese periodo)' : ''}`;
+
     return `
         <div class="bg-white rounded-lg shadow-lg p-6 space-y-6">
             <div class="border-b pb-4">
                 <h3 class="text-xl font-bold text-gray-900">${panelState.indicadorSeleccionado.nombre}</h3>
                 <p class="text-gray-600">Comparativo Real vs Meta - Escenario ${nombreEscenario}</p>
-                <p class="text-sm text-gray-500 mt-2">Último mes con datos: ${nombresMeses[ultimoMes.mes - 1]} ${ultimoMes.año}</p>
+                <p class="text-sm text-gray-500 mt-2">${notaPeriodo}</p>
             </div>
-            
+
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -905,14 +1019,14 @@ function generarComparativoMeta(escenario) {
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap font-medium">${nombresMeses[ultimoMes.mes - 1]} ${ultimoMes.año}</td>
-                            <td class="px-6 py-4 whitespace-nowrap">${formatNumber(ultimoMes.valor)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap font-medium">${etiquetaPeriodo}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${valorRealTexto}</td>
                             <td class="px-6 py-4 whitespace-nowrap">${formatNumber(meta)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap ${diferencia >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${diferencia >= 0 ? '+' : ''}${formatNumber(diferencia)}
+                            <td class="px-6 py-4 whitespace-nowrap ${diferenciaClase}">
+                                ${diferenciaTexto}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap ${cumplimiento >= 100 ? 'text-green-600' : cumplimiento >= 90 ? 'text-yellow-600' : 'text-red-600'}">
-                                ${cumplimiento}%
+                            <td class="px-6 py-4 whitespace-nowrap ${cumplimientoClase}">
+                                ${cumplimientoTexto}
                             </td>
                         </tr>
                     </tbody>
@@ -946,7 +1060,7 @@ function generarComparativoMeta(escenario) {
 
 async function renderizarGrafica(tipo = 'comparativa') {
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     const canvas = document.getElementById('grafica-container');
     if (!canvas) {
         console.error('Canvas no encontrado');
@@ -954,29 +1068,37 @@ async function renderizarGrafica(tipo = 'comparativa') {
     }
     
     const ultimoMes = obtenerUltimoMesConDatos();
-    if (!ultimoMes) return;
-    
+
+    if (tipo !== 'meta' && !ultimoMes) return;
+
     const indicador = panelState.indicadorSeleccionado;
-    
+
     if (tipo === 'meta') {
-        const escenarioSlug = panelState.opcionSeleccionada.includes('bajo') ? 'bajo'
-            : panelState.opcionSeleccionada.includes('medio') ? 'medio'
-            : 'alto';
+        const metaContext = panelState.metaContext || {};
+        const escenarioSlug = metaContext.escenario
+            || (panelState.opcionSeleccionada.includes('bajo') ? 'bajo'
+                : panelState.opcionSeleccionada.includes('medio') ? 'medio'
+                    : 'alto');
+
         const escenarioNombre = escenarioSlug === 'bajo' ? 'Escenario Bajo'
             : escenarioSlug === 'medio' ? 'Escenario Mediano'
             : 'Escenario Alto';
 
+        const anioMeta = metaContext.anio ?? ultimoMes?.año ?? new Date().getFullYear();
+
         await crearGraficaMeta('grafica-container', panelState.datosReales, panelState.datosMetas, {
-            anio: ultimoMes.año,
+            anio: anioMeta,
             escenario: escenarioSlug,
             titulo: `${indicador.nombre} - Real vs Meta (${escenarioNombre})`,
             unidadMedida: indicador.unidad_medida || 'Unidades',
             nombreIndicador: indicador.nombre
         });
     } else {
+        if (!ultimoMes) return;
+
         const checkbox = document.getElementById('check-4anios');
         const mostrar4Anios = checkbox?.checked || false;
-        
+
         const aniosDisponibles = [...new Set(panelState.datosReales.map(d => d.anio))].sort();
         const aniosAMostrar = mostrar4Anios ? aniosDisponibles.slice(-4) : [ultimoMes.año - 1, ultimoMes.año];
         
