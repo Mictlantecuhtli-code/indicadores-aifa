@@ -5,7 +5,7 @@
 
 import { DEBUG, VALIDATION } from '../config.js';
 import { routes, getNavigationBindings } from './routes.js';
-import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser } from '../lib/router.js';
+import { initRouter, navigateTo, goBack, reloadCurrentRoute, parseCurrentRoute, getDefaultRouteForUser, cancelActiveNavigation } from '../lib/router.js';
 import * as ui from '../lib/ui.js';
 import { initSupabase, appState, onAuthStateChange, isAuthenticated, signOut, changePassword, getCurrentSession } from '../lib/supa.js';
 
@@ -42,7 +42,8 @@ function exposeGlobals() {
         goBack,
         reloadCurrentRoute,
         parseCurrentRoute,
-        getDefaultRouteForUser
+        getDefaultRouteForUser,
+        cancelActiveNavigation
     };
 }
 
