@@ -4,7 +4,13 @@
 import { DEBUG } from '../config.js';
 import { selectData, appState, getCurrentProfile } from '../lib/supa.js';
 import { showToast, showLoading, hideLoading, formatNumber } from '../lib/ui.js';
-import { crearGraficaMeta, crearGraficaHistorica, destruirGrafica, normalizarSerieTemporal } from '../lib/charts.js';
+import {
+    crearGraficaMeta,
+    crearGraficaPanelComparativa,
+    crearHistogramaSimple,
+    destruirGrafica,
+    normalizarSerieTemporal
+} from '../lib/charts.js';
 // Estado del panel de directivos
 const ESCENARIO_LABELS = {
     bajo: 'Bajo',
@@ -28,7 +34,9 @@ const panelState = {
     },
     subdirecciones: new Map(), // Map<parentAreaId, subdirecciones[]>
     expandedDirecciones: new Set(), // Set de IDs de direcciones expandidas
-    loading: false
+    loading: false,
+    chartType: 'line',
+    histogramaVisible: false
 };
 
 const indicadorVisualConfig = {
@@ -317,6 +325,8 @@ function setupEventListeners() {
         seleccionarOpcion,
         seleccionarDireccion,
         toggleAnios,
+        cambiarTipoGrafica,
+        toggleHistograma,
         descargarDatos,
         imprimirReporte
     };
@@ -470,8 +480,8 @@ async function seleccionarOpcion(opcionId, event) {
 }
 
 function toggleAnios() {
-    destruirGrafica('visualizacion');
-    renderizarGrafica('comparativa');
+    destruirGrafica('panelDirectivos');
+    renderizarGrafica(obtenerModoGraficaPrincipal());
 }
 
 function descargarDatos() {
@@ -481,6 +491,108 @@ function descargarDatos() {
 
 function imprimirReporte() {
     window.print();
+}
+
+function obtenerModoGraficaPrincipal() {
+    const opcion = panelState.opcionSeleccionada || '';
+    return opcion.includes('vs_') && !opcion.includes('anterior') ? 'meta' : 'comparativa';
+}
+
+function cambiarTipoGrafica(tipo) {
+    if (!['line', 'bar'].includes(tipo)) return;
+
+    if (panelState.chartType === tipo) {
+        actualizarControlesGrafica();
+        return;
+    }
+
+    panelState.chartType = tipo;
+    renderizarGrafica(obtenerModoGraficaPrincipal());
+}
+
+async function toggleHistograma() {
+    const wrapper = document.getElementById('histograma-wrapper');
+    if (!wrapper) {
+        panelState.histogramaVisible = false;
+        return;
+    }
+
+    panelState.histogramaVisible = !panelState.histogramaVisible;
+
+    if (panelState.histogramaVisible) {
+        await renderizarHistograma();
+    } else {
+        destruirGrafica('panelDirectivosHistograma');
+    }
+
+    actualizarControlesGrafica();
+}
+
+async function renderizarHistograma() {
+    const wrapper = document.getElementById('histograma-wrapper');
+    const canvasWrapper = document.getElementById('histograma-canvas-wrapper');
+    const mensajeVacio = document.getElementById('histograma-empty');
+    const canvas = document.getElementById('histograma-container');
+
+    if (!wrapper || !canvasWrapper || !canvas) {
+        panelState.histogramaVisible = false;
+        return;
+    }
+
+    const valores = (panelState.datosReales || [])
+        .map(registro => registro?.valor)
+        .filter(valor => valor !== null && valor !== undefined)
+        .map(valor => Number(valor))
+        .filter(Number.isFinite);
+
+    if (!valores || valores.length === 0) {
+        if (mensajeVacio) mensajeVacio.classList.remove('hidden');
+        canvasWrapper.classList.add('hidden');
+        destruirGrafica('panelDirectivosHistograma');
+        return;
+    }
+
+    canvasWrapper.classList.remove('hidden');
+    if (mensajeVacio) mensajeVacio.classList.add('hidden');
+
+    await crearHistogramaSimple('histograma-container', valores, {
+        titulo: `${panelState.indicadorSeleccionado?.nombre || 'Indicador'} - Histograma`,
+        datasetLabel: 'Frecuencia',
+        color: '#6366F1'
+    });
+}
+
+function actualizarControlesGrafica() {
+    const botonesTipo = document.querySelectorAll('.toggle-chart-btn');
+    botonesTipo.forEach(boton => {
+        const tipo = boton.getAttribute('data-chart-type');
+        const activo = tipo === panelState.chartType;
+
+        boton.classList.toggle('bg-blue-600', activo);
+        boton.classList.toggle('text-white', activo);
+        boton.classList.toggle('border-blue-600', activo);
+        boton.classList.toggle('bg-white', !activo);
+        boton.classList.toggle('text-gray-700', !activo);
+        boton.classList.toggle('border-transparent', !activo);
+        boton.setAttribute('aria-pressed', activo.toString());
+    });
+
+    const botonHist = document.querySelector('[data-action="toggle-histograma"]');
+    if (botonHist) {
+        const activo = panelState.histogramaVisible;
+        botonHist.classList.toggle('bg-indigo-600', activo);
+        botonHist.classList.toggle('text-white', activo);
+        botonHist.classList.toggle('border-indigo-600', activo);
+        botonHist.classList.toggle('bg-white', !activo);
+        botonHist.classList.toggle('text-gray-700', !activo);
+        botonHist.classList.toggle('border-gray-200', !activo);
+        botonHist.setAttribute('aria-pressed', activo.toString());
+    }
+
+    const wrapper = document.getElementById('histograma-wrapper');
+    if (wrapper) {
+        wrapper.classList.toggle('hidden', !panelState.histogramaVisible);
+    }
 }
 // =====================================================
 // CARGA DE DATOS Y PROCESAMIENTO
@@ -518,7 +630,10 @@ async function cargarYMostrarResultados() {
         
         // Mostrar resultados
         document.getElementById('resultados-container').innerHTML = resultadosHTML;
-        
+
+        panelState.histogramaVisible = false;
+        destruirGrafica('panelDirectivosHistograma');
+
         // Recrear iconos
         if (window.lucide) {
             window.lucide.createIcons();
@@ -737,6 +852,49 @@ function obtenerUltimoTrimestreCompleto() {
 // GENERACIÓN DE HTML DE RESULTADOS
 // =====================================================
 
+function crearSeccionGrafica(titulo, { incluirToggleAnios = true } = {}) {
+    const toggleAnios = incluirToggleAnios
+        ? `
+            <label class="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
+                <span>Mostrar últimos 4 años</span>
+            </label>
+        `
+        : '';
+
+    return `
+        <div class="border-t pt-4 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <h4 class="font-semibold text-gray-900">${titulo}</h4>
+                <div class="flex flex-wrap items-center gap-2">
+                    ${toggleAnios}
+                    <div class="inline-flex overflow-hidden rounded-lg border border-gray-200" role="group">
+                        <button type="button" data-chart-type="line" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('line')">
+                            Líneas
+                        </button>
+                        <button type="button" data-chart-type="bar" class="toggle-chart-btn px-3 py-1 text-sm font-medium transition-colors border border-transparent bg-white text-gray-700" onclick="window.panelDirectivos.cambiarTipoGrafica('bar')">
+                            Barras
+                        </button>
+                    </div>
+                    <button type="button" data-action="toggle-histograma" class="toggle-hist-btn px-3 py-1 text-sm font-medium border border-gray-200 rounded-lg bg-white text-gray-700 transition-colors" onclick="window.panelDirectivos.toggleHistograma()">
+                        Histograma
+                    </button>
+                </div>
+            </div>
+            <div class="h-80">
+                <canvas id="grafica-container"></canvas>
+            </div>
+            <div id="histograma-wrapper" class="hidden border-t pt-4 space-y-3">
+                <h5 class="font-semibold text-gray-900">Histograma de distribución (todos los registros)</h5>
+                <p id="histograma-empty" class="hidden text-sm text-gray-500">No hay datos suficientes para generar el histograma.</p>
+                <div id="histograma-canvas-wrapper" class="h-64">
+                    <canvas id="histograma-container"></canvas>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function generarComparativoMensual() {
     const ultimoMes = obtenerUltimoMesConDatos();
     if (!ultimoMes) return '<p class="text-gray-500">No hay datos disponibles</p>';
@@ -783,18 +941,7 @@ function generarComparativoMensual() {
                 </table>
             </div>
             
-            <div class="border-t pt-4">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Mensual</h4>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                        <span class="text-sm text-gray-600">Mostrar últimos 4 años</span>
-                    </label>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Comparativa Mensual')}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -859,18 +1006,7 @@ function generarComparativoTrimestral() {
                 </table>
             </div>
             
-            <div class="border-t pt-4">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Mensual</h4>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                        <span class="text-sm text-gray-600">Mostrar últimos 4 años</span>
-                    </label>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Comparativa Trimestral')}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -935,18 +1071,7 @@ function generarComparativoAnual() {
                 </table>
             </div>
             
-            <div class="border-t pt-4">
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="font-semibold text-gray-900">Gráfica Comparativa Mensual</h4>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="check-4anios" class="rounded" onchange="window.panelDirectivos.toggleAnios()">
-                        <span class="text-sm text-gray-600">Mostrar últimos 4 años</span>
-                    </label>
-                </div>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Comparativa Anual')}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -1055,12 +1180,7 @@ function generarComparativoMeta(escenario) {
                 </table>
             </div>
             
-            <div class="border-t pt-4">
-                <h4 class="font-semibold text-gray-900 mb-4">Gráfica Real vs Meta</h4>
-                <div class="h-80">
-                    <canvas id="grafica-container"></canvas>
-                </div>
-            </div>
+            ${crearSeccionGrafica('Gráfica Real vs Meta', { incluirToggleAnios: false })}
             
             <div class="flex gap-3 pt-4 border-t">
                 <button onclick="window.panelDirectivos.descargarDatos()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -1085,7 +1205,7 @@ async function renderizarGrafica(tipo = 'comparativa') {
 
     const canvas = document.getElementById('grafica-container');
     if (!canvas) {
-        console.error('Canvas no encontrado');
+        actualizarControlesGrafica();
         return;
     }
     
@@ -1113,24 +1233,78 @@ async function renderizarGrafica(tipo = 'comparativa') {
             titulo: `${indicador.nombre} - Real vs Meta (${escenarioNombre})`,
             escenarioLabel: `Meta ${escenarioNombre}`,
             unidadMedida: indicador.unidad_medida || 'Unidades',
-            nombreIndicador: indicador.nombre
+            nombreIndicador: indicador.nombre,
+            tipo: panelState.chartType
         });
-    } else {
-        if (!ultimoMes) return;
-
-        const checkbox = document.getElementById('check-4anios');
-        const mostrar4Anios = checkbox?.checked || false;
-
-        const aniosDisponibles = [...new Set(panelState.datosReales.map(d => d.anio))].sort();
-        const aniosAMostrar = mostrar4Anios ? aniosDisponibles.slice(-4) : [ultimoMes.año - 1, ultimoMes.año];
-        
-        await crearGraficaHistorica('grafica-container', panelState.datosReales, {
-            aniosSeleccionados: aniosAMostrar,
-            titulo: `${indicador.nombre} - Comparativo`,
-            unidadMedida: indicador.unidad_medida || 'Unidades'
-        });
+        actualizarControlesGrafica();
+        if (panelState.histogramaVisible) {
+            renderizarHistograma();
+        }
+        return;
     }
-}   
+
+    if (!ultimoMes) {
+        actualizarControlesGrafica();
+        return;
+    }
+
+    const checkbox = document.getElementById('check-4anios');
+    const mostrar4Anios = checkbox?.checked || false;
+
+    const aniosDisponibles = [...new Set(panelState.datosReales.map(d => d.anio))].sort((a, b) => a - b);
+
+    let aniosAMostrar = [];
+
+    if (mostrar4Anios) {
+        aniosAMostrar = aniosDisponibles.slice(-4);
+    } else {
+        const anioActual = ultimoMes.año;
+        const anioAnterior = aniosDisponibles.filter(anio => anio < anioActual).pop();
+
+        if (anioAnterior !== undefined) {
+            aniosAMostrar = [anioAnterior, anioActual];
+        } else {
+            aniosAMostrar = aniosDisponibles.slice(-2);
+        }
+    }
+
+    if (aniosAMostrar.length === 0) {
+        actualizarControlesGrafica();
+        return;
+    }
+
+    const opcionSeleccionada = panelState.opcionSeleccionada || '';
+    const periodo = opcionSeleccionada.includes('trimestral')
+        ? 'trimestral'
+        : opcionSeleccionada.includes('anual')
+            ? 'anual'
+            : 'mensual';
+
+    const titulos = {
+        mensual: 'Comparativo Mensual',
+        trimestral: 'Comparativo Trimestral',
+        anual: 'Comparativo Anual'
+    };
+
+    const ultimoTrimestreCompleto = obtenerUltimoTrimestreCompleto();
+    const limiteTrimestre = ultimoTrimestreCompleto?.trimestre
+        || Math.max(1, Math.ceil((ultimoMes?.mes || 3) / 3));
+
+    await crearGraficaPanelComparativa('grafica-container', panelState.datosReales, {
+        periodo,
+        aniosSeleccionados: aniosAMostrar,
+        titulo: `${indicador.nombre} - ${titulos[periodo] || 'Comparativo'}`,
+        tipo: panelState.chartType,
+        limiteMes: ultimoMes.mes,
+        limiteTrimestre
+    });
+
+    actualizarControlesGrafica();
+
+    if (panelState.histogramaVisible) {
+        renderizarHistograma();
+    }
+}
 function seleccionarDireccion(direccionId) {
     showToast('Funcionalidad de dirección en desarrollo', 'info');
     // TODO: Implementar navegación a vista de dirección
