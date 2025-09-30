@@ -222,6 +222,7 @@ export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
     'vw_mediciones_historico',
     'mediciones'
   ];
+
   for (const relation of relations) {
     const { data, error } = await supabase
       .from(relation)

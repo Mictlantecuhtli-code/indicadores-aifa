@@ -4,7 +4,7 @@ import { renderCapture } from './views/capture.js';
 import { renderVisualization } from './views/visualization.js';
 import { renderUsers } from './views/users.js';
 import { renderLogin } from './views/login.js';
-import { getSession, subscribe } from './state/session.js';
+import { getSession, setSession, subscribe } from './state/session.js';
 import { renderLayout, highlightActiveRoute } from './ui/layout.js';
 import { signOut } from './services/supabaseClient.js';
 import { showToast } from './ui/feedback.js';
@@ -44,7 +44,7 @@ function bindLayoutActions() {
       } catch (error) {
         console.error(error);
       }
-      localStorage.clear();
+      setSession(null);
       showToast('Sesión cerrada correctamente', { type: 'success' });
       window.location.hash = '#login';
     });
