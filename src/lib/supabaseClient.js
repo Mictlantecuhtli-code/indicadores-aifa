@@ -29,12 +29,29 @@ function normalizeStatus(value) {
 
 function normalizeMeasurement(record) {
   if (!record) return record;
+  const status =
+    record.estatus_validacion ??
+    record.estado_validacion ??
+    record.estatus ??
+    (typeof record.validado === 'boolean'
+      ? record.validado
+        ? 'VALIDADO'
+        : 'PENDIENTE'
+      : null);
+
   return {
     ...record,
     escenario: record.escenario ? record.escenario.toUpperCase() : null,
+    estatus_validacion: typeof status === 'string' ? status.toUpperCase() : status ?? 'PENDIENTE',
     fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
     fecha_actualizacion:
-      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null
+      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null,
+    fecha_validacion: record.fecha_validacion ?? record.validado_en ?? null,
+    validado_por: record.validado_por ?? record.subdirector_id ?? null,
+    observaciones_validacion:
+      record.observaciones_validacion ?? record.validacion_observaciones ?? null,
+    capturado_por: record.capturado_por ?? record.creado_por ?? null,
+    editado_por: record.editado_por ?? record.actualizado_por ?? null
   };
 }
 
@@ -45,7 +62,9 @@ function normalizeTarget(record) {
     escenario: record.escenario ? record.escenario.toUpperCase() : null,
     fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
     fecha_actualizacion:
-      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null
+      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null,
+    capturado_por: record.capturado_por ?? record.creado_por ?? null,
+    editado_por: record.editado_por ?? record.actualizado_por ?? null
   };
 }
 
@@ -279,14 +298,23 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 }
 
 export async function saveMeasurement(payload) {
-  const sanitized = sanitizeScenario(payload);
+  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
+  if (sanitized && !('estatus_validacion' in sanitized)) {
+    sanitized.estatus_validacion = 'PENDIENTE';
+  }
+  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
+    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
+  }
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
   if (error) throw error;
   return normalizeMeasurement(data);
 }
 
 export async function updateMeasurement(id, payload) {
-  const sanitized = sanitizeScenario(payload);
+  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
+  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
+    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
+  }
   const { data, error } = await supabase
     .from('mediciones')
     .update(sanitized)
@@ -295,6 +323,19 @@ export async function updateMeasurement(id, payload) {
     .single();
   if (error) throw error;
   return normalizeMeasurement(data);
+}
+
+export async function validateMeasurement(id, { validado_por, observaciones = null } = {}) {
+  if (!id) throw new Error('Se requiere un identificador de medición para validar.');
+  const payload = {
+    estatus_validacion: 'VALIDADO',
+    validado_por: validado_por ?? null,
+    fecha_validacion: new Date().toISOString()
+  };
+  if (observaciones !== undefined) {
+    payload.observaciones_validacion = observaciones;
+  }
+  return updateMeasurement(id, payload);
 }
 
 export async function upsertTarget(payload) {
