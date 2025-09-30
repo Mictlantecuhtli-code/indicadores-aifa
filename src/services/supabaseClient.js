@@ -608,11 +608,12 @@ export async function updateUserAreaPermissions(id, permissions) {
 /**
  * Remover usuario de área
  */
-export async function removeUserFromArea(id) {
+export async function removeUserFromArea(usuario_id, area_id) {
   const { data, error } = await supabase
     .from('usuario_areas')
     .update({ estado: 'INACTIVO' })
-    .eq('id', id)
+    .eq('usuario_id', usuario_id)
+    .eq('area_id', area_id)
     .select()
     .single();
 
