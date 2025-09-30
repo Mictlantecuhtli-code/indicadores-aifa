@@ -1088,8 +1088,6 @@ function initAccordionControls(container) {
       applyState();
     });
   });
-}
-
   applyState();
 }
 
