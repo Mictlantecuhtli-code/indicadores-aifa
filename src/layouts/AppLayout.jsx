@@ -23,17 +23,44 @@ export default function AppLayout() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const logoUrl = useMemo(() => new URL('../../assets/AIFA_logo.png', import.meta.url).href, []);
 
+  const availableNavigation = useMemo(() => {
+    const role = (profile?.rol ?? profile?.puesto)?.toString().toLowerCase();
+
+    if (role?.includes('director')) {
+      return navigation.filter(item => item.to === '/panel-directivos');
+    }
+
+    return navigation;
+  }, [profile]);
+
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
+  const isDirector = useMemo(() => {
+    const role = (profile?.rol ?? profile?.puesto)?.toString().toLowerCase();
+    return role?.includes('director');
+  }, [profile]);
+
+  useEffect(() => {
+    if (!isDirector) return;
+
+    const isDashboardRoute = location.pathname === '/panel-directivos' || location.pathname.startsWith('/panel-directivos/');
+
+    if (!isDashboardRoute) {
+      navigate('/panel-directivos', { replace: true });
+    }
+  }, [isDirector, location.pathname, navigate]);
+
   const activeNavigation = useMemo(() => {
+    const items = availableNavigation.length ? availableNavigation : navigation;
+
     return (
-      navigation.find(item =>
+      items.find(item =>
         item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to)
-      ) ?? navigation[0]
+      ) ?? items[0]
     );
-  }, [location.pathname]);
+  }, [availableNavigation, location.pathname]);
 
   const handleSignOut = async () => {
     if (isSigningOut) return;
@@ -61,7 +88,7 @@ export default function AppLayout() {
           </div>
 
           <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
-            {navigation.map(item => {
+            {availableNavigation.map(item => {
               const Icon = item.icon;
               const isActive = item.exact
                 ? location.pathname === item.to
@@ -74,8 +101,8 @@ export default function AppLayout() {
                     classNames(
                       'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all',
                       isActive
-                        ? 'bg-aifa-blue text-white shadow-lg shadow-aifa-blue/25'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        ? 'bg-aifa-green text-white shadow-lg shadow-emerald-500/20'
+                        : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
                     )
                   }
                 >
@@ -96,7 +123,7 @@ export default function AppLayout() {
                 <button
                   onClick={handleSignOut}
                   disabled={isSigningOut}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-aifa-blue hover:text-aifa-blue disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-aifa-green hover:text-aifa-green disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Cerrar sesión</span>
@@ -107,7 +134,7 @@ export default function AppLayout() {
             )}
             <button
               onClick={() => setMobileOpen(open => !open)}
-              className="rounded-full border border-slate-200 p-2 text-slate-600 transition hover:border-aifa-blue hover:text-aifa-blue lg:hidden"
+              className="rounded-full border border-slate-200 p-2 text-slate-600 transition hover:border-aifa-green hover:text-aifa-green lg:hidden"
               aria-label="Abrir navegación"
             >
               <Menu className="h-5 w-5" />
@@ -118,7 +145,7 @@ export default function AppLayout() {
         {mobileOpen && (
           <div className="border-t border-slate-200 bg-white px-4 py-4 shadow-inner lg:hidden">
             <nav className="flex flex-col gap-2">
-              {navigation.map(item => {
+              {availableNavigation.map(item => {
                 const Icon = item.icon;
                 const isActive = item.exact
                   ? location.pathname === item.to
@@ -131,8 +158,8 @@ export default function AppLayout() {
                       classNames(
                         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                         isActive
-                          ? 'bg-aifa-blue text-white shadow'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-aifa-green text-white shadow'
+                          : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
                       )
                     }
                   >

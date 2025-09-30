@@ -1,5 +1,5 @@
 import { useForm } from 'react-hook-form';
-import { LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -14,6 +14,7 @@ export default function LoginPage() {
   } = useForm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = handleSubmit(async values => {
     setLoading(true);
@@ -48,7 +49,7 @@ export default function LoginPage() {
               id="email"
               type="email"
               autoComplete="email"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/30"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-aifa-green focus:outline-none focus:ring-2 focus:ring-aifa-green/20"
               placeholder="usuario@aifa.gob.mx"
               {...register('email', { required: 'El correo es obligatorio' })}
             />
@@ -58,14 +59,24 @@ export default function LoginPage() {
             <label htmlFor="password" className="block text-sm font-medium text-slate-700">
               Contraseña
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-aifa-blue focus:outline-none focus:ring-2 focus:ring-aifa-blue/30"
-              placeholder="********"
-              {...register('password', { required: 'La contraseña es obligatoria' })}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-11 text-sm shadow-sm focus:border-aifa-green focus:outline-none focus:ring-2 focus:ring-aifa-green/20"
+                placeholder="********"
+                {...register('password', { required: 'La contraseña es obligatoria' })}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(visible => !visible)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition hover:text-aifa-green focus:outline-none"
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
           </div>
           {error && (
@@ -76,7 +87,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-blue px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-aifa-blue/20 transition hover:bg-aifa-light focus:outline-none focus:ring-2 focus:ring-aifa-blue/30 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-aifa-green px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-aifa-green/30 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
             <LogIn className="h-4 w-4" />
             {loading ? 'Validando...' : 'Iniciar sesión'}
