@@ -80,9 +80,58 @@ function sanitizeScenario(payload) {
 }
 
 export async function signInWithEmail({ email, password }) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return supabase.auth.getUser();
+  // 1. Autenticar con Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+    email, 
+    password 
+  });
+  
+  if (authError) throw authError;
+  
+  const userId = authData.user.id;
+  
+  // 2. Obtener perfil del usuario
+  const { data: perfil, error: perfilError } = await supabase
+    .from('perfiles')
+    .select('id, nombre_completo, puesto, rol_principal')
+    .eq('usuario_id', userId)
+    .single();
+  
+  if (perfilError) {
+    console.error('Error obteniendo perfil:', perfilError);
+    throw new Error('No se pudo obtener el perfil del usuario');
+  }
+  
+  // 3. Obtener áreas y permisos del usuario
+  const { data: usuariosAreas, error: areasError } = await supabase
+    .from('usuarios_areas')
+    .select('rol, puede_capturar, puede_editar, puede_eliminar, estado, areas(id, nombre)')
+    .eq('usuario_id', userId)
+    .eq('estado', 'ACTIVO');
+  
+  if (areasError) {
+    console.error('Error obteniendo áreas:', areasError);
+  }
+  
+  // 4. Consolidar información del usuario
+  const userData = {
+    user: authData.user,
+    perfil: {
+      id: perfil.id,
+      nombre_completo: perfil.nombre_completo,
+      puesto: perfil.puesto,
+      rol_principal: perfil.rol_principal,
+      email: authData.user.email
+    },
+    areas: usuariosAreas || [],
+    permisos: {
+      puede_capturar: usuariosAreas?.some(ua => ua.puede_capturar) || false,
+      puede_editar: usuariosAreas?.some(ua => ua.puede_editar) || false,
+      puede_eliminar: usuariosAreas?.some(ua => ua.puede_eliminar) || false
+    }
+  };
+  
+  return { data: userData };
 }
 
 export async function signOut() {
