@@ -190,6 +190,22 @@ export async function getDirectorsHighlights() {
   return data ?? [];
 }
 
+export async function getAreas() {
+  const { data, error } = await supabase
+    .from('areas')
+    .select('id,nombre,clave,color_hex,parent_area_id')
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
 export async function getIndicators() {
   const relations = [
     'v_indicadores_area',
