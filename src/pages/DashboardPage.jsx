@@ -1,274 +1,384 @@
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import classNames from 'classnames';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Activity,
   BarChart3,
-  CalendarClock,
-  CalendarDays,
-  CalendarRange,
-  Goal,
+  Calendar,
+  ChevronDown,
+  LineChart,
+  Loader2,
   Package,
   Plane,
   PlaneTakeoff,
-  TrendingDown,
+  Target,
   Users,
   Weight
 } from 'lucide-react';
-import { useIndicatorAssignments } from '../hooks/useIndicatorAssignments.js';
-import { formatNumber } from '../utils/formatters.js';
+import { getAreas } from '../lib/supabaseClient.js';
 
-const PALETTES = {
-  indigo: {
-    border: 'border-indigo-100',
-    background: 'bg-indigo-50/80',
-    icon: 'text-indigo-500',
-    badge: 'bg-indigo-100 text-indigo-700',
-    option: {
-      idle: 'border-indigo-100 hover:border-indigo-200 hover:bg-white',
-      active: 'border-indigo-200 bg-white shadow-lg shadow-indigo-200/60 text-indigo-900'
-    },
-    chevron: 'text-indigo-500'
+const OPTION_BLUEPRINTS = [
+  {
+    id: 'monthly-yoy',
+    type: 'monthly',
+    template: entity =>
+      `Cantidad de ${entity} real mensual del año en curso respecto al mismo periodo del año anterior`
   },
-  blue: {
-    border: 'border-blue-100',
-    background: 'bg-blue-50/80',
-    icon: 'text-blue-500',
-    badge: 'bg-blue-100 text-blue-700',
-    option: {
-      idle: 'border-blue-100 hover:border-blue-200 hover:bg-white',
-      active: 'border-blue-200 bg-white shadow-lg shadow-blue-200/60 text-blue-900'
-    },
-    chevron: 'text-blue-500'
+  {
+    id: 'quarterly-yoy',
+    type: 'quarterly',
+    template: entity =>
+      `Cantidad de ${entity} real trimestral del año en curso respecto al mismo periodo del año anterior`
   },
-  amber: {
-    border: 'border-amber-100',
-    background: 'bg-amber-50/80',
-    icon: 'text-amber-500',
-    badge: 'bg-amber-100 text-amber-700',
-    option: {
-      idle: 'border-amber-100 hover:border-amber-200 hover:bg-white',
-      active: 'border-amber-200 bg-white shadow-lg shadow-amber-200/60 text-amber-900'
-    },
-    chevron: 'text-amber-500'
+  {
+    id: 'annual-yoy',
+    type: 'annual',
+    template: entity =>
+      `Cantidad de ${entity} real anual del año en curso respecto al mismo periodo del año anterior`
   },
-  orange: {
-    border: 'border-orange-100',
-    background: 'bg-orange-50/80',
-    icon: 'text-orange-500',
-    badge: 'bg-orange-100 text-orange-700',
-    option: {
-      idle: 'border-orange-100 hover:border-orange-200 hover:bg-white',
-      active: 'border-orange-200 bg-white shadow-lg shadow-orange-200/60 text-orange-900'
-    },
-    chevron: 'text-orange-500'
+  {
+    id: 'scenario-low',
+    type: 'scenario',
+    template: entity =>
+      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Bajo`
   },
-  emerald: {
-    border: 'border-emerald-100',
-    background: 'bg-emerald-50/80',
-    icon: 'text-emerald-500',
-    badge: 'bg-emerald-100 text-emerald-700',
-    option: {
-      idle: 'border-emerald-100 hover:border-emerald-200 hover:bg-white',
-      active: 'border-emerald-200 bg-white shadow-lg shadow-emerald-200/60 text-emerald-900'
-    },
-    chevron: 'text-emerald-500'
+  {
+    id: 'scenario-mid',
+    type: 'scenario',
+    template: entity =>
+      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Mediano`
   },
-  teal: {
-    border: 'border-teal-100',
-    background: 'bg-teal-50/80',
-    icon: 'text-teal-500',
-    badge: 'bg-teal-100 text-teal-700',
-    option: {
-      idle: 'border-teal-100 hover:border-teal-200 hover:bg-white',
-      active: 'border-teal-200 bg-white shadow-lg shadow-teal-200/60 text-teal-900'
-    },
-    chevron: 'text-teal-500'
-  },
-  violet: {
-    border: 'border-violet-100',
-    background: 'bg-violet-50/80',
-    icon: 'text-violet-500',
-    badge: 'bg-violet-100 text-violet-700',
-    option: {
-      idle: 'border-violet-100 hover:border-violet-200 hover:bg-white',
-      active: 'border-violet-200 bg-white shadow-lg shadow-violet-200/60 text-violet-900'
-    },
-    chevron: 'text-violet-500'
-  },
-  sky: {
-    border: 'border-sky-100',
-    background: 'bg-sky-50/80',
-    icon: 'text-sky-500',
-    badge: 'bg-sky-100 text-sky-700',
-    option: {
-      idle: 'border-sky-100 hover:border-sky-200 hover:bg-white',
-      active: 'border-sky-200 bg-white shadow-lg shadow-sky-200/60 text-sky-900'
-    },
-    chevron: 'text-sky-500'
-  },
-  slate: {
-    border: 'border-slate-200',
-    background: 'bg-slate-50/80',
-    icon: 'text-slate-500',
-    badge: 'bg-slate-100 text-slate-600',
-    option: {
-      idle: 'border-slate-200 hover:border-slate-300 hover:bg-white',
-      active: 'border-slate-300 bg-white shadow-lg shadow-slate-200/60 text-slate-900'
-    },
-    chevron: 'text-slate-500'
+  {
+    id: 'scenario-high',
+    type: 'scenario',
+    template: entity =>
+      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Alto`
   }
-};
+];
 
 const OPTION_ICON_MAP = {
-  'calendar-month': CalendarDays,
-  'calendar-quarter': CalendarClock,
-  'calendar-year': CalendarRange,
-  'target-low': TrendingDown,
-  'target-mid': Activity,
-  'target-high': Goal
+  monthly: LineChart,
+  quarterly: BarChart3,
+  annual: Calendar,
+  scenario: Target
 };
 
-const CARD_ICON_MAP = {
-  'plane-operations': PlaneTakeoff,
-  'plane-passengers': Users,
-  'cargo-operations': Package,
-  'cargo-weight': Weight,
-  'fbo-operations': Plane,
-  'fbo-passengers': Users
-};
+const OPERATIVE_GROUP_CONFIGS = [
+  { id: 'operations', title: 'Operaciones', entity: 'Operaciones', icon: PlaneTakeoff },
+  { id: 'passengers', title: 'Pasajeros', entity: 'Pasajeros', icon: Users },
+  { id: 'cargo-operations', title: 'Carga Operaciones', entity: 'Carga Operaciones', icon: Package },
+  { id: 'cargo-weight', title: 'Carga Toneladas', entity: 'Carga Toneladas', icon: Weight }
+];
 
-function IndicatorButton({ option, theme, onNavigate }) {
-  const Icon = OPTION_ICON_MAP[option.icon] ?? BarChart3;
-  const assigned = Boolean(option.indicator);
+const FBO_GROUP_CONFIGS = [
+  { id: 'fbo-operations', title: 'Operaciones', entity: 'Operaciones', icon: Plane },
+  { id: 'fbo-passengers', title: 'Pasajeros', entity: 'Pasajeros', icon: Users }
+];
 
+function buildIndicatorGroups(configs) {
+  return configs.map(config => ({
+    ...config,
+    options: OPTION_BLUEPRINTS.map(blueprint => ({
+      id: `${config.id}-${blueprint.id}`,
+      label: blueprint.template(config.entity),
+      type: blueprint.type
+    }))
+  }));
+}
+
+const OPERATIVE_GROUPS = buildIndicatorGroups(OPERATIVE_GROUP_CONFIGS);
+const FBO_GROUPS = buildIndicatorGroups(FBO_GROUP_CONFIGS);
+
+function AccordionSection({ id, title, description, isOpen, onToggle, icon: Icon, children }) {
   return (
-    <button
-      type="button"
-      onClick={() => assigned && onNavigate(option)}
-      disabled={!assigned}
-      title={option.templateLabel}
-
-      className={classNames(
-        'flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-        assigned ? theme.option.idle : 'border-dashed border-slate-200 bg-white/60 text-slate-400 cursor-not-allowed',
-        'focus-visible:ring-aifa-light'
-      )}
-    >
-      <span className={classNames('flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm', assigned ? theme.icon : 'text-slate-400')}>
-        <Icon className="h-5 w-5" />
-      </span>
-      <div className="flex flex-1 flex-col gap-1">
-        <span className="font-medium leading-snug text-slate-800">{option.label}</span>
-        {assigned ? (
-          <span className="text-xs text-slate-500">
-            Último valor: {formatNumber(option.indicator?.ultima_medicion_valor)}{' '}
-            {option.indicator?.unidad_medida ?? ''}
-          </span>
-        ) : (
-          <span className="text-xs text-slate-400">Sin indicador asignado</span>
-        )}
-      </div>
-      {assigned && option.indicator?.ultima_medicion_fecha && (
-        <div className="text-right text-xs text-slate-400">
-          Actualizado
-          <br />
-          {new Date(option.indicator.ultima_medicion_fecha).toLocaleDateString('es-MX')}
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+      >
+        <div className="flex items-start gap-3">
+          {Icon && (
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+              <Icon className="h-6 w-6" />
+            </span>
+          )}
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            {description && <p className="text-sm text-slate-500">{description}</p>}
+          </div>
         </div>
-      )}
-    </button>
+        <ChevronDown
+          className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
+        />
+      </button>
+
+      {isOpen && <div className="border-t border-slate-100 bg-slate-50/60 px-6 py-5">{children}</div>}
+    </section>
   );
 }
 
-function CategoryCard({ category, onNavigate }) {
-  const theme = PALETTES[category.palette] ?? PALETTES.slate;
-  const CardIcon = CARD_ICON_MAP[category.icon] ?? BarChart3;
-  const assignedCount = category.options.length;
+function IndicatorGroupsList({ groups }) {
+  const [openGroupId, setOpenGroupId] = useState(null);
 
   return (
-    <div className={classNames('overflow-hidden rounded-2xl border bg-white shadow-sm', theme.border)}>
-      <div className={classNames('flex items-center gap-3 border-b px-5 py-4', theme.background, theme.border)}>
-        <span className={classNames('flex h-11 w-11 items-center justify-center rounded-full bg-white shadow', theme.icon)}>
-          <CardIcon className="h-6 w-6" />
+    <div className="space-y-3">
+      {groups.map(group => (
+        <IndicatorGroupItem
+          key={group.id}
+          group={group}
+          isOpen={openGroupId === group.id}
+          onToggle={() => setOpenGroupId(prev => (prev === group.id ? null : group.id))}
+        />
+      ))}
+    </div>
+  );
+}
+
+function IndicatorGroupItem({ group, isOpen, onToggle }) {
+  const GroupIcon = group.icon ?? BarChart3;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+      >
+        <span className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <GroupIcon className="h-5 w-5" />
+          </span>
+          <span className="text-sm font-semibold text-slate-800">{group.title}</span>
         </span>
-        <div>
-          <p className="text-base font-semibold text-slate-800">{category.label}</p>
-          <p className={classNames('text-xs font-medium', theme.badge)}>
-            {assignedCount
-              ? `${assignedCount} indicador${assignedCount === 1 ? '' : 'es'} disponibles`
-              : 'Sin indicadores asignados'}
-          </p>
+        <ChevronDown
+          className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+          <ul className="space-y-2">
+            {group.options.map(option => {
+              const OptionIcon = OPTION_ICON_MAP[option.type] ?? LineChart;
+              return (
+                <li
+                  key={option.id}
+                  className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm"
+                >
+                  <span className="mt-0.5 text-slate-500">
+                    <OptionIcon className="h-4 w-4" />
+                  </span>
+                  <span>{option.label}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+function normalizeHex(color) {
+  if (typeof color !== 'string') return null;
+  const trimmed = color.trim();
+  if (!trimmed) return null;
+  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  if (/^#([0-9a-fA-F]{3}){1,2}$/.test(prefixed)) {
+    return prefixed.length === 4
+      ? `#${prefixed[1]}${prefixed[1]}${prefixed[2]}${prefixed[2]}${prefixed[3]}${prefixed[3]}`
+      : prefixed;
+  }
+  return null;
+}
+
+function getBadgeStyles(color) {
+  const normalized = normalizeHex(color) ?? '#1e293b';
+  const r = parseInt(normalized.slice(1, 3), 16);
+  const g = parseInt(normalized.slice(3, 5), 16);
+  const b = parseInt(normalized.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const textColor = luminance > 0.65 ? '#0f172a' : '#ffffff';
+  return {
+    backgroundColor: normalized,
+    color: textColor
+  };
+}
+
+function buildAreaTree(areas) {
+  const byParent = new Map();
+
+  (areas ?? []).forEach(area => {
+    const parentId = area?.parent_area_id ?? null;
+    if (!byParent.has(parentId)) {
+      byParent.set(parentId, []);
+    }
+    byParent.get(parentId).push(area);
+  });
+
+  const sortAreas = list =>
+    (list ?? []).slice().sort((a, b) => (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' }));
+
+  const buildBranch = parentId => {
+    const children = sortAreas(byParent.get(parentId));
+    return children.map(child => ({
+      ...child,
+      children: buildBranch(child.id)
+    }));
+  };
+
+  return buildBranch(null);
+}
+
+function DirectionChildrenList({ areas }) {
+  if (!areas?.length) return null;
+
+  return (
+    <ul className="space-y-2">
+      {areas.map(area => (
+        <li key={area.id} className="space-y-2">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+            <span>{area.nombre}</span>
+            <span
+              className="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
+              style={getBadgeStyles(area.color_hex)}
+            >
+              {area.clave ?? '—'}
+            </span>
+          </div>
+          {area.children?.length ? (
+            <div className="ml-4 border-l border-slate-200 pl-4">
+              <DirectionChildrenList areas={area.children} />
+            </div>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DirectionsSection({ areas, isLoading, error }) {
+  const [openDirectionId, setOpenDirectionId] = useState(null);
+  const hasDirections = areas?.length;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando direcciones...
       </div>
-      <div className="space-y-3 px-5 py-4">
-        {category.options.map(option => (
-          <IndicatorButton key={option.id} option={option} theme={theme} onNavigate={onNavigate} />
-        ))}
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        No se pudieron cargar las direcciones.
       </div>
+    );
+  }
+
+  if (!hasDirections) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+        No hay direcciones registradas.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {areas.map(area => {
+        const hasChildren = area.children?.length;
+        const isOpen = openDirectionId === area.id;
+        return (
+          <div key={area.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => (hasChildren ? setOpenDirectionId(prev => (prev === area.id ? null : area.id)) : null)}
+              aria-expanded={hasChildren ? isOpen : undefined}
+              className={classNames(
+                'flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2',
+                hasChildren ? 'hover:bg-slate-50' : 'cursor-default'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-800">{area.nombre}</span>
+                <span
+                  className="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
+                  style={getBadgeStyles(area.color_hex)}
+                >
+                  {area.clave ?? '—'}
+                </span>
+              </div>
+              {hasChildren && (
+                <ChevronDown
+                  className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
+                />
+              )}
+            </button>
+            {hasChildren && isOpen && (
+              <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+                <DirectionChildrenList areas={area.children} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { sections, indicatorsQuery } = useIndicatorAssignments();
+  const [openSection, setOpenSection] = useState('operativos');
+  const areasQuery = useQuery({
+    queryKey: ['areas'],
+    queryFn: getAreas
+  });
+
+  const directions = useMemo(() => buildAreaTree(areasQuery.data ?? []), [areasQuery.data]);
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-3 rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 p-6 shadow-sm">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold text-slate-900">Panel directivos</h1>
-          <p className="text-sm text-slate-500">
-            Seleccione una opción para consultar el análisis detallado del indicador asociado.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-bold text-slate-900">Panel directivos</h1>
+        <p className="text-sm text-slate-500">
+          Seleccione una categoría para explorar las opciones de indicadores y direcciones disponibles.
+        </p>
       </header>
 
-      <div className="space-y-10">
-        {indicatorsQuery.isLoading ? (
-          <section className="space-y-5">
-            <div className="h-5 w-48 rounded bg-slate-200/60" />
-            <div className="grid gap-5 xl:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-48 animate-pulse rounded-2xl border border-slate-100 bg-white"
-                />
-              ))}
-            </div>
-          </section>
-        ) : (
-          sections.map(section => (
-            <section key={section.id} className="space-y-5">
-              <header className="space-y-1">
-                <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
-                  {section.title}
-                </h2>
-                {section.description && (
-                  <p className="text-xs text-slate-400">{section.description}</p>
-                )}
-              </header>
+      <div className="space-y-5">
+        <AccordionSection
+          id="operativos"
+          title="Indicadores Operativos"
+          isOpen={openSection === 'operativos'}
+          onToggle={next => setOpenSection(prev => (prev === next ? null : next))}
+          icon={BarChart3}
+        >
+          <IndicatorGroupsList groups={OPERATIVE_GROUPS} />
+        </AccordionSection>
 
-              <div className="grid gap-5 xl:grid-cols-2">
-                {section.categories.map(category => (
-                  <CategoryCard
-                    key={category.id}
-                    category={category}
-                    onNavigate={option => navigate(`/panel-directivos/${option.id}`)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))
-        )}
+        <AccordionSection
+          id="fbo"
+          title="Indicadores FBO (Aviación General)"
+          isOpen={openSection === 'fbo'}
+          onToggle={next => setOpenSection(prev => (prev === next ? null : next))}
+          icon={Plane}
+        >
+          <IndicatorGroupsList groups={FBO_GROUPS} />
+        </AccordionSection>
 
-        {!indicatorsQuery.isLoading && !sections.length && (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center">
-            <BarChart3 className="mx-auto h-10 w-10 text-slate-300" />
-            <p className="mt-3 text-sm font-medium text-slate-500">
-              No se encontraron indicadores asignados a las opciones del panel.
-            </p>
-          </div>
-        )}
+        <AccordionSection
+          id="direcciones"
+          title="Direcciones"
+          isOpen={openSection === 'direcciones'}
+          onToggle={next => setOpenSection(prev => (prev === next ? null : next))}
+          icon={Users}
+        >
+          <DirectionsSection areas={directions} isLoading={areasQuery.isLoading} error={areasQuery.error} />
+        </AccordionSection>
       </div>
     </div>
   );
