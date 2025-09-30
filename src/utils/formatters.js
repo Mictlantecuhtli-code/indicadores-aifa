@@ -29,6 +29,12 @@ export function monthName(month) {
   return months[month - 1] ?? '';
 }
 
+export function formatMonth(year, month = 1) {
+  if (!year) return '—';
+  const name = monthName(month ?? 1);
+  return `${name} ${year}`.trim();
+}
+
 export function formatDate(date) {
   if (!date) return '—';
   const d = new Date(date);

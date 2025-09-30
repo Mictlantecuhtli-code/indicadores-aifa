@@ -1,19 +1,7 @@
-import {
-  getDashboardSummary,
-  getIndicators,
-  getIndicatorHistory,
-  getIndicatorTargets
-} from '../services/supabaseClient.js';
+import { getIndicators, getIndicatorHistory, getIndicatorTargets } from '../services/supabaseClient.js';
 import { formatNumber, formatPercentage, formatDate, monthName } from '../utils/formatters.js';
 import { renderLoading, renderError, showToast } from '../ui/feedback.js';
-import { renderIndicatorChart } from '../ui/charts.js';
-import {
-  INDICATOR_SECTIONS,
-  DIRECTION_FALLBACKS,
-  buildIndicatorOptions,
-  normalizeText,
-  buildCodeFromName
-} from '../config/dashboardConfig.js';
+import { INDICATOR_SECTIONS, buildIndicatorOptions, normalizeText } from '../config/dashboardConfig.js';
 
 const PALETTES = {
   indigo: {
@@ -117,53 +105,488 @@ const OPTION_ICON_CLASSES = {
   'target-high': 'fa-solid fa-bullseye-pointer'
 };
 
-function buildSummaryCards(summary) {
-  if (!summary?.length) {
-    return '<p class="text-sm text-slate-500">No hay datos disponibles.</p>';
-  }
-  const data = summary[0];
-  const fields = [
-    { key: 'total_indicadores', label: 'Indicadores monitoreados' },
-    { key: 'indicadores_con_metas', label: 'Indicadores con metas' },
-    { key: 'indicadores_sin_actualizar', label: 'Indicadores pendientes' },
-    { key: 'porcentaje_cumplimiento', label: 'Cumplimiento promedio', type: 'percentage' }
-  ].filter(field => field.key in data);
+const VIEW_TABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'comparativo', label: 'Comparativo real vs meta' },
+  { id: 'tendencias', label: 'Tendencias' }
+];
 
-  if (!fields.length) {
-    return '<p class="text-sm text-slate-500">No hay métricas para mostrar.</p>';
+const SCENARIOS = [
+  { id: 'BAJO', label: 'Escenario bajo' },
+  { id: 'MEDIO', label: 'Escenario medio' },
+  { id: 'ALTO', label: 'Escenario alto' }
+];
+
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+const SERIES_COLORS = ['#1E3A8A', '#0EA5E9', '#10B981', '#F97316', '#9333EA', '#DC2626'];
+
+let activeChart = null;
+
+const detailState = {
+  indicatorId: null,
+  history: [],
+  targets: [],
+  chartType: 'line',
+  activeTab: 'dashboard',
+  scenario: 'MEDIO'
+};
+
+function withAlpha(color, alpha = 0.15) {
+  if (!color?.startsWith('#') || (color.length !== 7 && color.length !== 4)) {
+    return color;
+  }
+  const hex = color.length === 4
+    ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+    : color;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function sortHistory(records = []) {
+  return [...records]
+    .filter(item => item != null)
+    .sort((a, b) => {
+      const yearDiff = (a?.anio ?? 0) - (b?.anio ?? 0);
+      if (yearDiff !== 0) {
+        return yearDiff;
+      }
+      return (a?.mes ?? 0) - (b?.mes ?? 0);
+    });
+}
+
+function buildKey(year, month = 0) {
+  return `${year}-${String(month ?? 0).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(year, month = 1) {
+  return `${monthName(month ?? 1)} ${year}`;
+}
+
+function buildTargetsIndex(targets = []) {
+  const map = new Map();
+  targets.forEach(item => {
+    const scenario = (item?.escenario ?? '').toUpperCase();
+    if (!scenario) return;
+    if (!map.has(scenario)) {
+      map.set(scenario, new Map());
+    }
+    const key = buildKey(item.anio, item.mes ?? 0);
+    map.get(scenario).set(key, Number(item.valor) || null);
+  });
+  return map;
+}
+
+function calculateProjection(history, months = 6) {
+  const numericHistory = history
+    .filter(item => item?.valor != null && !Number.isNaN(Number(item.valor)))
+    .map((item, index) => ({ ...item, index, valor: Number(item.valor) }));
+
+  if (numericHistory.length < 2) return [];
+
+  const n = numericHistory.length;
+  const sumX = numericHistory.reduce((acc, item) => acc + item.index, 0);
+  const sumY = numericHistory.reduce((acc, item) => acc + item.valor, 0);
+  const sumXY = numericHistory.reduce((acc, item) => acc + item.index * item.valor, 0);
+  const sumX2 = numericHistory.reduce((acc, item) => acc + item.index * item.index, 0);
+  const denominator = n * sumX2 - sumX * sumX;
+
+  if (denominator === 0) return [];
+
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+
+  const last = numericHistory[numericHistory.length - 1];
+  let year = last.anio;
+  let month = last.mes ?? 1;
+
+  const projection = [];
+  for (let i = 1; i <= months; i += 1) {
+    const nextIndex = last.index + i;
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    const value = slope * nextIndex + intercept;
+    projection.push({
+      period: formatMonthLabel(year, month),
+      year,
+      month,
+      projected: value
+    });
   }
 
-  return `
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      ${fields
-        .map(field => {
-          const value = data[field.key];
-          const formatted =
-            field.type === 'percentage'
-              ? formatPercentage(value)
-              : formatNumber(value, { decimals: 0 });
-          return `
-            <article class="relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow transition hover:shadow-lg">
-              <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-aifa-light/10"></div>
-              <div class="relative">
-                <p class="text-xs uppercase tracking-widest text-slate-400">${field.label}</p>
-                <p class="mt-3 text-3xl font-semibold text-slate-800">${formatted}</p>
-              </div>
-            </article>
-          `;
-        })
-        .join('')}
-    </div>
-  `;
+  return projection;
+}
+
+function prepareDashboardChart(history, chartType = 'line') {
+  const sorted = sortHistory(history);
+  const years = Array.from(new Set(sorted.map(item => item.anio))).sort((a, b) => a - b);
+  const selectedYears = years.slice(-4);
+
+  const labels = MONTH_LABELS;
+  const datasets = selectedYears.map((year, index) => {
+    const color = SERIES_COLORS[index % SERIES_COLORS.length];
+    const data = Array.from({ length: 12 }).map((_, monthIndex) => {
+      const month = monthIndex + 1;
+      const record = sorted.find(item => item.anio === year && (item.mes ?? 0) === month);
+      return record ? Number(record.valor) || null : null;
+    });
+
+    return {
+      label: `${year}`,
+      data,
+      type: chartType === 'bar' ? 'bar' : 'line',
+      backgroundColor: chartType === 'bar' ? withAlpha(color, 0.65) : withAlpha(color, 0.15),
+      borderColor: color,
+      borderWidth: 2,
+      tension: 0.3,
+      fill: chartType === 'line'
+    };
+  });
+
+  return { labels, datasets };
+}
+
+function prepareComparativoChart(history, targets, scenario = 'MEDIO', chartType = 'line') {
+  const sorted = sortHistory(history);
+  const lastRecords = sorted.slice(-12);
+  const targetIndex = buildTargetsIndex(targets);
+  const scenarioTargets = targetIndex.get(scenario?.toUpperCase() ?? 'MEDIO') ?? new Map();
+
+  const labels = lastRecords.map(item => formatMonthLabel(item.anio, item.mes ?? 1));
+  const realValues = lastRecords.map(item => (item?.valor != null ? Number(item.valor) : null));
+  const metaValues = lastRecords.map(item => scenarioTargets.get(buildKey(item.anio, item.mes ?? 0)) ?? null);
+
+  const colorReal = SERIES_COLORS[0];
+  const colorMeta = SERIES_COLORS[2];
+
+  const datasets = [
+    {
+      label: 'Valor real',
+      data: realValues,
+      type: chartType === 'bar' ? 'bar' : 'line',
+      backgroundColor: chartType === 'bar' ? withAlpha(colorReal, 0.7) : withAlpha(colorReal, 0.2),
+      borderColor: colorReal,
+      borderWidth: 2,
+      tension: 0.25,
+      fill: chartType === 'line'
+    },
+    {
+      label: `Meta (${scenario ?? 'MEDIO'})`,
+      data: metaValues,
+      type: chartType === 'bar' ? 'bar' : 'line',
+      backgroundColor: chartType === 'bar' ? withAlpha(colorMeta, 0.4) : 'transparent',
+      borderColor: colorMeta,
+      borderWidth: 2,
+      tension: 0.25,
+      fill: false,
+      borderDash: chartType === 'line' ? [6, 4] : undefined
+    }
+  ];
+
+  const lastReal = realValues.length ? realValues[realValues.length - 1] : null;
+  const lastMeta = metaValues.length ? metaValues[metaValues.length - 1] : null;
+  const compliance = lastReal != null && lastMeta ? lastReal / lastMeta : null;
+
+  return { labels, datasets, compliance };
+}
+
+function prepareTrendChart(history, chartType = 'line') {
+  const sorted = sortHistory(history);
+  const projection = calculateProjection(sorted, 6);
+
+  const labels = [
+    ...sorted.map(item => formatMonthLabel(item.anio, item.mes ?? 1)),
+    ...projection.map(item => item.period)
+  ];
+
+  const realColor = SERIES_COLORS[0];
+  const projectionColor = SERIES_COLORS[4];
+
+  const realData = [
+    ...sorted.map(item => (item?.valor != null ? Number(item.valor) : null)),
+    ...projection.map(() => null)
+  ];
+
+  const projectionData = [
+    ...Array(sorted.length).fill(null),
+    ...projection.map(item => item.projected)
+  ];
+
+  const datasets = [
+    {
+      label: 'Valor real',
+      data: realData,
+      type: chartType === 'bar' ? 'bar' : 'line',
+      backgroundColor: chartType === 'bar' ? withAlpha(realColor, 0.7) : withAlpha(realColor, 0.2),
+      borderColor: realColor,
+      borderWidth: 2,
+      tension: 0.25,
+      fill: chartType === 'line'
+    },
+    {
+      label: 'Proyección',
+      data: projectionData,
+      type: 'line',
+      backgroundColor: 'transparent',
+      borderColor: projectionColor,
+      borderWidth: 2,
+      borderDash: [4, 4],
+      pointRadius: 3,
+      pointHoverRadius: 4,
+      tension: 0.2,
+      fill: false
+    }
+  ];
+
+  return { labels, datasets };
+}
+
+function updateChartTypeButtons() {
+  document.querySelectorAll('[data-chart-type]').forEach(button => {
+    const isActive = button.dataset.chartType === detailState.chartType;
+    button.classList.toggle('bg-white', isActive);
+    button.classList.toggle('text-aifa-blue', isActive);
+    button.classList.toggle('shadow', isActive);
+    button.classList.toggle('border', true);
+    button.classList.toggle('border-transparent', !isActive);
+    button.classList.toggle('border-aifa-blue', isActive);
+  });
+}
+
+function updateTabButtons() {
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    const isActive = button.dataset.tab === detailState.activeTab;
+    button.classList.toggle('bg-aifa-blue', isActive);
+    button.classList.toggle('text-white', isActive);
+    button.classList.toggle('shadow', isActive);
+    button.classList.toggle('text-slate-500', !isActive);
+    button.classList.toggle('border', true);
+    button.classList.toggle('border-aifa-blue', isActive);
+    button.classList.toggle('border-transparent', !isActive);
+  });
+}
+
+function updateScenarioButtons() {
+  document.querySelectorAll('[data-scenario]').forEach(button => {
+    const isActive = button.dataset.scenario === detailState.scenario;
+    button.classList.toggle('bg-aifa-blue', isActive);
+    button.classList.toggle('text-white', isActive);
+    button.classList.toggle('border-aifa-blue', isActive);
+    button.classList.toggle('border-slate-200', !isActive);
+    button.classList.toggle('text-slate-500', !isActive);
+  });
+}
+
+function toggleScenarioControls(visible) {
+  const controls = document.querySelector('[data-scenario-controls]');
+  if (!controls) return;
+  controls.classList.toggle('hidden', !visible);
+}
+
+function updateComplianceBadge(compliance) {
+  const badge = document.querySelector('[data-compliance-badge]');
+  if (!badge) return;
+
+  if (compliance == null) {
+    badge.classList.add('hidden');
+    badge.textContent = '';
+    badge.classList.remove('bg-emerald-50', 'text-emerald-600', 'bg-amber-50', 'text-amber-600', 'bg-rose-50', 'text-rose-600');
+    return;
+  }
+
+  badge.classList.remove('hidden');
+  badge.classList.remove('bg-emerald-50', 'text-emerald-600', 'bg-amber-50', 'text-amber-600', 'bg-rose-50', 'text-rose-600');
+
+  if (compliance >= 1.02) {
+    badge.classList.add('bg-emerald-50', 'text-emerald-600');
+  } else if (compliance >= 0.9) {
+    badge.classList.add('bg-amber-50', 'text-amber-600');
+  } else {
+    badge.classList.add('bg-rose-50', 'text-rose-600');
+  }
+
+  badge.textContent = `Cumplimiento actual: ${formatPercentage(compliance)}`;
+}
+
+function destroyActiveChart() {
+  if (activeChart) {
+    activeChart.destroy();
+    activeChart = null;
+  }
+}
+
+function setDetailLoading() {
+  const chartContainer = document.querySelector('[data-chart-container]');
+  if (chartContainer) {
+    chartContainer.innerHTML = `
+      <div class="flex h-72 items-center justify-center text-sm text-slate-500">
+        <i class="fa-solid fa-spinner animate-spin mr-2"></i>
+        Cargando información del indicador...
+      </div>
+    `;
+  }
+
+  const historyBody = document.querySelector('[data-history-body]');
+  if (historyBody) {
+    historyBody.innerHTML = `
+      <tr>
+        <td colspan="3" class="px-4 py-6 text-center text-slate-400">Cargando mediciones...</td>
+      </tr>
+    `;
+  }
+}
+
+function resetDetailView() {
+  detailState.indicatorId = null;
+  detailState.history = [];
+  detailState.targets = [];
+  detailState.activeTab = 'dashboard';
+  detailState.chartType = 'line';
+  detailState.scenario = 'MEDIO';
+
+  destroyActiveChart();
+  updateChartTypeButtons();
+  updateTabButtons();
+  updateScenarioButtons();
+  toggleScenarioControls(false);
+  updateComplianceBadge(null);
+
+  const chartContainer = document.querySelector('[data-chart-container]');
+  if (chartContainer) {
+    chartContainer.innerHTML = `
+      <div class="flex h-72 items-center justify-center text-sm text-slate-500">
+        Seleccione un indicador con información disponible.
+      </div>
+    `;
+  }
+
+  const historyBody = document.querySelector('[data-history-body]');
+  if (historyBody) {
+    historyBody.innerHTML = `
+      <tr>
+        <td colspan="3" class="px-4 py-6 text-center text-slate-400">Seleccione un indicador asignado.</td>
+      </tr>
+    `;
+  }
+}
+
+function updateHistoryTable(history) {
+  const historyBody = document.querySelector('[data-history-body]');
+  if (!historyBody) return;
+  historyBody.innerHTML = buildHistoryTable(history ?? []);
+}
+
+function renderDetailChart() {
+  const chartContainer = document.querySelector('[data-chart-container]');
+  if (!chartContainer) return;
+
+  if (!detailState.indicatorId) {
+    resetDetailView();
+    return;
+  }
+
+  const tab = detailState.activeTab;
+  let chartData = { labels: [], datasets: [] };
+  let compliance = null;
+
+  if (tab === 'dashboard') {
+    chartData = prepareDashboardChart(detailState.history, detailState.chartType);
+  } else if (tab === 'comparativo') {
+    const prepared = prepareComparativoChart(
+      detailState.history,
+      detailState.targets,
+      detailState.scenario,
+      detailState.chartType
+    );
+    chartData = prepared;
+    compliance = prepared.compliance ?? null;
+  } else {
+    chartData = prepareTrendChart(detailState.history, detailState.chartType);
+  }
+
+  const hasData = chartData.datasets.some(dataset => dataset.data.some(value => value != null));
+  if (!chartData.labels.length || !hasData) {
+    destroyActiveChart();
+    chartContainer.innerHTML = `
+      <div class="flex h-72 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/70 text-sm text-slate-500">
+        No hay datos suficientes para mostrar esta visualización.
+      </div>
+    `;
+    toggleScenarioControls(tab === 'comparativo' && hasData);
+    updateComplianceBadge(compliance);
+    return;
+  }
+
+  chartContainer.innerHTML = '<canvas id="indicator-analytics-chart" class="h-72 w-full"></canvas>';
+  const canvas = document.getElementById('indicator-analytics-chart');
+  if (!canvas) return;
+
+  destroyActiveChart();
+
+  const baseType = detailState.chartType === 'bar' ? 'bar' : 'line';
+  activeChart = new Chart(canvas, {
+    type: baseType,
+    data: {
+      labels: chartData.labels,
+      datasets: chartData.datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const value = context.parsed?.y ?? context.parsed ?? null;
+              if (value == null || Number.isNaN(value)) {
+                return `${context.dataset.label}: sin dato`;
+              }
+              return `${context.dataset.label}: ${formatNumber(value)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: {
+            color: '#475569'
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.25)'
+          }
+        },
+        x: {
+          ticks: {
+            color: '#475569'
+          },
+          grid: {
+            display: false
+          }
+        }
+      }
+    }
+  });
+
+  toggleScenarioControls(tab === 'comparativo' && hasData);
+  updateComplianceBadge(compliance);
 }
 
 function buildIndicatorCard(category, options) {
+  const assignedOptions = options.filter(option => option.indicator);
+  if (!assignedOptions.length) {
+    return '';
+  }
   const palette = PALETTES[category.palette] ?? PALETTES.slate;
   const iconClass = CARD_ICON_CLASSES[category.icon] ?? 'fa-solid fa-chart-line';
-  const assignedCount = options.filter(option => option.indicator).length;
-  const headerStatus = assignedCount
-    ? `${assignedCount} opción${assignedCount === 1 ? '' : 'es'} asignada${assignedCount === 1 ? '' : 's'}`
-    : 'Sin asignar';
+  const assignedCount = assignedOptions.length;
+  const headerStatus = `${assignedCount} indicador${assignedCount === 1 ? '' : 'es'} disponibles`;
 
   return `
     <article class="overflow-hidden rounded-2xl border ${palette.border} bg-white shadow-sm" data-card="${category.id}">
@@ -189,36 +612,30 @@ function buildIndicatorCard(category, options) {
       <div class="grid transition-[grid-template-rows] duration-300 ease-in-out grid-rows-[0fr]" data-card-body="${category.id}">
         <div class="min-h-0 overflow-hidden border-t border-slate-100 bg-white px-5 py-4">
           <div class="flex flex-col gap-3">
-            ${options
+            ${assignedOptions
               .map(option => {
-                const enabled = Boolean(option.indicator);
                 const optionIcon = OPTION_ICON_CLASSES[option.icon] ?? 'fa-solid fa-chart-line';
                 const idle = palette.optionIdle;
                 const active = palette.optionActive;
                 return `
                   <button
                     type="button"
-                    class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      enabled ? `${idle} focus:ring-aifa-light` : 'border-dashed border-slate-200 bg-white/60 text-slate-400 cursor-not-allowed focus:ring-slate-200'
-                    }"
+                    class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${idle} focus:ring-aifa-light"
                     data-option="${option.id}"
                     data-theme-idle="${idle}"
                     data-theme-active="${active}"
                     data-card-owner="${category.id}"
-                    data-enabled="${enabled ? 'true' : 'false'}"
                     data-indicator-id="${option.indicator?.id ?? ''}"
                   >
                     <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm ${
-                      enabled ? palette.icon : 'text-slate-400'
+                      option.indicator ? palette.icon : 'text-slate-400'
                     }">
                       <i class="${optionIcon}"></i>
                     </span>
                     <div class="flex flex-1 flex-col gap-1">
                       <span class="font-medium leading-snug">${option.label}</span>
-                      <span class="text-xs ${enabled ? 'text-slate-500' : 'text-slate-400'}">
-                        ${enabled
-                          ? `Último valor: ${formatNumber(option.indicator.ultima_medicion_valor)} ${option.indicator.unidad_medida ?? ''}`
-                          : 'Sin asignar'}
+                      <span class="text-xs text-slate-500">
+                        Último valor: ${formatNumber(option.indicator.ultima_medicion_valor)} ${option.indicator.unidad_medida ?? ''}
                       </span>
                     </div>
                     ${
@@ -240,54 +657,10 @@ function buildIndicatorCard(category, options) {
   `;
 }
 
-function buildDirectionCard(direction) {
-  const palette = PALETTES[direction.palette] ?? PALETTES.slate;
-  return `
-    <article class="overflow-hidden rounded-2xl border ${palette.border} bg-white shadow-sm" data-direction="${direction.id}">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition ${palette.background} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-aifa-light"
-        data-toggle-direction="${direction.id}"
-        aria-expanded="false"
-      >
-        <div class="flex flex-1 items-center gap-3">
-          <span class="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow ${palette.icon}">
-            <i class="fa-solid fa-users"></i>
-          </span>
-          <div>
-            <p class="text-base font-semibold text-slate-800">${direction.name}</p>
-            <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${palette.badge}">
-              <span class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold text-slate-700">${direction.code}</span>
-              ${direction.subdirections.length
-                ? `${direction.subdirections.length} subdirección${direction.subdirections.length === 1 ? '' : 'es'}`
-                : 'Sin subdirecciones registradas'}
-            </span>
-          </div>
-        </div>
-        <i class="fa-solid fa-chevron-down transition-transform ${palette.chevron}" data-direction-chevron="${direction.id}"></i>
-      </button>
-      <div class="grid transition-[grid-template-rows] duration-300 ease-in-out grid-rows-[0fr]" data-direction-body="${direction.id}">
-        <div class="min-h-0 overflow-hidden border-t border-slate-100 bg-white px-5 py-4">
-          ${direction.subdirections.length
-            ? `<ul class="flex flex-col gap-2 text-sm text-slate-600">
-                ${direction.subdirections
-                  .map(sub => `
-                    <li class="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2">
-                      <span class="font-medium text-slate-700">${sub.name}</span>
-                      ${sub.code ? `<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-400">${sub.code}</span>` : ''}
-                    </li>
-                  `)
-                  .join('')}
-              </ul>`
-            : '<p class="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-400">No hay subdirecciones registradas en la matriz.</p>'}
-        </div>
-      </div>
-    </article>
-  `;
-}
-
 function buildHistoryTable(history = []) {
-  if (!history.length) {
+  const ordered = sortHistory(history);
+
+  if (!ordered.length) {
     return `
       <tr>
         <td colspan="3" class="px-4 py-6 text-center text-slate-400">No hay mediciones registradas para este indicador.</td>
@@ -295,7 +668,7 @@ function buildHistoryTable(history = []) {
     `;
   }
 
-  return history
+  return ordered
     .slice(-12)
     .map(item => `
       <tr class="hover:bg-slate-50/80">
@@ -307,16 +680,12 @@ function buildHistoryTable(history = []) {
     .join('');
 }
 
-function toggleAccordion(id, type) {
-  const attribute = type === 'card' ? 'data-card-body' : 'data-direction-body';
-  const toggleAttr = type === 'card' ? 'data-toggle-card' : 'data-toggle-direction';
-  const chevronAttr = type === 'card' ? 'data-chevron' : 'data-direction-chevron';
-
-  document.querySelectorAll(`[${attribute}]`).forEach(panel => {
-    const panelId = panel.getAttribute(attribute);
+function toggleAccordion(id) {
+  document.querySelectorAll('[data-card-body]').forEach(panel => {
+    const panelId = panel.getAttribute('data-card-body');
+    const header = document.querySelector(`[data-toggle-card="${panelId}"]`);
+    const chevron = document.querySelector(`[data-chevron="${panelId}"]`);
     const isTarget = panelId === id;
-    const header = document.querySelector(`[${toggleAttr}="${panelId}"]`);
-    const chevron = document.querySelector(`[${chevronAttr}="${panelId}"]`);
 
     if (isTarget) {
       const expanded = panel.style.gridTemplateRows === '1fr';
@@ -331,16 +700,13 @@ function toggleAccordion(id, type) {
         if (header) header.setAttribute('aria-expanded', 'true');
         if (chevron) chevron.classList.add('rotate-180');
       }
-    } else if (type === 'card') {
+    } else {
       panel.style.gridTemplateRows = '0fr';
       panel.setAttribute('aria-hidden', 'true');
-      const otherHeader = document.querySelector(`[${toggleAttr}="${panelId}"]`);
-      const otherChevron = document.querySelector(`[${chevronAttr}="${panelId}"]`);
-      if (otherHeader) otherHeader.setAttribute('aria-expanded', 'false');
-      if (otherChevron) otherChevron.classList.remove('rotate-180');
+      if (header) header.setAttribute('aria-expanded', 'false');
+      if (chevron) chevron.classList.remove('rotate-180');
     }
   });
-
 }
 
 function ensureCardOpen(cardId) {
@@ -359,10 +725,9 @@ function updateActiveOption(optionId) {
   document.querySelectorAll('[data-option]').forEach(button => {
     const idle = button.dataset.themeIdle ? button.dataset.themeIdle.split(' ') : [];
     const active = button.dataset.themeActive ? button.dataset.themeActive.split(' ') : [];
-    const enabled = button.dataset.enabled === 'true';
 
     button.classList.remove(...active);
-    if (enabled && idle.length) {
+    if (idle.length) {
       idle.forEach(cls => {
         if (!button.classList.contains(cls)) {
           button.classList.add(cls);
@@ -443,67 +808,37 @@ function updateIndicatorInfo(indicator) {
 }
 
 async function loadIndicatorDetails(indicatorId) {
-  const chartWrapper = document.querySelector('[data-indicator-chart]');
-  const historyBody = document.querySelector('[data-history-body]');
-
   if (!indicatorId) {
-    if (chartWrapper) {
-      chartWrapper.innerHTML = `
-        <div class="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 text-sm text-slate-500">
-          Seleccione un indicador con información disponible.
-        </div>
-      `;
-    }
-    if (historyBody) {
-      historyBody.innerHTML = `
-        <tr>
-          <td colspan="3" class="px-4 py-6 text-center text-slate-400">No hay información para mostrar.</td>
-        </tr>
-      `;
-    }
+    resetDetailView();
     return;
   }
 
-  if (chartWrapper) {
-    chartWrapper.innerHTML = `
-      <div class="flex h-72 items-center justify-center text-slate-500">
-        <i class="fa-solid fa-spinner animate-spin mr-2"></i>
-        Cargando histórico...
-      </div>
-    `;
-  }
-
-  if (historyBody) {
-    historyBody.innerHTML = `
-      <tr>
-        <td colspan="3" class="px-4 py-6 text-center text-slate-400">Cargando mediciones...</td>
-      </tr>
-    `;
-  }
+  setDetailLoading();
 
   try {
     const [history, targets] = await Promise.all([
-      getIndicatorHistory(indicatorId, { limit: 36 }),
+      getIndicatorHistory(indicatorId, { limit: 120 }),
       getIndicatorTargets(indicatorId)
     ]);
 
-    if (chartWrapper) {
-      chartWrapper.innerHTML = '<canvas id="dashboard-indicator-chart" class="h-72 w-full"></canvas>';
-      renderIndicatorChart('dashboard-indicator-chart', history, targets);
-    }
+    detailState.history = sortHistory(history ?? []);
+    detailState.targets = targets ?? [];
 
-    if (historyBody) {
-      historyBody.innerHTML = buildHistoryTable(history ?? []);
-    }
+    updateHistoryTable(detailState.history);
+    updateScenarioButtons();
+    renderDetailChart();
   } catch (error) {
     console.error(error);
-    if (chartWrapper) {
-      chartWrapper.innerHTML = `
+    const chartContainer = document.querySelector('[data-chart-container]');
+    if (chartContainer) {
+      chartContainer.innerHTML = `
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-600">
-          No fue posible cargar la información histórica.
+          No fue posible cargar la información histórica del indicador.
         </div>
       `;
     }
+
+    const historyBody = document.querySelector('[data-history-body]');
     if (historyBody) {
       historyBody.innerHTML = `
         <tr>
@@ -511,6 +846,9 @@ async function loadIndicatorDetails(indicatorId) {
         </tr>
       `;
     }
+
+    updateComplianceBadge(null);
+    toggleScenarioControls(false);
   }
 }
 
@@ -520,8 +858,24 @@ function selectIndicator(optionId, indicator) {
     ensureCardOpen(document.querySelector(`[data-option="${optionId}"]`)?.dataset.cardOwner ?? null);
   }
 
-  updateIndicatorInfo(indicator ?? null);
-  loadIndicatorDetails(indicator?.id ?? null);
+  if (!indicator) {
+    updateIndicatorInfo(null);
+    resetDetailView();
+    return;
+  }
+
+  detailState.indicatorId = indicator.id;
+  detailState.activeTab = 'dashboard';
+  detailState.scenario = 'MEDIO';
+
+  updateIndicatorInfo(indicator);
+  updateChartTypeButtons();
+  updateTabButtons();
+  updateScenarioButtons();
+  toggleScenarioControls(false);
+  updateComplianceBadge(null);
+
+  loadIndicatorDetails(indicator.id);
 }
 
 function bindInteractions() {
@@ -529,26 +883,52 @@ function bindInteractions() {
     button.addEventListener('click', () => {
       const id = button.getAttribute('data-toggle-card');
       if (!id) return;
-      toggleAccordion(id, 'card');
-    });
-  });
-
-  document.querySelectorAll('[data-toggle-direction]').forEach(button => {
-    button.addEventListener('click', () => {
-      const id = button.getAttribute('data-toggle-direction');
-      if (!id) return;
-      toggleAccordion(id, 'direction');
+      toggleAccordion(id);
     });
   });
 
   document.querySelectorAll('[data-option]').forEach(button => {
     button.addEventListener('click', () => {
-      if (button.dataset.enabled !== 'true') return;
       const optionId = button.dataset.option;
       const indicatorId = button.dataset.indicatorId;
       if (!indicatorId) return;
       const indicator = button.__indicatorRef;
       selectIndicator(optionId, indicator);
+    });
+  });
+
+  document.querySelectorAll('[data-chart-type]').forEach(button => {
+    button.addEventListener('click', () => {
+      const type = button.dataset.chartType;
+      if (!type || detailState.chartType === type) return;
+      detailState.chartType = type;
+      updateChartTypeButtons();
+      renderDetailChart();
+    });
+  });
+
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.tab;
+      if (!tab || detailState.activeTab === tab) return;
+      detailState.activeTab = tab;
+      updateTabButtons();
+      if (tab !== 'comparativo') {
+        updateComplianceBadge(null);
+      }
+      renderDetailChart();
+    });
+  });
+
+  document.querySelectorAll('[data-scenario]').forEach(button => {
+    button.addEventListener('click', () => {
+      const scenario = button.dataset.scenario;
+      if (!scenario || detailState.scenario === scenario) return;
+      detailState.scenario = scenario;
+      updateScenarioButtons();
+      if (detailState.activeTab === 'comparativo') {
+        renderDetailChart();
+      }
     });
   });
 }
@@ -570,10 +950,7 @@ export async function renderDashboard(container) {
   renderLoading(container, 'Preparando panel de análisis...');
 
   try {
-    const [summary, indicators] = await Promise.all([
-      getDashboardSummary(),
-      getIndicators()
-    ]);
+    const indicators = await getIndicators();
 
     const indicatorIndex = indicators.map(record => ({
       record,
@@ -582,130 +959,124 @@ export async function renderDashboard(container) {
       normalizedArea: normalizeText(record.area_nombre ?? record.area)
     }));
 
-    const sections = INDICATOR_SECTIONS.map(section => ({
-      ...section,
-      categories: section.categories.map(category => {
-        const options = buildIndicatorOptions(category).map(option => {
-          const normalizedOption = normalizeText(option.label);
-          const match = indicatorIndex.find(entry => {
-            if (!entry.normalizedName && !entry.normalizedDescription) return false;
-            const haystacks = [entry.normalizedName, entry.normalizedDescription].filter(Boolean);
-            const sectionName = normalizeText(category.label);
-            const areaName = entry.normalizedArea;
-            const optionWords = normalizedOption.split(' ').filter(Boolean);
-            return haystacks.some(text => {
-              if (text.includes(normalizedOption)) return true;
-              const containsAllWords = optionWords.every(part => text.includes(part));
-              if (containsAllWords && sectionName && text.includes(sectionName)) {
-                return true;
-              }
-              if (containsAllWords && areaName && text.includes(areaName)) {
-                return true;
-              }
-              return false;
-            });
-          });
-          return { ...option, indicator: match?.record ?? null };
-        });
-        return { ...category, options };
+    const sections = INDICATOR_SECTIONS.map(section => {
+      const categories = section.categories
+        .map(category => {
+          const options = buildIndicatorOptions(category)
+            .map(option => {
+              const normalizedOption = normalizeText(option.label);
+              const match = indicatorIndex.find(entry => {
+                if (!entry.normalizedName && !entry.normalizedDescription) return false;
+                const haystacks = [entry.normalizedName, entry.normalizedDescription].filter(Boolean);
+                const sectionName = normalizeText(category.label);
+                const areaName = entry.normalizedArea;
+                const optionWords = normalizedOption.split(' ').filter(Boolean);
+                return haystacks.some(text => {
+                  if (text.includes(normalizedOption)) return true;
+                  const containsAllWords = optionWords.every(part => text.includes(part));
+                  if (containsAllWords && sectionName && text.includes(sectionName)) {
+                    return true;
+                  }
+                  if (containsAllWords && areaName && text.includes(areaName)) {
+                    return true;
+                  }
+                  return false;
+                });
+              });
+              return { ...option, indicator: match?.record ?? null };
+            })
+            .filter(option => option.indicator);
+
+          if (!options.length) return null;
+          return { ...category, options };
+        })
+        .filter(Boolean);
+
+      if (!categories.length) return null;
+      return { ...section, categories };
+    })
+      .filter(Boolean);
+
+    const sectionsMarkup = sections
+      .map(section => {
+        const cards = section.categories
+          .map(category => buildIndicatorCard(category, category.options))
+          .filter(Boolean)
+          .join('');
+
+        if (!cards) return '';
+
+        return `
+          <section class="space-y-4" data-section="${section.id}">
+            <header>
+              <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-500">${section.title}</h2>
+              <p class="text-xs text-slate-400">${section.description ?? ''}</p>
+            </header>
+            <div class="space-y-3">
+              ${cards}
+            </div>
+          </section>
+        `;
       })
-    }));
+      .filter(Boolean)
+      .join('');
 
-    const directionsMap = new Map();
-    indicators.forEach(item => {
-      const directionName = item.direccion ?? item.direccion_nombre ?? item.area_direccion;
-      if (!directionName) return;
-      const key = normalizeText(directionName);
-      if (!directionsMap.has(key)) {
-        const fallback = DIRECTION_FALLBACKS.find(dir => normalizeText(dir.name) === key);
-        directionsMap.set(key, {
-          id: fallback?.id ?? key,
-          name: directionName,
-          code: item.direccion_codigo ?? item.direccion_clave ?? fallback?.code ?? buildCodeFromName(directionName),
-          palette: fallback?.palette ?? 'slate',
-          subdirections: new Map()
-        });
-      }
-      const subName = item.subdireccion ?? item.subdireccion_nombre ?? item.area_subdireccion;
-      if (subName) {
-        const entry = directionsMap.get(key);
-        const subKey = normalizeText(subName);
-        entry.subdirections.set(subKey, {
-          name: subName,
-          code: item.subdireccion_codigo ?? item.subdireccion_clave ?? buildCodeFromName(subName)
-        });
-      }
-    });
+    const tabsMarkup = VIEW_TABS.map(tab => `
+      <button
+        type="button"
+        data-tab="${tab.id}"
+        class="rounded-full border border-transparent px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 transition hover:border-aifa-blue hover:text-aifa-blue"
+      >
+        ${tab.label}
+      </button>
+    `).join('');
 
-    let directions = Array.from(directionsMap.values()).map(direction => ({
-      ...direction,
-      subdirections: Array.from(direction.subdirections.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
-    }));
-
-    const existingDirectionKeys = new Set(directions.map(item => normalizeText(item.name)));
-    DIRECTION_FALLBACKS.forEach(fallback => {
-      const key = normalizeText(fallback.name);
-      if (!existingDirectionKeys.has(key)) {
-        directions.push({ ...fallback, subdirections: [] });
-      }
-    });
-
-    directions = directions.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const scenarioButtons = SCENARIOS.map(scenario => `
+      <button
+        type="button"
+        data-scenario="${scenario.id}"
+        class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:border-aifa-blue hover:text-aifa-blue"
+      >
+        ${scenario.label}
+      </button>
+    `).join('');
 
     container.innerHTML = `
       <div class="space-y-8">
-        <header class="space-y-3 rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100 p-6 shadow-sm">
-          <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 class="text-2xl font-bold text-slate-900">Panel de Análisis de Indicadores</h1>
-              <p class="text-sm text-slate-500">Seleccione un indicador para consultar su tendencia y los escenarios de meta.</p>
-            </div>
-            <div class="hidden items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700" data-indicator-alert></div>
-          </div>
+        <header class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 class="text-2xl font-bold text-slate-900">Panel de indicadores para directivos</h1>
+          <p class="mt-1 text-sm text-slate-500">Selecciona un indicador disponible para explorar su desempeño histórico, comparar contra las metas y evaluar tendencias proyectadas.</p>
         </header>
-
-        <section data-summary>${buildSummaryCards(summary)}</section>
 
         <div class="grid gap-6 xl:grid-cols-[420px,1fr]">
           <div class="space-y-6" data-indicator-sections>
-            ${sections
-              .map(section => `
-                <section class="space-y-4" data-section="${section.id}">
-                  <header>
-                    <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-500">${section.title}</h2>
-                    <p class="text-xs text-slate-400">${section.description ?? ''}</p>
-                  </header>
-                  <div class="space-y-3">
-                    ${section.categories
-                      .map(category => buildIndicatorCard(category, category.options))
-                      .join('')}
-                  </div>
-                </section>
-              `)
-              .join('')}
-
-            <section class="space-y-4">
-              <header>
-                <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Direcciones</h2>
-                <p class="text-xs text-slate-400">Consulta la matriz de subdirecciones asignadas.</p>
-              </header>
-              <div class="space-y-3" data-directions>
-                ${directions.map(direction => buildDirectionCard(direction)).join('')}
+            ${sectionsMarkup || `
+              <div class="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500">
+                No se encontraron indicadores asignados a las opciones del panel.
               </div>
-            </section>
+            `}
           </div>
 
           <div class="space-y-6">
             <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
+                <div class="min-w-[220px] flex-1">
                   <p class="text-xs uppercase tracking-widest text-slate-400">Indicador seleccionado</p>
                   <h2 class="mt-1 text-xl font-semibold text-slate-800" data-indicator-name>Seleccione un indicador asignado</h2>
                   <p class="mt-2 max-w-2xl text-sm text-slate-500 hidden" data-indicator-description></p>
                 </div>
-                <div class="rounded-2xl bg-aifa-blue/10 px-4 py-2 text-right">
-                  <p class="text-xs uppercase tracking-widest text-aifa-blue">Unidad</p>
-                  <p class="text-sm font-semibold text-aifa-blue" data-indicator-unit>—</p>
+                <div class="flex flex-col items-end gap-3">
+                  <div class="rounded-2xl bg-aifa-blue/10 px-4 py-2 text-right">
+                    <p class="text-xs uppercase tracking-widest text-aifa-blue">Unidad</p>
+                    <p class="text-sm font-semibold text-aifa-blue" data-indicator-unit>—</p>
+                  </div>
+                  <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-500">
+                    <span class="hidden sm:inline">Tipo de gráfica</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" data-chart-type="line" class="rounded-full px-3 py-1 text-xs font-semibold text-slate-500 transition hover:text-aifa-blue">Líneas</button>
+                      <button type="button" data-chart-type="bar" class="rounded-full px-3 py-1 text-xs font-semibold text-slate-500 transition hover:text-aifa-blue">Barras</button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -722,9 +1093,25 @@ export async function renderDashboard(container) {
                 </div>
               </div>
 
-              <div class="mt-6" data-indicator-chart>
-                <div class="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/60 text-sm text-slate-500">
-                  Seleccione un indicador con información disponible.
+              <div class="mt-6 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                  <div class="flex flex-wrap items-center gap-2" role="tablist">
+                    ${tabsMarkup}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <div class="hidden items-center gap-2" data-scenario-controls>
+                      <span class="text-xs uppercase tracking-widest text-slate-400">Escenario</span>
+                      <div class="flex items-center gap-1">
+                        ${scenarioButtons}
+                      </div>
+                    </div>
+                    <div class="hidden rounded-full px-3 py-1 text-xs font-semibold" data-compliance-badge></div>
+                  </div>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-white p-4" data-chart-container>
+                  <div class="flex h-72 items-center justify-center text-sm text-slate-500">
+                    Seleccione un indicador con información disponible.
+                  </div>
                 </div>
               </div>
             </section>
@@ -753,6 +1140,7 @@ export async function renderDashboard(container) {
       </div>
     `;
 
+    resetDetailView();
     hydrateOptionReferences(sections);
     bindInteractions();
 
@@ -769,9 +1157,6 @@ export async function renderDashboard(container) {
     if (firstAssigned) {
       ensureCardOpen(firstAssigned.cardId);
       selectIndicator(firstAssigned.option.id, firstAssigned.option.indicator);
-    } else if (indicators.length) {
-      updateIndicatorInfo(indicators[0]);
-      loadIndicatorDetails(indicators[0].id);
     }
   } catch (error) {
     console.error(error);
