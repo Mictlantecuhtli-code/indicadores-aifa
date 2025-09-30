@@ -20,6 +20,12 @@ function isFunctionNotFound(error) {
   return error?.code === '42883' || /function .+ does not exist/i.test(error?.message ?? '');
 }
 
+function normalizeStatus(value) {
+  const text = value?.toString().toLowerCase() ?? '';
+  return typeof text.normalize === 'function'
+    ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    : text;
+}
 function normalizeMeasurement(record) {
   if (!record) return record;
   return {
@@ -42,24 +48,6 @@ function normalizeTarget(record) {
   };
 }
 
-async function fetchFromRelations(relations, builder) {
-  let lastError = null;
-  for (const relation of relations) {
-    const { data, error } = await builder(relation);
-    if (!error) {
-      return data ?? [];
-    }
-    if (!isRelationNotFound(error)) {
-      throw error;
-    }
-    lastError = error;
-  }
-  if (lastError) {
-    throw lastError;
-  }
-  return [];
-}
-
 function sanitizeScenario(payload) {
   if (!payload) return payload;
   if ('escenario' in payload && payload.escenario) {
@@ -72,52 +60,114 @@ function sanitizeScenario(payload) {
 }
 
 export async function getDashboardSummary() {
-  return fetchFromRelations(['v_dashboard_resumen', 'vw_dashboard_resumen'], relation =>
-    supabase.from(relation).select('*')
-  );
-}
+  const relations = [
+    'v_dashboard_resumen',
+    'v_dashboard_resumen_v2',
+    'vw_dashboard_resumen',
+    'vw_dashboard_resumen_v2',
+    'dashboard_resumen',
+    'dashboard_resumen_view',
+    'dashboard_resumen_vista',
+    'dashboard_resumen_general',
+    'resumen_dashboard',
+    'vista_dashboard_resumen',
+    'vista_dashboard_resumen_v2'
+  ];
 
-export async function getDirectorsHighlights() {
-  try {
-    return await fetchFromRelations(
-      ['v_indicadores_criticos', 'vw_indicadores_criticos', 'vw_indicadores_alertas', 'vw_indicadores_alerta'],
-      relation => supabase.from(relation).select('*')
-    );
-  } catch (error) {
+  for (const relation of relations) {
+    const { data, error } = await supabase.from(relation).select('*');
+
+    if (!error) {
+      return data ?? [];
+    }
+
     if (!isRelationNotFound(error)) {
       throw error;
     }
   }
 
-  const { data: indicators, error: indicatorsError } = await supabase
-    .from('v_indicadores_area')
-    .select('*');
+  return [];
+}
 
-  if (indicatorsError) {
-    if (!isRelationNotFound(indicatorsError)) {
-      throw indicatorsError;
+export async function getDirectorsHighlights() {
+  const highlightRelations = [
+    'v_indicadores_criticos',
+    'v_indicadores_prioritarios',
+    'vw_indicadores_criticos',
+    'vw_indicadores_prioritarios',
+    'vw_indicadores_alertas',
+    'vw_indicadores_alerta',
+    'indicadores_criticos',
+    'indicadores_prioritarios',
+    'indicadores_alertas',
+    'indicadores_directivos_resumen',
+    'resumen_indicadores_directivos',
+    'resumen_indicadores_prioritarios',
+    'vista_indicadores_criticos',
+    'vista_indicadores_prioritarios'
+  ];
+
+  for (const relation of highlightRelations) {
+    const { data, error } = await supabase.from(relation).select('*');
+
+    if (!error) {
+      return data ?? [];
     }
-  } else if (indicators?.length) {
-    const criticalIndicators = indicators.filter(record => {
-      if (record == null || typeof record !== 'object') return false;
-      if ('es_critico' in record) return Boolean(record.es_critico);
-      if ('es_alerta' in record) return Boolean(record.es_alerta);
-      if ('critico' in record) return Boolean(record.critico);
-      if ('alerta' in record) return Boolean(record.alerta);
-      const status =
-        (record.nivel_alerta ?? record.estatus ?? record.estado ?? record.estatus_alerta ?? record.color_alerta ?? '')
-          .toString()
-          .toLowerCase();
-      return ['critico', 'crítico', 'alerta', 'rojo'].includes(status);
-    });
 
-    return criticalIndicators.map(item => ({
-      ...item,
-      valor_actual: item.valor_actual ?? item.ultima_medicion_valor ?? item.valor ?? null,
-      meta: item.meta ?? item.valor_meta ?? item.meta_actual ?? null,
-      actualizado_en: item.actualizado_en ?? item.fecha_actualizacion ?? item.ultima_medicion_fecha ?? null,
-      area: item.area ?? item.area_nombre ?? null
-    }));
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  const indicatorRelations = [
+    'v_indicadores_area',
+    'v_indicadores',
+    'vw_indicadores_area',
+    'vw_indicadores_detalle',
+    'vw_indicadores',
+    'indicadores_area',
+    'indicadores',
+    'vista_indicadores_area',
+    'vista_indicadores'
+  ];
+
+  for (const relation of indicatorRelations) {
+    const { data: indicators, error } = await supabase.from(relation).select('*');
+
+    if (error) {
+      if (isRelationNotFound(error)) {
+        continue;
+      }
+      throw error;
+    }
+
+    if (indicators?.length) {
+      const criticalIndicators = indicators.filter(record => {
+        if (record == null || typeof record !== 'object') return false;
+        if ('es_critico' in record) return Boolean(record.es_critico);
+        if ('es_alerta' in record) return Boolean(record.es_alerta);
+        if ('critico' in record) return Boolean(record.critico);
+        if ('alerta' in record) return Boolean(record.alerta);
+        const status =
+          record.nivel_alerta ??
+          record.estatus ??
+          record.estado ??
+          record.estatus_alerta ??
+          record.color_alerta ??
+          '';
+        return ['critico', 'alerta', 'rojo'].includes(normalizeStatus(status));
+      });
+
+      if (criticalIndicators.length) {
+        return criticalIndicators.map(item => ({
+          ...item,
+          valor_actual: item.valor_actual ?? item.ultima_medicion_valor ?? item.valor ?? null,
+          meta: item.meta ?? item.valor_meta ?? item.meta_actual ?? null,
+          actualizado_en: item.actualizado_en ?? item.fecha_actualizacion ?? item.ultima_medicion_fecha ?? null,
+          area: item.area ?? item.area_nombre ?? null
+        }));
+      }
+    }
   }
 
   const { data, error } = await supabase.rpc('kpi_resumen_directivos');
@@ -126,6 +176,38 @@ export async function getDirectorsHighlights() {
     throw error;
   }
   return data ?? [];
+}
+
+export async function getIndicators() {
+  const relations = [
+    'v_indicadores_area',
+    'v_indicadores',
+    'vw_indicadores_area',
+    'vw_indicadores_detalle',
+    'vw_indicadores',
+    'indicadores_area',
+    'indicadores',
+    'vista_indicadores_area',
+    'vista_indicadores'
+  ];
+
+  for (const relation of relations) {
+    const { data, error } = await supabase
+      .from(relation)
+      .select('*')
+      .order('area_nombre', { ascending: true })
+      .order('nombre', { ascending: true });
+
+    if (!error) {
+      return data ?? [];
+    }
+
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  return [];
 }
 
 export async function getIndicators() {
@@ -140,18 +222,35 @@ export async function getIndicators() {
 
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
-  const data = await fetchFromRelations(['v_mediciones_historico', 'mediciones'], relation =>
-    supabase
+  const relations = [
+    'v_mediciones_historico',
+    'v_mediciones_historico_v2',
+    'mediciones_historico',
+    'mediciones_historico_view',
+    'vista_mediciones_historico',
+    'vw_mediciones_historico',
+    'mediciones'
+  ];
+
+  for (const relation of relations) {
+    const { data, error } = await supabase
       .from(relation)
       .select('*')
       .eq('indicador_id', indicadorId)
       .order('anio', { ascending: true })
       .order('mes', { ascending: true })
-      .limit(limit)
-  );
+      .limit(limit);
 
+    if (!error) {
+      return (data ?? []).map(normalizeMeasurement);
+    }
 
-  return (data ?? []).map(normalizeMeasurement);
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  return [];
 }
 
 export async function getIndicatorTargets(indicadorId, { year } = {}) {
