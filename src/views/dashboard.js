@@ -1,4 +1,4 @@
-import { getAreas } from '../services/supabaseClient.js';
+import { getAreas, getIndicators, getIndicatorHistory, getIndicatorTargets } from '../services/supabaseClient.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
 
 const OPTION_BLUEPRINTS = [
@@ -123,7 +123,7 @@ const ACCORDION_SECTIONS = [
 
 const DEFAULT_ACCORDION_ID = 'operativos';
 
-const CURRENT_YEAR = 2024;
+const CURRENT_YEAR = new Date().getFullYear();
 
 const MONTHS = [
   { index: 0, label: 'Enero', short: 'Ene' },
@@ -148,117 +148,188 @@ const SCENARIO_LABELS = {
   ALTO: 'Escenario Alto'
 };
 
-function createSeries({
-  unit,
-  monthlyCurrent,
-  monthlyPrevious,
-  scenarioLow,
-  scenarioMid,
-  scenarioHigh,
-  annualHistory = [],
-  currentYear = CURRENT_YEAR
-}) {
-  const currentTotal = monthlyCurrent.reduce((acc, value) => acc + value, 0);
-  const history = [...annualHistory, { year: currentYear, value: currentTotal }];
-  return {
-    unit,
-    monthlyCurrent,
-    monthlyPrevious,
-    scenarioLow,
-    scenarioMid,
-    scenarioHigh,
-    annualHistory: history
-  };
-}
-
-const INDICATOR_SERIES = {
-  operations: createSeries({
-    unit: 'Operaciones',
-    monthlyCurrent: [1180, 1245, 1320, 1385, 1430, 1495, 1540, 1585, 1510, 1455, 1385, 1320],
-    monthlyPrevious: [1055, 1120, 1195, 1230, 1285, 1330, 1375, 1405, 1340, 1285, 1210, 1155],
-    scenarioLow: [1100, 1160, 1225, 1280, 1335, 1385, 1425, 1460, 1405, 1350, 1290, 1235],
-    scenarioMid: [1140, 1205, 1275, 1335, 1390, 1445, 1490, 1530, 1475, 1415, 1350, 1290],
-    scenarioHigh: [1185, 1255, 1330, 1395, 1455, 1510, 1560, 1605, 1540, 1480, 1415, 1355],
-    annualHistory: [
-      { year: 2021, value: 13780 },
-      { year: 2022, value: 14690 },
-      { year: 2023, value: 15440 }
-    ]
-  }),
-  passengers: createSeries({
-    unit: 'Pasajeros',
-    monthlyCurrent: [48250, 49580, 51240, 52860, 54120, 55640, 56890, 57950, 56420, 54980, 53310, 51740],
-    monthlyPrevious: [43820, 45100, 46740, 48030, 49450, 50860, 51920, 52880, 51400, 50060, 48410, 46890],
-    scenarioLow: [46000, 47300, 48900, 50350, 51700, 53150, 54200, 55100, 53600, 52250, 50600, 49050],
-    scenarioMid: [47200, 48550, 50180, 51620, 52980, 54520, 55680, 56650, 55180, 53800, 52120, 50550],
-    scenarioHigh: [48600, 50020, 51740, 53290, 54760, 56340, 57590, 58680, 57120, 55740, 54050, 52480],
-    annualHistory: [
-      { year: 2021, value: 452000 },
-      { year: 2022, value: 470500 },
-      { year: 2023, value: 489800 }
-    ]
-  }),
-  'cargo-operations': createSeries({
-    unit: 'Operaciones',
-    monthlyCurrent: [240, 255, 268, 275, 282, 295, 305, 312, 298, 286, 274, 265],
-    monthlyPrevious: [210, 222, 234, 240, 248, 258, 266, 272, 260, 248, 236, 228],
-    scenarioLow: [220, 232, 244, 252, 260, 270, 278, 284, 272, 260, 248, 238],
-    scenarioMid: [230, 244, 256, 264, 272, 282, 290, 296, 284, 272, 260, 250],
-    scenarioHigh: [240, 254, 268, 276, 284, 296, 304, 310, 298, 286, 274, 264],
-    annualHistory: [
-      { year: 2021, value: 2400 },
-      { year: 2022, value: 2565 },
-      { year: 2023, value: 2720 }
-    ]
-  }),
-  'cargo-weight': createSeries({
-    unit: 'Toneladas',
-    monthlyCurrent: [525, 548, 572, 590, 612, 635, 654, 670, 648, 628, 604, 586],
-    monthlyPrevious: [480, 502, 524, 540, 562, 584, 600, 616, 592, 570, 546, 528],
-    scenarioLow: [500, 522, 546, 564, 586, 608, 624, 640, 616, 596, 572, 554],
-    scenarioMid: [515, 538, 562, 580, 602, 626, 642, 658, 634, 612, 588, 570],
-    scenarioHigh: [530, 554, 578, 596, 620, 644, 662, 680, 656, 634, 610, 592],
-    annualHistory: [
-      { year: 2021, value: 6600 },
-      { year: 2022, value: 6900 },
-      { year: 2023, value: 7200 }
-    ]
-  }),
-  'fbo-operations': createSeries({
-    unit: 'Operaciones',
-    monthlyCurrent: [215, 228, 238, 246, 254, 262, 270, 276, 268, 258, 246, 238],
-    monthlyPrevious: [198, 207, 216, 222, 230, 236, 242, 246, 238, 230, 220, 214],
-    scenarioLow: [204, 214, 224, 232, 240, 248, 256, 262, 254, 244, 234, 226],
-    scenarioMid: [210, 220, 230, 238, 246, 254, 262, 268, 260, 250, 240, 232],
-    scenarioHigh: [218, 228, 238, 246, 254, 262, 270, 276, 268, 258, 248, 240],
-    annualHistory: [
-      { year: 2021, value: 2650 },
-      { year: 2022, value: 2785 },
-      { year: 2023, value: 2895 }
-    ]
-  }),
-  'fbo-passengers': createSeries({
-    unit: 'Pasajeros',
-    monthlyCurrent: [980, 1025, 1070, 1105, 1140, 1180, 1215, 1240, 1205, 1165, 1120, 1085],
-    monthlyPrevious: [910, 950, 990, 1020, 1055, 1085, 1120, 1145, 1110, 1070, 1025, 990],
-    scenarioLow: [940, 980, 1020, 1050, 1085, 1120, 1150, 1180, 1140, 1100, 1060, 1020],
-    scenarioMid: [960, 1005, 1045, 1080, 1115, 1150, 1185, 1210, 1175, 1135, 1090, 1050],
-    scenarioHigh: [985, 1030, 1075, 1110, 1145, 1185, 1220, 1245, 1210, 1170, 1125, 1085],
-    annualHistory: [
-      { year: 2021, value: 10200 },
-      { year: 2022, value: 10850 },
-      { year: 2023, value: 11520 }
-    ]
-  })
+const INDICATOR_MAPPING = {
+  'operations': {
+    patterns: ['operaciones', 'operacion'],
+    areaPatterns: ['comercial', 'aviacion comercial'],
+    excludePatterns: ['carga', 'fbo', 'general', 'toneladas'],
+    priority: 1
+  },
+  'passengers': {
+    patterns: ['pasajeros', 'pasajero'],
+    areaPatterns: ['comercial', 'aviacion comercial'],
+    excludePatterns: ['carga', 'fbo', 'general'],
+    priority: 1
+  },
+  'cargo-operations': {
+    patterns: ['operaciones', 'operacion'],
+    areaPatterns: ['carga', 'aviacion carga'],
+    excludePatterns: ['pasajeros', 'fbo', 'general', 'toneladas'],
+    priority: 2
+  },
+  'cargo-weight': {
+    patterns: ['toneladas', 'tonelada', 'peso', 'kg'],
+    areaPatterns: ['carga', 'aviacion carga'],
+    excludePatterns: ['operaciones', 'pasajeros', 'fbo', 'general'],
+    priority: 2
+  },
+  'fbo-operations': {
+    patterns: ['operaciones', 'operacion'],
+    areaPatterns: ['fbo', 'general', 'aviacion general', 'ejecutiva'],
+    excludePatterns: ['carga', 'comercial', 'pasajeros', 'toneladas'],
+    priority: 3
+  },
+  'fbo-passengers': {
+    patterns: ['pasajeros', 'pasajero'],
+    areaPatterns: ['fbo', 'general', 'aviacion general', 'ejecutiva'],
+    excludePatterns: ['carga', 'comercial', 'operaciones'],
+    priority: 3
+  }
 };
 
 let activeModalChart = null;
 let modalContainer = null;
+// Funciones auxiliares para obtener y procesar datos reales
+
+async function getIndicatorRealData(indicatorId) {
+  if (!indicatorId) return null;
+  
+  try {
+    const [history, targets, indicator] = await Promise.all([
+      getIndicatorHistory(indicatorId, { limit: 120 }),
+      getIndicatorTargets(indicatorId),
+      getIndicators().then(indicators => indicators.find(i => i.id === indicatorId))
+    ]);
+    
+    return {
+      indicator,
+      history: history || [],
+      targets: targets || []
+    };
+  } catch (error) {
+    console.error('Error obteniendo datos del indicador:', error);
+    return null;
+  }
+}
+
+function getLastLoadedMonth(history = []) {
+  if (!history.length) return null;
+  
+  const sorted = [...history].sort((a, b) => {
+    if (a.anio !== b.anio) return b.anio - a.anio;
+    return b.mes - a.mes;
+  });
+  
+  return sorted[0] ? { year: sorted[0].anio, month: sorted[0].mes } : null;
+}
+
+function filterCompleteQuarters(history = [], currentYear) {
+  const lastLoaded = getLastLoadedMonth(history);
+  if (!lastLoaded || lastLoaded.year !== currentYear) {
+    return 4;
+  }
+  
+  const lastMonth = lastLoaded.month;
+  return Math.floor(lastMonth / 3);
+}
+
+function getDataByYear(history = [], year) {
+  return history
+    .filter(item => item.anio === year)
+    .sort((a, b) => a.mes - b.mes);
+}
+
+function aggregateQuarterlyData(history = [], year, maxQuarter = 4) {
+  const quarters = [];
+  
+  for (let q = 1; q <= maxQuarter; q++) {
+    const startMonth = (q - 1) * 3 + 1;
+    const endMonth = q * 3;
+    
+    const quarterData = history.filter(
+      item => item.anio === year && item.mes >= startMonth && item.mes <= endMonth
+    );
+    
+    if (quarterData.length === 3) {
+      const total = quarterData.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+      quarters.push({
+        quarter: q,
+        label: `Q${q}`,
+        value: total,
+        months: quarterData
+      });
+    }
+  }
+  
+  return quarters;
+}
+
+function findIndicatorByDataKey(indicators, dataKey) {
+  const config = INDICATOR_MAPPING[dataKey];
+  if (!config) {
+    console.warn(`No hay configuración de mapeo para: ${dataKey}`);
+    return null;
+  }
+  
+  const normalize = (text) => {
+    return (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+  
+  const scored = indicators.map(ind => {
+    const normalizedName = normalize(ind.nombre);
+    const normalizedDesc = normalize(ind.descripcion);
+    const normalizedArea = normalize(ind.area_nombre);
+    const searchText = `${normalizedName} ${normalizedDesc} ${normalizedArea}`;
+    
+    let score = 0;
+    
+    if (config.excludePatterns.some(pattern => searchText.includes(pattern))) {
+      return { indicator: ind, score: -1000 };
+    }
+    
+    config.patterns.forEach(pattern => {
+      if (normalizedName.includes(pattern)) score += 100;
+      if (normalizedDesc.includes(pattern)) score += 50;
+    });
+    
+    config.areaPatterns.forEach(pattern => {
+      if (normalizedArea.includes(pattern)) score += 80;
+      if (searchText.includes(pattern)) score += 40;
+    });
+    
+    const mainPattern = config.patterns[0];
+    if (normalizedName.startsWith(mainPattern)) score += 50;
+    
+    return { indicator: ind, score };
+  });
+  
+  scored.sort((a, b) => b.score - a.score);
+  
+  if (scored[0] && scored[0].score > 0) {
+    if (window.DEBUG_INDICATORS) {
+      console.log(`✅ Match encontrado para ${dataKey}:`, {
+        indicador: scored[0].indicator.nombre,
+        score: scored[0].score
+      });
+    }
+    return scored[0].indicator;
+  }
+  
+  if (window.DEBUG_INDICATORS) {
+    console.warn(`❌ No se encontró match para ${dataKey}`);
+  }
+  
+  return null;
+}
 
 function sum(values = []) {
   return values.reduce((acc, value) => acc + (Number(value) || 0), 0);
 }
-
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(Number(value));
@@ -290,256 +361,6 @@ function formatSignedNumber(value) {
   return formatted;
 }
 
-function computeMonthlyComparison(series) {
-  return MONTHS.map((month, index) => {
-    const current = series.monthlyCurrent[index] ?? null;
-    const comparison = series.monthlyPrevious[index] ?? null;
-    const diff = current != null && comparison != null ? current - comparison : null;
-    const pct = diff != null && comparison ? diff / comparison : null;
-    return { label: month.label, short: month.short, current, comparison, diff, pct };
-  });
-}
-
-function computeQuarterlyComparison(series) {
-  return QUARTER_LABELS.map((label, quarterIndex) => {
-    const start = quarterIndex * 3;
-    const current = sum(series.monthlyCurrent.slice(start, start + 3));
-    const comparison = sum(series.monthlyPrevious.slice(start, start + 3));
-    const diff = current - comparison;
-    const pct = comparison ? diff / comparison : null;
-    return { label, current, comparison, diff, pct };
-  });
-}
-
-function computeScenarioComparison(series, scenario) {
-  const key = scenario === 'BAJO' ? 'scenarioLow' : scenario === 'ALTO' ? 'scenarioHigh' : 'scenarioMid';
-  const reference = series[key] ?? [];
-  return MONTHS.map((month, index) => {
-    const current = series.monthlyCurrent[index] ?? null;
-    const comparison = reference[index] ?? null;
-    const diff = current != null && comparison != null ? current - comparison : null;
-    const pct = diff != null && comparison ? diff / comparison : null;
-    return { label: month.label, short: month.short, current, comparison, diff, pct };
-  });
-}
-
-function computeAnnualComparison(series) {
-  const current = sum(series.monthlyCurrent);
-  const comparison = sum(series.monthlyPrevious);
-  const diff = current - comparison;
-  const pct = comparison ? diff / comparison : null;
-  return [{ label: `${CURRENT_YEAR}`, current, comparison, diff, pct }];
-}
-
-function getScenarioSeries(series, scenario) {
-  if (scenario === 'BAJO') return series.scenarioLow;
-  if (scenario === 'ALTO') return series.scenarioHigh;
-  return series.scenarioMid;
-}
-
-function destroyActiveModalChart() {
-  if (activeModalChart) {
-    activeModalChart.destroy();
-    activeModalChart = null;
-  }
-}
-
-function renderModalChart(canvas, config) {
-  if (!canvas) return;
-  const Chart = typeof window !== 'undefined' ? window.Chart : null;
-  if (!Chart) {
-    const fallback = document.createElement('div');
-    fallback.className =
-      'flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/70 text-sm text-slate-500';
-    fallback.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-2"></i>No se pudo cargar la biblioteca de gráficas.';
-    canvas.replaceWith(fallback);
-    return;
-  }
-  destroyActiveModalChart();
-  activeModalChart = new Chart(canvas, config);
-}
-
-function buildMonthlyChartConfig(series) {
-  return {
-    type: 'line',
-    data: {
-      labels: MONTHS.map(month => month.short),
-      datasets: [
-        {
-          label: `${CURRENT_YEAR}`,
-          data: series.monthlyCurrent,
-          borderColor: '#2563eb',
-          backgroundColor: 'rgba(37, 99, 235, 0.15)',
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointRadius: 3
-        },
-        {
-          label: `${CURRENT_YEAR - 1}`,
-          data: series.monthlyPrevious,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointRadius: 3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: value => formatNumber(value)
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'bottom'
-        }
-      }
-    }
-  };
-}
-
-function buildQuarterlyChartConfig(series) {
-  const quarterlyCurrent = computeQuarterlyComparison(series).map(item => item.current);
-  const quarterlyPrevious = computeQuarterlyComparison(series).map(item => item.comparison);
-  return {
-    type: 'bar',
-    data: {
-      labels: QUARTER_LABELS,
-      datasets: [
-        {
-          label: `${CURRENT_YEAR}`,
-          data: quarterlyCurrent,
-          backgroundColor: 'rgba(37, 99, 235, 0.65)'
-        },
-        {
-          label: `${CURRENT_YEAR - 1}`,
-          data: quarterlyPrevious,
-          backgroundColor: 'rgba(16, 185, 129, 0.45)'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: value => formatNumber(value)
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'bottom'
-        }
-      }
-    }
-  };
-}
-
-function buildScenarioChartConfig(series, scenario) {
-  const scenarioSeries = getScenarioSeries(series, scenario);
-  const label = SCENARIO_LABELS[scenario] ?? 'Meta';
-  return {
-    type: 'line',
-    data: {
-      labels: MONTHS.map(month => month.short),
-      datasets: [
-        {
-          label: 'Real',
-          data: series.monthlyCurrent,
-          borderColor: '#2563eb',
-          backgroundColor: 'rgba(37, 99, 235, 0.15)',
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointRadius: 3
-        },
-        {
-          label,
-          data: scenarioSeries,
-          borderColor: '#f97316',
-          backgroundColor: 'rgba(249, 115, 22, 0.15)',
-          borderDash: [6, 4],
-          borderWidth: 2,
-          tension: 0.3,
-          fill: false,
-          pointRadius: 3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: value => formatNumber(value)
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'bottom'
-        }
-      }
-    }
-  };
-}
-
-function buildAnnualChartConfig(series) {
-  const labels = series.annualHistory.map(item => String(item.year));
-  const values = series.annualHistory.map(item => item.value);
-  return {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Total anual',
-          data: values,
-          backgroundColor: 'rgba(37, 99, 235, 0.7)'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: value => formatNumber(value)
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'bottom'
-        }
-      }
-    }
-  };
-}
-
-function buildChartConfig(series, type, scenario) {
-  if (type === 'monthly') return buildMonthlyChartConfig(series);
-  if (type === 'quarterly') return buildQuarterlyChartConfig(series);
-  if (type === 'annual') return buildAnnualChartConfig(series);
-  return buildScenarioChartConfig(series, scenario);
-}
-
 function findLatestIndex(values = []) {
   for (let index = values.length - 1; index >= 0; index -= 1) {
     if (values[index] != null && !Number.isNaN(Number(values[index]))) {
@@ -547,102 +368,6 @@ function findLatestIndex(values = []) {
     }
   }
   return values.length - 1;
-}
-
-function buildSummary(series, type, scenario) {
-  if (type === 'monthly') {
-    const latestIndex = findLatestIndex(series.monthlyCurrent);
-    const month = MONTHS[latestIndex] ?? MONTHS[MONTHS.length - 1];
-    const current = series.monthlyCurrent[latestIndex] ?? null;
-    const comparison = series.monthlyPrevious[latestIndex] ?? null;
-    const diff = current != null && comparison != null ? current - comparison : null;
-    const pct = diff != null && comparison ? diff / comparison : null;
-    return {
-      title: `Comparativo mensual (${month.label})`,
-      currentLabel: 'Real',
-      comparisonLabel: `${CURRENT_YEAR - 1}`,
-      currentValue: current,
-      comparisonValue: comparison,
-      diff,
-      pct
-    };
-  }
-
-  if (type === 'quarterly') {
-    const quarterly = computeQuarterlyComparison(series);
-    const latest = quarterly[quarterly.length - 1];
-    return {
-      title: 'Comparativo trimestral',
-      currentLabel: `${CURRENT_YEAR}`,
-      comparisonLabel: `${CURRENT_YEAR - 1}`,
-      currentValue: latest?.current ?? null,
-      comparisonValue: latest?.comparison ?? null,
-      diff: latest?.diff ?? null,
-      pct: latest?.pct ?? null
-    };
-  }
-
-  if (type === 'annual') {
-    const rows = computeAnnualComparison(series);
-    const latest = rows[0];
-    return {
-      title: 'Acumulado anual',
-      currentLabel: `${CURRENT_YEAR}`,
-      comparisonLabel: `${CURRENT_YEAR - 1}`,
-      currentValue: latest?.current ?? null,
-      comparisonValue: latest?.comparison ?? null,
-      diff: latest?.diff ?? null,
-      pct: latest?.pct ?? null
-    };
-  }
-
-  const latestIndex = findLatestIndex(series.monthlyCurrent);
-  const month = MONTHS[latestIndex] ?? MONTHS[MONTHS.length - 1];
-  const referenceSeries = getScenarioSeries(series, scenario);
-  const current = series.monthlyCurrent[latestIndex] ?? null;
-  const comparison = referenceSeries[latestIndex] ?? null;
-  const diff = current != null && comparison != null ? current - comparison : null;
-  const pct = diff != null && comparison ? diff / comparison : null;
-  return {
-    title: `${SCENARIO_LABELS[scenario] ?? 'Meta'} (${month.label})`,
-    currentLabel: 'Real',
-    comparisonLabel: 'Meta',
-    currentValue: current,
-    comparisonValue: comparison,
-    diff,
-    pct
-  };
-}
-
-function buildTableRows(series, type, scenario) {
-  let rows = [];
-  if (type === 'monthly') {
-    rows = computeMonthlyComparison(series);
-  } else if (type === 'quarterly') {
-    rows = computeQuarterlyComparison(series);
-  } else if (type === 'annual') {
-    rows = computeAnnualComparison(series);
-  } else {
-    rows = computeScenarioComparison(series, scenario);
-  }
-
-  return rows
-    .map(row => `
-      <tr class="border-b border-slate-100">
-        <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
-        <td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatNumber(row.current)}</td>
-        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatNumber(row.comparison)}</td>
-        <td class="px-4 py-2 text-right text-sm font-semibold ${
-          row.diff > 0
-            ? 'text-emerald-600'
-            : row.diff < 0
-            ? 'text-rose-600'
-            : 'text-slate-500'
-        }">${formatSignedNumber(row.diff)}</td>
-        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
-      </tr>
-    `)
-    .join('');
 }
 
 function getTrendColorClasses(value) {
@@ -662,149 +387,6 @@ function getTrendColorClasses(value) {
     text: 'text-slate-600',
     badge: 'bg-slate-100 text-slate-600'
   };
-}
-
-function ensureModalContainer() {
-  if (!modalContainer) {
-    modalContainer = document.createElement('div');
-    modalContainer.setAttribute('data-modal-root', '');
-    document.body.appendChild(modalContainer);
-  }
-  return modalContainer;
-}
-
-function closeIndicatorModal() {
-  destroyActiveModalChart();
-  if (modalContainer) {
-    modalContainer.innerHTML = '';
-  }
-  document.body.classList.remove('overflow-hidden');
-}
-
-function buildModalMarkup({ label, series, type, scenario }) {
-  const summary = buildSummary(series, type, scenario);
-  const rowsMarkup = buildTableRows(series, type, scenario);
-  const trendClasses = getTrendColorClasses(summary.diff ?? 0);
-  const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : `${CURRENT_YEAR - 1}`;
-
-  return `
-    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
-      <div class="relative w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <button
-          type="button"
-          class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-          aria-label="Cerrar"
-          data-modal-close
-        >
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-
-        <div class="space-y-6 p-6">
-          <header class="space-y-2">
-            <p class="text-xs uppercase tracking-widest text-slate-400">Indicador seleccionado</p>
-            <h2 class="text-2xl font-semibold text-slate-900">${escapeHtml(label)}</h2>
-            <p class="text-sm text-slate-500">Unidad de medida: ${escapeHtml(series.unit ?? '—')}</p>
-          </header>
-
-          <section class="space-y-4">
-            <header class="flex items-center justify-between">
-              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">${escapeHtml(
-                summary.title
-              )}</h3>
-              <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">${
-                type === 'scenario' ? 'Seguimiento vs meta' : 'Comparativo año contra año'
-              }</span>
-            </header>
-
-            <div class="grid gap-4 sm:grid-cols-3">
-              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs uppercase tracking-widest text-slate-400">${escapeHtml(summary.currentLabel)}</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.currentValue)}</p>
-              </article>
-              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs uppercase tracking-widest text-slate-400">${escapeHtml(scenarioLabel)}</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.comparisonValue)}</p>
-              </article>
-              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
-                <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatSignedNumber(summary.diff)}</p>
-                <p class="text-xs text-slate-500">${formatPercentage(summary.pct)}</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="mb-3 flex items-center justify-between">
-              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Visualización</h3>
-              <span class="rounded-full px-3 py-1 text-xs font-semibold ${trendClasses.badge}">${
-                type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : `${CURRENT_YEAR} vs ${CURRENT_YEAR - 1}`
-              }</span>
-            </div>
-            <div class="h-72">
-              <canvas data-modal-chart aria-label="Gráfica del indicador"></canvas>
-            </div>
-          </section>
-
-          <section class="rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-100 px-5 py-3">
-              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Detalle del periodo</h3>
-            </div>
-            <div class="max-h-72 overflow-auto">
-              <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
-                  <tr>
-                    <th class="px-4 py-2 text-left">Periodo</th>
-                    <th class="px-4 py-2 text-right">Real</th>
-                    <th class="px-4 py-2 text-right">Comparativo</th>
-                    <th class="px-4 py-2 text-right">Variación</th>
-                    <th class="px-4 py-2 text-right">% Variación</th>
-                  </tr>
-                </thead>
-                <tbody>${rowsMarkup}</tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function openIndicatorModal({ label, series, type, scenario }) {
-  if (!series) return;
-  const root = ensureModalContainer();
-  root.innerHTML = buildModalMarkup({ label, series, type, scenario });
-  document.body.classList.add('overflow-hidden');
-
-  const overlay = root.querySelector('[data-modal-overlay]');
-  const closeButton = root.querySelector('[data-modal-close]');
-  const canvas = root.querySelector('[data-modal-chart]');
-
-  const handleClose = () => {
-    overlay?.removeEventListener('click', overlayListener);
-    closeButton?.removeEventListener('click', handleClose);
-    document.removeEventListener('keydown', escListener);
-    closeIndicatorModal();
-  };
-
-  const overlayListener = event => {
-    if (event.target === overlay) {
-      handleClose();
-    }
-  };
-
-  const escListener = event => {
-    if (event.key === 'Escape') {
-      handleClose();
-    }
-  };
-
-  overlay?.addEventListener('click', overlayListener);
-  closeButton?.addEventListener('click', handleClose);
-  document.addEventListener('keydown', escListener);
-
-  const chartConfig = buildChartConfig(series, type, scenario);
-  renderModalChart(canvas, chartConfig);
 }
 
 function escapeHtml(value) {
@@ -841,7 +423,892 @@ function getBadgeStyles(color) {
   const textColor = luminance > 0.65 ? '#0f172a' : '#ffffff';
   return `background-color: ${normalized}; color: ${textColor};`;
 }
+function buildSummary(realData, type, scenario) {
+  if (!realData || !realData.history.length) {
+    return {
+      title: 'Sin datos disponibles',
+      currentLabel: 'Actual',
+      comparisonLabel: 'Anterior',
+      currentValue: null,
+      comparisonValue: null,
+      diff: null,
+      pct: null
+    };
+  }
 
+  const { history } = realData;
+  const currentYear = CURRENT_YEAR;
+  const lastLoaded = getLastLoadedMonth(history);
+  
+  if (!lastLoaded) {
+    return {
+      title: 'Sin datos disponibles',
+      currentLabel: 'Actual',
+      comparisonLabel: 'Anterior',
+      currentValue: null,
+      comparisonValue: null,
+      diff: null,
+      pct: null
+    };
+  }
+
+  if (type === 'monthly') {
+    const latestMonth = lastLoaded.month;
+    const latestYear = lastLoaded.year;
+    const month = MONTHS[latestMonth - 1] || MONTHS[MONTHS.length - 1];
+    
+    const currentItem = history.find(
+      item => item.anio === latestYear && item.mes === latestMonth
+    );
+    const comparisonItem = history.find(
+      item => item.anio === latestYear - 1 && item.mes === latestMonth
+    );
+    
+    const current = currentItem ? Number(currentItem.valor) : null;
+    const comparison = comparisonItem ? Number(comparisonItem.valor) : null;
+    const diff = current != null && comparison != null ? current - comparison : null;
+    const pct = diff != null && comparison ? diff / comparison : null;
+    
+    return {
+      title: `Comparativo mensual (${month.label} ${latestYear})`,
+      currentLabel: `${latestYear}`,
+      comparisonLabel: `${latestYear - 1}`,
+      currentValue: current,
+      comparisonValue: comparison,
+      diff,
+      pct
+    };
+  }
+
+  if (type === 'quarterly') {
+    const completeQuarters = filterCompleteQuarters(history, currentYear);
+    
+    if (completeQuarters === 0) {
+      return {
+        title: 'Sin trimestres completos',
+        currentLabel: `${currentYear}`,
+        comparisonLabel: `${currentYear - 1}`,
+        currentValue: null,
+        comparisonValue: null,
+        diff: null,
+        pct: null
+      };
+    }
+    
+    const currentQuarters = aggregateQuarterlyData(history, currentYear, completeQuarters);
+    const previousQuarters = aggregateQuarterlyData(history, currentYear - 1, completeQuarters);
+    
+    const latest = currentQuarters[currentQuarters.length - 1];
+    const previousLatest = previousQuarters[previousQuarters.length - 1];
+    
+    return {
+      title: `Comparativo trimestral (Q${latest?.quarter || 1} ${currentYear})`,
+      currentLabel: `${currentYear}`,
+      comparisonLabel: `${currentYear - 1}`,
+      currentValue: latest?.value || null,
+      comparisonValue: previousLatest?.value || null,
+      diff: latest && previousLatest ? latest.value - previousLatest.value : null,
+      pct: latest && previousLatest && previousLatest.value ? 
+        (latest.value - previousLatest.value) / previousLatest.value : null
+    };
+  }
+
+  if (type === 'annual') {
+    const currentData = getDataByYear(history, currentYear);
+    const previousData = getDataByYear(history, currentYear - 1);
+    
+    const current = sum(currentData.map(item => item.valor));
+    const comparison = sum(previousData.map(item => item.valor));
+    const diff = current - comparison;
+    const pct = comparison ? diff / comparison : null;
+    
+    return {
+      title: `Acumulado anual (${currentYear})`,
+      currentLabel: `${currentYear}`,
+      comparisonLabel: `${currentYear - 1}`,
+      currentValue: current,
+      comparisonValue: comparison,
+      diff,
+      pct
+    };
+  }
+
+  // Para escenarios
+  const latestMonth = lastLoaded.month;
+  const latestYear = lastLoaded.year;
+  const month = MONTHS[latestMonth - 1];
+  
+  const currentItem = history.find(
+    item => item.anio === latestYear && item.mes === latestMonth
+  );
+  
+  const targetItem = realData.targets.find(
+    item => item.anio === latestYear && 
+           item.mes === latestMonth && 
+           item.escenario === scenario
+  );
+  
+  const current = currentItem ? Number(currentItem.valor) : null;
+  const comparison = targetItem ? Number(targetItem.valor) : null;
+  const diff = current != null && comparison != null ? current - comparison : null;
+  const pct = diff != null && comparison ? diff / comparison : null;
+  
+  return {
+    title: `${SCENARIO_LABELS[scenario] || 'Meta'} (${month?.label || ''} ${latestYear})`,
+    currentLabel: 'Real',
+    comparisonLabel: 'Meta',
+    currentValue: current,
+    comparisonValue: comparison,
+    diff,
+    pct
+  };
+}
+
+function buildTableRows(realData, type, scenario) {
+  if (!realData || !realData.history.length) {
+    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
+  }
+
+  const { history } = realData;
+  const currentYear = CURRENT_YEAR;
+  const lastLoaded = getLastLoadedMonth(history);
+  
+  if (!lastLoaded) {
+    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
+  }
+
+  let rows = [];
+
+  if (type === 'monthly') {
+    const currentData = getDataByYear(history, currentYear);
+    const previousData = getDataByYear(history, currentYear - 1);
+    
+    const previousMap = new Map();
+    previousData.forEach(item => {
+      previousMap.set(item.mes, Number(item.valor) || 0);
+    });
+    
+    rows = currentData.map(item => {
+      const current = Number(item.valor) || 0;
+      const comparison = previousMap.get(item.mes) || null;
+      const diff = comparison !== null ? current - comparison : null;
+      const pct = diff !== null && comparison ? diff / comparison : null;
+      
+      return {
+        label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
+        current,
+        comparison,
+        diff,
+        pct
+      };
+    });
+  } 
+  else if (type === 'quarterly') {
+    const completeQuarters = filterCompleteQuarters(history, currentYear);
+    
+    if (completeQuarters === 0) {
+      return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay trimestres completos disponibles</td></tr>';
+    }
+    
+    const currentQuarters = aggregateQuarterlyData(history, currentYear, completeQuarters);
+    const previousQuarters = aggregateQuarterlyData(history, currentYear - 1, completeQuarters);
+    
+    const previousMap = new Map();
+    previousQuarters.forEach(q => {
+      previousMap.set(q.quarter, q.value);
+    });
+    
+    rows = currentQuarters.map(q => {
+      const current = q.value;
+      const comparison = previousMap.get(q.quarter) || null;
+      const diff = comparison !== null ? current - comparison : null;
+      const pct = diff !== null && comparison ? diff / comparison : null;
+      
+      return {
+        label: `Trimestre ${q.quarter}`,
+        current,
+        comparison,
+        diff,
+        pct
+      };
+    });
+  } 
+  else if (type === 'annual') {
+    const years = Array.from(new Set(history.map(item => item.anio))).sort((a, b) => b - a).slice(0, 5);
+    
+    rows = years.map((year, index) => {
+      const yearData = getDataByYear(history, year);
+      const current = sum(yearData.map(item => item.valor));
+      const previousYear = years[index + 1];
+      const previousYearData = previousYear ? getDataByYear(history, previousYear) : [];
+      const comparison = previousYearData.length ? sum(previousYearData.map(item => item.valor)) : null;
+      const diff = comparison !== null ? current - comparison : null;
+      const pct = diff !== null && comparison ? diff / comparison : null;
+      
+      return {
+        label: `${year}`,
+        current,
+        comparison,
+        diff,
+        pct
+      };
+    });
+  } 
+  else {
+    // Para escenarios
+    const currentData = getDataByYear(history, currentYear);
+    
+    const targetMap = new Map();
+    realData.targets
+      .filter(item => item.anio === currentYear && item.escenario === scenario)
+      .forEach(item => {
+        targetMap.set(item.mes, Number(item.valor) || 0);
+      });
+    
+    rows = currentData.map(item => {
+      const current = Number(item.valor) || 0;
+      const comparison = targetMap.get(item.mes) || null;
+      const diff = comparison !== null ? current - comparison : null;
+      const pct = diff !== null && comparison ? diff / comparison : null;
+      
+      return {
+        label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
+        current,
+        comparison,
+        diff,
+        pct
+      };
+    });
+  }
+
+  if (!rows.length) {
+    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles para este periodo</td></tr>';
+  }
+
+  return rows
+    .map(row => `
+      <tr class="border-b border-slate-100">
+        <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
+        <td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatNumber(row.current)}</td>
+        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatNumber(row.comparison)}</td>
+        <td class="px-4 py-2 text-right text-sm font-semibold ${
+          row.diff > 0
+            ? 'text-emerald-600'
+            : row.diff < 0
+            ? 'text-rose-600'
+            : 'text-slate-500'
+        }">${formatSignedNumber(row.diff)}</td>
+        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
+      </tr>
+    `)
+    .join('');
+}
+function destroyActiveModalChart() {
+  if (activeModalChart) {
+    activeModalChart.destroy();
+    activeModalChart = null;
+  }
+}
+
+function renderModalChart(canvas, config) {
+  if (!canvas) return;
+  const Chart = typeof window !== 'undefined' ? window.Chart : null;
+  if (!Chart) {
+    const fallback = document.createElement('div');
+    fallback.className =
+      'flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/70 text-sm text-slate-500';
+    fallback.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-2"></i>No se pudo cargar la biblioteca de gráficas.';
+    canvas.replaceWith(fallback);
+    return;
+  }
+  destroyActiveModalChart();
+  activeModalChart = new Chart(canvas, config);
+}
+
+function buildMonthlyChartConfig(realData, chartType = 'line') {
+  if (!realData || !realData.history.length) {
+    return null;
+  }
+
+  const currentYear = CURRENT_YEAR;
+  const currentData = getDataByYear(realData.history, currentYear);
+  const previousData = getDataByYear(realData.history, currentYear - 1);
+
+  const currentValues = Array(12).fill(null);
+  const previousValues = Array(12).fill(null);
+
+  currentData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12) {
+      currentValues[item.mes - 1] = Number(item.valor) || null;
+    }
+  });
+
+  previousData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12) {
+      previousValues[item.mes - 1] = Number(item.valor) || null;
+    }
+  });
+
+  const config = {
+    type: chartType,
+    data: {
+      labels: MONTHS.map(month => month.short),
+      datasets: [
+        {
+          label: `${currentYear}`,
+          data: currentValues,
+          borderColor: '#2563eb',
+          backgroundColor: chartType === 'bar' ? '#2563eb' : 'rgba(37, 99, 235, 0.15)',
+          borderWidth: 2,
+          spanGaps: true
+        },
+        {
+          label: `${currentYear - 1}`,
+          data: previousValues,
+          borderColor: '#10b981',
+          backgroundColor: chartType === 'bar' ? '#10b981' : 'rgba(16, 185, 129, 0.15)',
+          borderWidth: 2,
+          spanGaps: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: value => formatNumber(value)
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  };
+
+  if (chartType === 'line') {
+    config.data.datasets.forEach(dataset => {
+      dataset.tension = 0.3;
+      dataset.fill = true;
+      dataset.pointRadius = 3;
+    });
+  }
+
+  return config;
+}
+
+function buildQuarterlyChartConfig(realData) {
+  if (!realData || !realData.history.length) {
+    return null;
+  }
+
+  const currentYear = CURRENT_YEAR;
+  const completeQuarters = filterCompleteQuarters(realData.history, currentYear);
+
+  if (completeQuarters === 0) {
+    return null;
+  }
+
+  const currentQuarters = aggregateQuarterlyData(realData.history, currentYear, completeQuarters);
+  const previousQuarters = aggregateQuarterlyData(realData.history, currentYear - 1, completeQuarters);
+
+  const labels = currentQuarters.map(q => `Q${q.quarter}`);
+  const currentValues = currentQuarters.map(q => q.value);
+  const previousValues = previousQuarters.map(q => q.value);
+
+  return {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: `${currentYear}`,
+          data: currentValues,
+          backgroundColor: 'rgba(37, 99, 235, 0.65)'
+        },
+        {
+          label: `${currentYear - 1}`,
+          data: previousValues,
+          backgroundColor: 'rgba(16, 185, 129, 0.45)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: value => formatNumber(value)
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  };
+}
+
+function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
+  if (!realData || !realData.history.length) {
+    return null;
+  }
+
+  const currentYear = CURRENT_YEAR;
+  const currentData = getDataByYear(realData.history, currentYear);
+
+  const targetMap = new Map();
+  realData.targets
+    .filter(item => item.anio === currentYear && item.escenario === scenario)
+    .forEach(item => {
+      targetMap.set(item.mes, Number(item.valor) || null);
+    });
+
+  const realValues = Array(12).fill(null);
+  const targetValues = Array(12).fill(null);
+
+  currentData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12) {
+      realValues[item.mes - 1] = Number(item.valor) || null;
+    }
+  });
+
+  for (let mes = 1; mes <= 12; mes++) {
+    if (targetMap.has(mes)) {
+      targetValues[mes - 1] = targetMap.get(mes);
+    }
+  }
+
+  const label = SCENARIO_LABELS[scenario] || 'Meta';
+
+  const config = {
+    type: chartType,
+    data: {
+      labels: MONTHS.map(month => month.short),
+      datasets: [
+        {
+          label: 'Real',
+          data: realValues,
+          borderColor: '#2563eb',
+          backgroundColor: chartType === 'bar' ? '#2563eb' : 'rgba(37, 99, 235, 0.15)',
+          borderWidth: 2,
+          spanGaps: true
+        },
+        {
+          label,
+          data: targetValues,
+          borderColor: '#f97316',
+          backgroundColor: chartType === 'bar' ? '#f97316' : 'rgba(249, 115, 22, 0.15)',
+          borderWidth: 2,
+          spanGaps: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: value => formatNumber(value)
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  };
+
+  if (chartType === 'line') {
+    config.data.datasets[0].tension = 0.3;
+    config.data.datasets[0].fill = true;
+    config.data.datasets[0].pointRadius = 3;
+    
+    config.data.datasets[1].borderDash = [6, 4];
+    config.data.datasets[1].tension = 0.3;
+    config.data.datasets[1].fill = false;
+    config.data.datasets[1].pointRadius = 3;
+  }
+
+  return config;
+}
+
+function buildAnnualChartConfig(realData) {
+  if (!realData || !realData.history.length) {
+    return null;
+  }
+
+  const years = Array.from(new Set(realData.history.map(item => item.anio)))
+    .sort((a, b) => a - b)
+    .slice(-5);
+
+  const values = years.map(year => {
+    const yearData = getDataByYear(realData.history, year);
+    return sum(yearData.map(item => item.valor));
+  });
+
+  return {
+    type: 'bar',
+    data: {
+      labels: years.map(String),
+      datasets: [
+        {
+          label: 'Total anual',
+          data: values,
+          backgroundColor: 'rgba(37, 99, 235, 0.7)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: value => formatNumber(value)
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  };
+}
+
+function buildChartConfig(realData, type, scenario, chartType = 'line') {
+  if (!realData) return null;
+  
+  if (type === 'monthly') {
+    return buildMonthlyChartConfig(realData, chartType);
+  } else if (type === 'quarterly') {
+    return buildQuarterlyChartConfig(realData);
+  } else if (type === 'annual') {
+    return buildAnnualChartConfig(realData);
+  } else {
+    return buildScenarioChartConfig(realData, scenario, chartType);
+  }
+}
+
+function buildChartTypeToggle(currentType, type) {
+  if (type !== 'monthly' && type !== 'scenario') {
+    return '';
+  }
+  
+  return `
+    <div class="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm" data-chart-toggle>
+      <button
+        type="button"
+        data-chart-type="line"
+        class="flex items-center gap-2 rounded-full px-3 py-1 text-sm transition ${
+          currentType === 'line' 
+            ? 'bg-primary-600 text-white shadow' 
+            : 'text-slate-500 hover:bg-slate-100'
+        }"
+      >
+        <i class="fa-solid fa-chart-line"></i>
+        Líneas
+      </button>
+      <button
+        type="button"
+        data-chart-type="bar"
+        class="flex items-center gap-2 rounded-full px-3 py-1 text-sm transition ${
+          currentType === 'bar' 
+            ? 'bg-primary-600 text-white shadow' 
+            : 'text-slate-500 hover:bg-slate-100'
+        }"
+      >
+        <i class="fa-solid fa-chart-column"></i>
+        Barras
+      </button>
+    </div>
+  `;
+}
+function ensureModalContainer() {
+  if (!modalContainer) {
+    modalContainer = document.createElement('div');
+    modalContainer.setAttribute('data-modal-root', '');
+    document.body.appendChild(modalContainer);
+  }
+  return modalContainer;
+}
+
+function closeIndicatorModal() {
+  destroyActiveModalChart();
+  if (modalContainer) {
+    modalContainer.innerHTML = '';
+  }
+  document.body.classList.remove('overflow-hidden');
+}
+
+function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' }) {
+  const summary = buildSummary(realData, type, scenario);
+  const rowsMarkup = buildTableRows(realData, type, scenario);
+  const trendClasses = getTrendColorClasses(summary.diff ?? 0);
+  const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
+  const chartToggle = buildChartTypeToggle(chartType, type);
+
+  return `
+    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+      <div class="relative w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl" style="max-height: 90vh; overflow-y: auto;">
+        <button
+          type="button"
+          class="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+          aria-label="Cerrar"
+          data-modal-close
+        >
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <div class="space-y-6 p-6">
+          <header class="space-y-2">
+            <p class="text-xs uppercase tracking-widest text-slate-400">Indicador seleccionado</p>
+            <h2 class="text-2xl font-semibold text-slate-900">${escapeHtml(label)}</h2>
+            ${realData?.indicator ? `
+              <div class="flex flex-wrap gap-3 text-sm text-slate-500">
+                <span><strong>Área:</strong> ${escapeHtml(realData.indicator.area_nombre || '—')}</span>
+                <span><strong>Unidad:</strong> ${escapeHtml(realData.indicator.unidad_medida || '—')}</span>
+              </div>
+            ` : ''}
+          </header>
+
+          <section class="space-y-4">
+            <header class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">${escapeHtml(
+                summary.title
+              )}</h3>
+              <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">${
+                type === 'scenario' ? 'Seguimiento vs meta' : 'Comparativo año contra año'
+              }</span>
+            </header>
+
+            <div class="grid gap-4 sm:grid-cols-3">
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p class="text-xs uppercase tracking-widest text-slate-400">${escapeHtml(summary.currentLabel)}</p>
+                <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.currentValue)}</p>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p class="text-xs uppercase tracking-widest text-slate-400">${escapeHtml(scenarioLabel)}</p>
+                <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.comparisonValue)}</p>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
+                <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatSignedNumber(summary.diff)}</p>
+                <p class="text-xs text-slate-500">${formatPercentage(summary.pct)}</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="mb-3 flex items-center justify-between flex-wrap gap-3">
+              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Visualización</h3>
+              ${chartToggle}
+            </div>
+            <div class="h-72">
+              <canvas data-modal-chart aria-label="Gráfica del indicador"></canvas>
+            </div>
+          </section>
+
+          <section class="rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-100 px-5 py-3">
+              <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Detalle del periodo</h3>
+            </div>
+            <div class="max-h-72 overflow-auto">
+              <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
+                  <tr>
+                    <th class="px-4 py-2 text-left">Periodo</th>
+                    <th class="px-4 py-2 text-right">Real</th>
+                    <th class="px-4 py-2 text-right">Comparativo</th>
+                    <th class="px-4 py-2 text-right">Variación</th>
+                    <th class="px-4 py-2 text-right">% Variación</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsMarkup}</tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function openIndicatorModal({ label, dataKey, type, scenario }) {
+  const root = ensureModalContainer();
+  
+  root.innerHTML = `
+    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6">
+      <div class="rounded-2xl bg-white p-8 shadow-2xl">
+        <div class="flex items-center gap-3 text-slate-600">
+          <svg class="animate-spin h-6 w-6" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <span>Cargando datos del indicador...</span>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.classList.add('overflow-hidden');
+
+  try {
+    const indicators = await getIndicators();
+    const foundIndicator = findIndicatorByDataKey(indicators, dataKey);
+
+    if (!foundIndicator) {
+      root.innerHTML = `
+        <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+          <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md">
+            <div class="text-center">
+              <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-500 mb-4"></i>
+              <h3 class="text-lg font-semibold text-slate-900 mb-2">Indicador no encontrado</h3>
+              <p class="text-sm text-slate-600 mb-4">No se encontró un indicador configurado para esta opción.</p>
+              <button
+                type="button"
+                class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                data-modal-close
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const closeBtn = root.querySelector('[data-modal-close]');
+      closeBtn?.addEventListener('click', closeIndicatorModal);
+      return;
+    }
+
+    const realData = await getIndicatorRealData(foundIndicator.id);
+    
+    if (!realData || !realData.history.length) {
+      root.innerHTML = `
+        <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+          <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md">
+            <div class="text-center">
+              <i class="fa-solid fa-chart-simple text-4xl text-slate-300 mb-4"></i>
+              <h3 class="text-lg font-semibold text-slate-900 mb-2">Sin datos disponibles</h3>
+              <p class="text-sm text-slate-600 mb-4">No hay datos históricos registrados para este indicador.</p>
+              <button
+                type="button"
+                class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                data-modal-close
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const closeBtn = root.querySelector('[data-modal-close]');
+      closeBtn?.addEventListener('click', closeIndicatorModal);
+      return;
+    }
+
+    let currentChartType = 'line';
+
+    const renderModal = (chartType) => {
+      root.innerHTML = buildModalMarkup({ 
+        label: foundIndicator.nombre, 
+        realData, 
+        type, 
+        scenario,
+        chartType 
+      });
+
+      const overlay = root.querySelector('[data-modal-overlay]');
+      const closeButton = root.querySelector('[data-modal-close]');
+      const canvas = root.querySelector('[data-modal-chart]');
+      const chartToggle = root.querySelector('[data-chart-toggle]');
+
+      const handleClose = () => {
+        overlay?.removeEventListener('click', overlayListener);
+        closeButton?.removeEventListener('click', handleClose);
+        document.removeEventListener('keydown', escListener);
+        closeIndicatorModal();
+      };
+
+      const overlayListener = event => {
+        if (event.target === overlay) {
+          handleClose();
+        }
+      };
+
+      const escListener = event => {
+        if (event.key === 'Escape') {
+          handleClose();
+        }
+      };
+
+      overlay?.addEventListener('click', overlayListener);
+      closeButton?.addEventListener('click', handleClose);
+      document.addEventListener('keydown', escListener);
+
+      if (chartToggle) {
+        chartToggle.querySelectorAll('[data-chart-type]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const newChartType = btn.dataset.chartType;
+            if (newChartType !== currentChartType) {
+              currentChartType = newChartType;
+              renderModal(newChartType);
+            }
+          });
+        });
+      }
+
+      const chartConfig = buildChartConfig(realData, type, scenario, chartType);
+      if (chartConfig) {
+        renderModalChart(canvas, chartConfig);
+      }
+    };
+
+    renderModal(currentChartType);
+
+  } catch (error) {
+    console.error('Error al abrir modal:', error);
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md">
+          <div class="text-center">
+            <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
+            <h3 class="text-lg font-semibold text-slate-900 mb-2">Error al cargar datos</h3>
+            <p class="text-sm text-slate-600 mb-4">${escapeHtml(error.message || 'Ocurrió un error inesperado')}</p>
+            <button
+              type="button"
+              class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+              data-modal-close
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    const closeBtn = root.querySelector('[data-modal-close]');
+    closeBtn?.addEventListener('click', closeIndicatorModal);
+  }
+}
 function buildOptionMarkup(option) {
   const iconClass = OPTION_ICON_CLASSES[option.type] ?? 'fa-solid fa-circle-dot';
   return `
@@ -1049,7 +1516,6 @@ function buildDashboardMarkup() {
     </div>
   `;
 }
-
 function initAccordionControls(container) {
   const root = container.querySelector('[data-accordion-root]');
   if (!root) return;
@@ -1088,6 +1554,7 @@ function initAccordionControls(container) {
       applyState();
     });
   });
+  
   applyState();
 }
 
@@ -1120,7 +1587,6 @@ function initGroupControls(container) {
       if (chevron) {
         chevron.classList.toggle('rotate-180', isOpen);
       }
-
     });
   };
 
@@ -1161,7 +1627,7 @@ function initDirectionControls(container) {
 
 function initOptionModals(container) {
   container.querySelectorAll('[data-option-button]').forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const dataKey = button.dataset.optionDatakey;
       const type = button.dataset.optionType;
       const scenario = button.dataset.optionScenario || null;
@@ -1172,13 +1638,7 @@ function initOptionModals(container) {
         return;
       }
 
-      const series = INDICATOR_SERIES[dataKey];
-      if (!series) {
-        console.warn('No hay serie configurada para', dataKey);
-        return;
-      }
-
-      openIndicatorModal({ label, series, type, scenario });
+      await openIndicatorModal({ label, dataKey, type, scenario });
     });
   });
 }
