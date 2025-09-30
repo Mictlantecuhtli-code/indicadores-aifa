@@ -143,4 +143,23 @@ export function renderLogin(container) {
       submit.classList.remove('opacity-70');
     }
   });
+  const togglePassword = document.getElementById('toggle-password');
+  const passwordInput = document.getElementById('password');
+  const eyeIcon = document.getElementById('eye-icon');
+
+  if (togglePassword && passwordInput && eyeIcon) {
+    togglePassword.addEventListener('click', () => {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+      
+      // Cambiar el ícono
+      if (type === 'password') {
+        eyeIcon.classList.remove('fa-eye-slash');
+        eyeIcon.classList.add('fa-eye');
+      } else {
+        eyeIcon.classList.remove('fa-eye');
+        eyeIcon.classList.add('fa-eye-slash');
+      }
+    });
+  }
 }
