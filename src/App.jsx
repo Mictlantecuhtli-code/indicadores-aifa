@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import IndicatorDetailPage from './pages/IndicatorDetailPage.jsx';
 import IndicatorsPage from './pages/IndicatorsPage.jsx';
 import CapturePage from './pages/CapturePage.jsx';
 import VisualizationPage from './pages/VisualizationPage.jsx';
@@ -44,6 +45,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="panel-directivos" replace />} />
         <Route path="panel-directivos" element={<DashboardPage />} />
+        <Route path="panel-directivos/:optionId" element={<IndicatorDetailPage />} />
         <Route path="visualizacion" element={<VisualizationPage />} />
         <Route path="indicadores" element={<IndicatorsPage />} />
         <Route path="captura" element={<CapturePage />} />
