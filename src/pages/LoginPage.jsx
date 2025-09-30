@@ -1,10 +1,12 @@
 import { useForm } from 'react-hook-form';
 import { LogIn } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const {
     register,
     handleSubmit,
@@ -21,6 +23,7 @@ export default function LoginPage() {
       if (signInError) {
         throw signInError;
       }
+      navigate('/panel-directivos', { replace: true });
     } catch (err) {
       setError(err.message ?? 'No fue posible iniciar sesión');
     } finally {
