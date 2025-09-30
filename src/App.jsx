@@ -5,6 +5,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import IndicatorsPage from './pages/IndicatorsPage.jsx';
 import CapturePage from './pages/CapturePage.jsx';
+import VisualizationPage from './pages/VisualizationPage.jsx';
+import UsersPage from './pages/UsersPage.jsx';
 
 function ProtectedRoute({ children }) {
   const { session, loading } = useAuth();
@@ -31,7 +33,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login" element={session ? <Navigate to="/panel-directivos" replace /> : <LoginPage />} />
       <Route
         path="/"
         element={
@@ -40,11 +42,14 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<Navigate to="panel-directivos" replace />} />
+        <Route path="panel-directivos" element={<DashboardPage />} />
+        <Route path="visualizacion" element={<VisualizationPage />} />
         <Route path="indicadores" element={<IndicatorsPage />} />
         <Route path="captura" element={<CapturePage />} />
+        <Route path="usuarios" element={<UsersPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={session ? '/' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={session ? '/panel-directivos' : '/login'} replace />} />
     </Routes>
   );
 }

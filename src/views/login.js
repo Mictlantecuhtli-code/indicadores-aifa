@@ -8,7 +8,7 @@ export function renderLogin(container) {
       <div class="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-10">
         <header class="flex flex-col gap-6 text-slate-600 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center gap-4">
-            <img src="./assets/AIFA_Logo.png" alt="Logotipo AIFA" class="h-16 w-auto" />
+            <img src="./assets/AIFA_logo.png" alt="Logotipo AIFA" class="h-16 w-auto" />
             <div>
               <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Sistema de Indicadores AIFA</p>
               <h1 class="text-2xl font-semibold text-slate-800">Aeropuerto Internacional Felipe Ángeles</h1>

@@ -1,12 +1,14 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { Menu, BarChart3, ListChecks, ClipboardPen, LogOut } from 'lucide-react';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { BarChart3, ListChecks, ClipboardPen, LogOut, Users, Presentation, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useState } from 'react';
 
 const navigation = [
-  { name: 'Panel directivos', to: '/', icon: BarChart3, exact: true },
+  { name: 'Panel directivos', to: '/panel-directivos', icon: BarChart3, exact: true },
+  { name: 'Visualización', to: '/visualizacion', icon: Presentation },
   { name: 'Consulta de indicadores', to: '/indicadores', icon: ListChecks },
-  { name: 'Captura de indicadores', to: '/captura', icon: ClipboardPen }
+  { name: 'Captura de indicadores', to: '/captura', icon: ClipboardPen },
+  { name: 'Administración de usuarios', to: '/usuarios', icon: Users }
 ];
 
 function classNames(...classes) {
@@ -16,95 +18,142 @@ function classNames(...classes) {
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const logoUrl = useMemo(() => new URL('../../assets/AIFA_logo.png', import.meta.url).href, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  const activeNavigation = useMemo(() => {
+    return (
+      navigation.find(item =>
+        item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to)
+      ) ?? navigation[0]
+    );
+  }, [location.pathname]);
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('No fue posible cerrar la sesión', error);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
-      <aside
-        className={classNames(
-          'fixed inset-y-0 left-0 z-30 w-72 transform bg-white shadow-xl transition-transform duration-200 lg:translate-x-0',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        )}
-      >
-        <div className="flex h-20 items-center justify-between border-b border-slate-200 px-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-aifa-blue">AIFA</p>
-            <h1 className="text-lg font-bold text-slate-800">Sistema de indicadores</h1>
-          </div>
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-6">
-          {navigation.map(item => {
-            const Icon = item.icon;
-            const isActive = item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to);
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileOpen(false)}
-                className={() =>
-                  classNames(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-aifa-blue text-white shadow-lg shadow-aifa-blue/25'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  )
-                }
-              >
-                <Icon className="h-5 w-5" />
-                {item.name}
-              </NavLink>
-            );
-          })}
-        </nav>
-        <div className="border-t border-slate-200 px-6 py-5">
-          {profile ? (
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-aifa-light to-aifa-blue font-semibold text-white">
-                {(profile.nombre_completo ?? profile.nombre ?? 'A').charAt(0) || 'A'}
-              </div>
-              <div className="flex-1 text-sm">
-                <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
-                <p className="text-xs text-slate-500">{profile.puesto ?? profile.rol}</p>
-              </div>
-              <button
-                onClick={signOut}
-                className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-aifa-blue"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
+    <div className="flex min-h-screen flex-col bg-slate-100">
+      <header className="relative z-20 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+        <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-1 items-center gap-4">
+            <img src={logoUrl} alt="Logotipo AIFA" className="h-12 w-auto" />
+            <div className="hidden sm:block">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-aifa-blue">AIFA</p>
+              <h1 className="text-sm font-semibold text-slate-700">Sistema de indicadores</h1>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">Sesión no disponible</p>
-          )}
-        </div>
-      </aside>
-      <div className="flex flex-1 flex-col lg:pl-72">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
-          <div className="flex h-20 items-center justify-between px-4 sm:px-6">
+          </div>
+
+          <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+            {navigation.map(item => {
+              const Icon = item.icon;
+              const isActive = item.exact
+                ? location.pathname === item.to
+                : location.pathname.startsWith(item.to);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={() =>
+                    classNames(
+                      'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all',
+                      isActive
+                        ? 'bg-aifa-blue text-white shadow-lg shadow-aifa-blue/25'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.name}
+                </NavLink>
+              );
+            })}
+          </nav>
+
+          <div className="flex flex-1 items-center justify-end gap-3">
+            {profile ? (
+              <div className="flex items-center gap-3">
+                <div className="hidden text-right text-xs sm:block">
+                  <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
+                  <p className="text-[11px] uppercase tracking-widest text-slate-400">{profile.puesto ?? profile.rol}</p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-aifa-blue hover:text-aifa-blue disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Cerrar sesión</span>
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Sesión no disponible</p>
+            )}
             <button
-              onClick={() => setMobileOpen(prev => !prev)}
-              className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden"
+              onClick={() => setMobileOpen(open => !open)}
+              className="rounded-full border border-slate-200 p-2 text-slate-600 transition hover:border-aifa-blue hover:text-aifa-blue lg:hidden"
+              aria-label="Abrir navegación"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="ml-auto text-right">
-              <p className="text-xs uppercase tracking-widest text-slate-400">Panel</p>
-              <p className="font-semibold text-slate-700">
-                {navigation.find(item => location.pathname.startsWith(item.to))?.name ?? 'Panel'}
-              </p>
-            </div>
           </div>
-        </header>
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        </div>
+
+        {mobileOpen && (
+          <div className="border-t border-slate-200 bg-white px-4 py-4 shadow-inner lg:hidden">
+            <nav className="flex flex-col gap-2">
+              {navigation.map(item => {
+                const Icon = item.icon;
+                const isActive = item.exact
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={() =>
+                      classNames(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                        isActive
+                          ? 'bg-aifa-blue text-white shadow'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      )
+                    }
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.name}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+        )}
+      </header>
+
+      <main className="flex-1">
+        <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-6 text-sm uppercase tracking-widest text-slate-400">
+            {activeNavigation.name}
+          </div>
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

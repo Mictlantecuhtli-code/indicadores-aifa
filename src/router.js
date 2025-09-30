@@ -1,6 +1,8 @@
 import { renderDashboard } from './views/dashboard.js';
 import { renderIndicators } from './views/indicators.js';
 import { renderCapture } from './views/capture.js';
+import { renderVisualization } from './views/visualization.js';
+import { renderUsers } from './views/users.js';
 import { renderLogin } from './views/login.js';
 import { getSession, subscribe } from './state/session.js';
 import { renderLayout, highlightActiveRoute } from './ui/layout.js';
@@ -10,8 +12,10 @@ import { showToast } from './ui/feedback.js';
 const routes = {
   login: renderLogin,
   dashboard: renderDashboard,
+  visualizacion: renderVisualization,
   indicators: renderIndicators,
-  capture: renderCapture
+  capture: renderCapture,
+  users: renderUsers
 };
 
 function getRouteFromHash() {
@@ -43,6 +47,19 @@ function bindLayoutActions() {
       localStorage.clear();
       showToast('Sesión cerrada correctamente', { type: 'success' });
       window.location.hash = '#login';
+    });
+  }
+
+  const mobileMenu = document.getElementById('mobile-menu');
+  if (mobileMenu) {
+    const toggle = document.getElementById('mobile-menu-toggle');
+    mobileMenu.querySelectorAll('a[data-route]').forEach(link => {
+      link.addEventListener('click', () => {
+        mobileMenu.hidden = true;
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
     });
   }
 }

@@ -303,3 +303,50 @@ export async function upsertTarget(payload) {
   if (error) throw error;
   return normalizeTarget(data);
 }
+
+function normalizeUser(record) {
+  if (!record) return null;
+  const email = record.email ?? record.correo ?? record.usuario?.email ?? record.usuario_email ?? null;
+  const lastAccess =
+    record.ultimo_acceso ?? record.ultima_conexion ?? record.ultimo_login ?? record.actualizado_en ?? null;
+  return {
+    id:
+      record.id ??
+      record.usuario_id ??
+      email ??
+      record.nombre_completo ??
+      record.nombre ??
+      `usuario-${Math.random().toString(36).slice(2)}`,
+    nombre: record.nombre_completo ?? record.nombre ?? record.full_name ?? 'Sin nombre',
+    puesto: record.puesto ?? record.cargo ?? null,
+    rol: record.rol ?? record.perfil ?? record.tipo ?? null,
+    email: email ?? '—',
+    direccion: record.direccion ?? record.area ?? record.area_nombre ?? record.subdireccion ?? null,
+    ultimo_acceso: lastAccess
+  };
+}
+
+export async function getUsers() {
+  const relationCandidates = [
+    { relation: 'v_usuarios_sistema', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,subdireccion,ultima_conexion,ultimo_acceso,usuario:usuarios(email,ultimo_acceso)' },
+    { relation: 'vw_usuarios', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,ultima_conexion' },
+    { relation: 'usuarios_detalle', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,ultima_conexion' },
+    { relation: 'usuarios', select: 'id,nombre,correo,rol,ultimo_acceso' },
+    { relation: 'perfiles', select: 'id,nombre_completo,nombre,puesto,rol,usuario:usuarios(email,ultimo_acceso)' }
+  ];
+
+  for (const candidate of relationCandidates) {
+    const { data, error } = await supabase.from(candidate.relation).select(candidate.select);
+
+    if (!error) {
+      return (data ?? []).map(normalizeUser).filter(Boolean);
+    }
+
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  return [];
+
+}
