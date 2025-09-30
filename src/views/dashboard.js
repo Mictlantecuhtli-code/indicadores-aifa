@@ -39,7 +39,6 @@ const OPTION_BLUEPRINTS = [
       `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Alto`
   }
 ];
-
 const OPTION_ICON_CLASSES = {
   monthly: 'fa-solid fa-chart-line',
   quarterly: 'fa-solid fa-chart-column',
