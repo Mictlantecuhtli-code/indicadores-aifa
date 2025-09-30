@@ -6,38 +6,14 @@ export function renderLogin(container) {
   container.innerHTML = `
     <div class="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100">
       <div class="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-10">
-        <header class="flex flex-col gap-6 text-slate-600 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-center gap-4">
-            <img src="./assets/AIFA_logo.png" alt="Logotipo AIFA" class="h-16 w-auto" />
-            <div>
-              <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Sistema de Indicadores AIFA</p>
-              <h1 class="text-2xl font-semibold text-slate-800">Aeropuerto Internacional Felipe Ángeles</h1>
-            </div>
+        <header class="flex flex-col items-center text-center">
+          <img src="./assets/AIFA_logo.png" alt="Logotipo AIFA" class="h-20 w-auto mb-4" />
+          <div>
+            <h1 class="text-2xl font-bold text-slate-800">Sistema de Indicadores AIFA</h1>
+            <p class="text-sm text-slate-500 mt-1">Aeropuerto Internacional Felipe Ángeles</p>
           </div>
-          <a href="#" class="inline-flex items-center gap-2 text-sm font-semibold text-primary-700 hover:text-primary-800">
-            <i class="fa-solid fa-house"></i>
-            Inicio
-          </a>
         </header>
-        <main class="mt-12 grid flex-1 items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
-          <div class="space-y-6 text-slate-600">
-            <h2 class="text-3xl font-semibold text-slate-900">Sistema de Indicadores</h2>
-            <p class="text-base leading-relaxed">
-              Consulta en tiempo real la operación del AIFA y registra el avance de los indicadores
-              estratégicos de cada área. La plataforma integra mediciones, metas y seguimiento para la
-              toma de decisiones de la Dirección.
-            </p>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div class="rounded-2xl border border-slate-200 bg-white/70 p-5 backdrop-blur">
-                <p class="text-xs uppercase tracking-wider text-slate-400">Consultas</p>
-                <p class="mt-2 text-lg font-semibold text-slate-800">Panel directivo actualizado</p>
-              </div>
-              <div class="rounded-2xl border border-slate-200 bg-white/70 p-5 backdrop-blur">
-                <p class="text-xs uppercase tracking-wider text-slate-400">Captura</p>
-                <p class="mt-2 text-lg font-semibold text-slate-800">Registro seguro de indicadores</p>
-              </div>
-            </div>
-          </div>
+        <main class="mt-12 flex flex-1 items-center justify-center">
           <div class="mx-auto w-full max-w-md">
             <div class="rounded-[28px] border border-slate-200/80 bg-white/90 p-8 shadow-xl shadow-slate-900/5 backdrop-blur">
               <div class="space-y-2 text-center">
