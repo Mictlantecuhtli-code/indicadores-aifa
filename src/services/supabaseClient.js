@@ -94,7 +94,7 @@ export async function signInWithEmail({ email, password }) {
   const { data: perfil, error: perfilError } = await supabase
     .from('perfiles')
     .select('id, nombre_completo, puesto, rol_principal')
-    .eq('usuario_id', userId)
+    .eq('id', userId)
     .single();
   
   if (perfilError) {
@@ -106,7 +106,7 @@ export async function signInWithEmail({ email, password }) {
   const { data: usuariosAreas, error: areasError } = await supabase
     .from('usuarios_areas')
     .select('rol, puede_capturar, puede_editar, puede_eliminar, estado, areas(id, nombre)')
-    .eq('usuario_id', userId)
+    .eq('id', userId)
     .eq('estado', 'ACTIVO');
   
   if (areasError) {
