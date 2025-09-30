@@ -1088,9 +1088,12 @@ function initAccordionControls(container) {
       applyState();
     });
   });
+  applyState();
+}
 
   applyState();
 }
+
 
 function initGroupControls(container) {
   const groups = new Map();
@@ -1121,6 +1124,7 @@ function initGroupControls(container) {
       if (chevron) {
         chevron.classList.toggle('rotate-180', isOpen);
       }
+
     });
   };
 

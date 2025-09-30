@@ -17,6 +17,7 @@ import {
   Users,
   Weight
 } from 'lucide-react';
+
 import { getAreas, getIndicatorHistory, getIndicatorTargets } from '../lib/supabaseClient.js';
 import { useIndicatorAssignments } from '../hooks/useIndicatorAssignments.js';
 import { formatMonth, formatNumber, formatPercentage, monthName } from '../utils/formatters.js';
@@ -474,6 +475,7 @@ function IndicatorCategoriesList({ categories, onSelectOption }) {
           isOpen={openCategory === category.id}
           onToggle={() => setOpenCategory(prev => (prev === category.id ? null : category.id))}
           onSelectOption={onSelectOption}
+
         />
       ))}
     </div>
@@ -482,6 +484,7 @@ function IndicatorCategoriesList({ categories, onSelectOption }) {
 
 function IndicatorCategoryItem({ category, isOpen, onToggle, onSelectOption }) {
   const IconComponent = CATEGORY_ICON_MAP[category.icon] ?? BarChart3;
+
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -496,6 +499,7 @@ function IndicatorCategoryItem({ category, isOpen, onToggle, onSelectOption }) {
             <IconComponent className="h-5 w-5" />
           </span>
           <span className="text-sm font-semibold text-slate-800">{category.label}</span>
+
         </span>
         <ChevronDown
           className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
@@ -993,6 +997,7 @@ function ChartRenderer({ chartType, data, series }) {
 export default function DashboardPage() {
   const [openSection, setOpenSection] = useState('operativos');
   const [activeOptionId, setActiveOptionId] = useState(null);
+
 
   const areasQuery = useQuery({
     queryKey: ['areas'],
