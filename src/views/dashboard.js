@@ -1088,6 +1088,7 @@ function initAccordionControls(container) {
       applyState();
     });
   });
+}
 
   applyState();
 }
@@ -1156,8 +1157,7 @@ function initDirectionControls(container) {
         chevron.classList.toggle('rotate-180', isOpen);
       }
     });
-  });
-}
+  };
 
 function initOptionModals(container) {
   container.querySelectorAll('[data-option-button]').forEach(button => {
@@ -1241,6 +1241,7 @@ export async function renderDashboard(container) {
   initAccordionControls(container);
   initGroupControls(container);
   initOptionModals(container);
+
 
   const directionsContainer = container.querySelector('[data-directions-container]');
   if (directionsContainer) {
