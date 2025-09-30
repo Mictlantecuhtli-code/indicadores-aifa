@@ -1023,7 +1023,7 @@ function initAccordionControls(container) {
       openId = openId === id ? null : id;
       applyState();
     });
-  });
+  };
 
   applyState();
 }
@@ -1092,7 +1092,6 @@ function initDirectionControls(container) {
       }
     });
   });
-}
 
 function buildAreaTree(areas) {
   const byParent = new Map();
@@ -1129,6 +1128,7 @@ export async function renderDashboard(container) {
     initAccordionControls(container);
     initGroupControls(container);
     initIndicatorOptionHandlers(container);
+
     initDirectionControls(container);
   } catch (error) {
     console.error(error);
