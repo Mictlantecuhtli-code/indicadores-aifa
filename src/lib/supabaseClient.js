@@ -211,6 +211,22 @@ export async function getIndicators() {
   return [];
 }
 
+export async function getAreas() {
+  const { data, error } = await supabase
+    .from('areas')
+    .select('id,nombre,clave,color_hex,parent_area_id')
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
   const relations = [
