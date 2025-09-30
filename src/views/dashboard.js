@@ -1157,7 +1157,8 @@ function initDirectionControls(container) {
         chevron.classList.toggle('rotate-180', isOpen);
       }
     });
-  };
+  });
+}
 
 function initOptionModals(container) {
   container.querySelectorAll('[data-option-button]').forEach(button => {
