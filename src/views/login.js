@@ -76,8 +76,17 @@ export function renderLogin(container) {
                       autocomplete="current-password"
                       class="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm text-slate-700 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
                     />
+                    <button
+                      type="button"
+                      id="toggle-password"
+                      class="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition"
+                      aria-label="Mostrar contraseña"
+                    >
+                      <i class="fa-solid fa-eye" id="eye-icon"></i>
+                    </button>
                   </div>
                 </div>
+                
                 <div class="flex items-center justify-between text-sm">
                   <label class="flex items-center gap-2 text-slate-500">
                     <input
