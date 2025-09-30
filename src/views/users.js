@@ -1,4 +1,4 @@
-import { getAllUsers, updateUser, deactivateUser, assignUserToArea, getAreas } from '../services/supabaseClient.js';
+import { getAllUsers, updateUser, deactivateUser, assignUserToArea, removeUserFromArea, getAreas } from '../services/supabaseClient.js';
 import { formatDate } from '../utils/formatters.js';
 import { showToast, renderLoading, renderError } from '../ui/feedback.js';
 
@@ -540,4 +540,26 @@ function initializeEventListeners() {
       });
     }
   }
+// Remover área (AGREGAR ESTE CÓDIGO)
+    document.querySelectorAll('[data-action="remove-area"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const usuarioId = e.currentTarget.dataset.usuarioId;
+        const areaId = e.currentTarget.dataset.areaId;
+
+        if (confirm('¿Está seguro de remover esta área del usuario?')) {
+          try {
+            await removeUserFromArea(usuarioId, areaId);
+            showToast('Área removida correctamente');
+            modalContainer.innerHTML = '';
+            currentUsers = await getAllUsers();
+            tableBody.innerHTML = buildUsersTable(currentUsers);
+            bindTableActions();
+          } catch (error) {
+            console.error(error);
+            showToast('No fue posible remover el área', { type: 'error' });
+          }
+        }
+      });
+    });
+  } // ← Este es el cierre de bindModalActions
 }
