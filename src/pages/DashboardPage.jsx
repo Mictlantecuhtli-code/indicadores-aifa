@@ -146,6 +146,8 @@ function IndicatorButton({ option, theme, onNavigate }) {
       type="button"
       onClick={() => assigned && onNavigate(option)}
       disabled={!assigned}
+      title={option.templateLabel}
+
       className={classNames(
         'flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
         assigned ? theme.option.idle : 'border-dashed border-slate-200 bg-white/60 text-slate-400 cursor-not-allowed',
@@ -180,7 +182,7 @@ function IndicatorButton({ option, theme, onNavigate }) {
 function CategoryCard({ category, onNavigate }) {
   const theme = PALETTES[category.palette] ?? PALETTES.slate;
   const CardIcon = CARD_ICON_MAP[category.icon] ?? BarChart3;
-  const assignedCount = category.options.filter(option => option.indicator).length;
+  const assignedCount = category.options.length;
 
   return (
     <div className={classNames('overflow-hidden rounded-2xl border bg-white shadow-sm', theme.border)}>

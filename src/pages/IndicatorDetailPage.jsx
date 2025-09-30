@@ -464,8 +464,13 @@ export default function IndicatorDetailPage() {
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-widest text-slate-400">Indicador</p>
             <h1 className="text-2xl font-bold text-slate-900">{indicator.nombre}</h1>
-            <p className="text-sm text-slate-500">{assignment.option.label}</p>
-            {indicator.descripcion && <p className="max-w-2xl text-sm text-slate-500">{indicator.descripcion}</p>}
+            <p className="text-sm text-slate-500">
+              {assignment.option.subtitle ?? assignment.option.templateLabel}
+            </p>
+            {indicator.descripcion && (
+              <p className="max-w-2xl text-sm text-slate-500">{indicator.descripcion}</p>
+            )}
+
           </div>
           <div className="rounded-2xl bg-aifa-blue/10 px-4 py-3 text-right">
             <p className="text-xs uppercase tracking-widest text-aifa-blue">Unidad</p>

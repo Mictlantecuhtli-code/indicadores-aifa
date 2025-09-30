@@ -44,18 +44,31 @@ export function useIndicatorAssignments() {
             });
           });
 
+          const indicator = indicatorMatch?.record ?? null;
+
           return {
             ...option,
-            indicator: indicatorMatch?.record ?? null
+            templateLabel: option.label,
+            label: indicator?.nombre ?? option.label,
+            subtitle: indicator?.descripcion ?? option.label,
+            indicator
           };
         });
 
+        const assignedOptions = options.filter(item => item.indicator);
+
+        if (!assignedOptions.length) {
+          return null;
+        }
+
         return {
           ...category,
-          options
+          options: assignedOptions
         };
       })
-    }));
+        .filter(Boolean)
+    }))
+      .filter(section => section.categories.length);
   }, [indicatorsIndex]);
 
   const optionIndex = useMemo(() => {
