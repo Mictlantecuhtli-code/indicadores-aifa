@@ -26,7 +26,6 @@ function normalizeStatus(value) {
     ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     : text;
 }
-
 function normalizeMeasurement(record) {
   if (!record) return record;
   return {
@@ -211,9 +210,18 @@ export async function getIndicators() {
   return [];
 }
 
+export async function getIndicators() {
+  return fetchFromRelations(['v_indicadores_area', 'vw_indicadores_area', 'vw_indicadores_detalle'], relation =>
+    supabase
+      .from(relation)
+      .select('*')
+      .order('area_nombre', { ascending: true })
+      .order('nombre', { ascending: true })
+  );
+}
+
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
-
   const relations = [
     'v_mediciones_historico',
     'v_mediciones_historico_v2',
