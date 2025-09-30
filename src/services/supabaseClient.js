@@ -104,7 +104,7 @@ export async function signInWithEmail({ email, password }) {
   
   // 3. Obtener áreas y permisos del usuario
   const { data: usuariosAreas, error: areasError } = await supabase
-    .from('usuarios_areas')
+    .from('usuario_areas')
     .select('rol, puede_capturar, puede_editar, puede_eliminar, estado, areas(id, nombre)')
     .eq('id', userId)
     .eq('estado', 'ACTIVO');
