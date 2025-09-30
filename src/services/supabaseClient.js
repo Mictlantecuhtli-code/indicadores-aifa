@@ -454,4 +454,169 @@ export async function getUsers() {
   }
 
   return [];
+  // ============================================
+// FUNCIONES PARA ADMINISTRACIÓN DE USUARIOS
+// ============================================
+
+/**
+ * Obtener todos los usuarios con su perfil y áreas
+ */
+export async function getAllUsers() {
+  // 1. Obtener perfiles
+  const { data: perfiles, error: perfilesError } = await supabase
+    .from('perfiles')
+    .select('id, nombre_completo, puesto, rol_principal, email, telefono, estado')
+    .order('nombre_completo', { ascending: true });
+
+  if (perfilesError) throw perfilesError;
+
+  // 2. Obtener áreas asignadas por usuario
+  const { data: usuariosAreas, error: areasError } = await supabase
+    .from('usuario_areas')
+    .select(`
+      usuario_id,
+      rol,
+      puede_capturar,
+      puede_editar,
+      puede_eliminar,
+      estado,
+      areas(id, nombre)
+    `)
+    .eq('estado', 'ACTIVO');
+
+  if (areasError) {
+    console.error('Error obteniendo áreas:', areasError);
+  }
+
+  // 3. Combinar información
+  const usuarios = perfiles.map(perfil => {
+    const areasUsuario = (usuariosAreas || []).filter(ua => ua.usuario_id === perfil.id);
+    return {
+      ...perfil,
+      areas: areasUsuario,
+      areas_count: areasUsuario.length,
+      permisos: {
+        puede_capturar: areasUsuario.some(ua => ua.puede_capturar),
+        puede_editar: areasUsuario.some(ua => ua.puede_editar),
+        puede_eliminar: areasUsuario.some(ua => ua.puede_eliminar)
+      }
+    };
+  });
+
+  return usuarios;
+}
+
+/**
+ * Crear nuevo usuario
+ */
+export async function createUser({ email, password, nombre_completo, puesto, rol_principal, telefono }) {
+  // 1. Crear usuario en Supabase Auth (requiere permisos de admin)
+  // NOTA: Esto normalmente se hace desde una función del servidor (Edge Function)
+  // Por ahora solo creamos el perfil, el admin debe crear el usuario Auth manualmente
+  
+  const { data, error } = await supabase
+    .from('perfiles')
+    .insert({
+      email,
+      nombre_completo,
+      puesto,
+      rol_principal,
+      telefono,
+      estado: 'ACTIVO'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Actualizar usuario
+ */
+export async function updateUser(userId, updates) {
+  const { data, error } = await supabase
+    .from('perfiles')
+    .update(updates)
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Desactivar usuario
+ */
+export async function deactivateUser(userId) {
+  const { data, error } = await supabase
+    .from('perfiles')
+    .update({ estado: 'INACTIVO' })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Asignar área a usuario
+ */
+export async function assignUserToArea({ 
+  usuario_id, 
+  area_id, 
+  rol, 
+  puede_capturar = false, 
+  puede_editar = false, 
+  puede_eliminar = false 
+}) {
+  const { data, error } = await supabase
+    .from('usuario_areas')
+    .insert({
+      usuario_id,
+      area_id,
+      rol,
+      puede_capturar,
+      puede_editar,
+      puede_eliminar,
+      estado: 'ACTIVO'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Actualizar permisos de usuario en área
+ */
+export async function updateUserAreaPermissions(id, permissions) {
+  const { data, error } = await supabase
+    .from('usuario_areas')
+    .update(permissions)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Remover usuario de área
+ */
+export async function removeUserFromArea(id) {
+  const { data, error } = await supabase
+    .from('usuario_areas')
+    .update({ estado: 'INACTIVO' })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
 }
