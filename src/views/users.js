@@ -257,7 +257,8 @@ function buildAreasModal(user) {
                   type="button"
                   class="ml-4 text-red-600 hover:text-red-700"
                   data-action="remove-area"
-                  data-area-assignment-id="${ua.id}"
+                  data-usuario-id="${user.id}"
+                  data-area-id="${ua.area_id}"
                   title="Remover área"
                 >
                   <i class="fa-solid fa-trash"></i>
