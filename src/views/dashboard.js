@@ -1091,6 +1091,10 @@ function initAccordionControls(container) {
   applyState();
 }
 
+  applyState();
+}
+
+
 function initGroupControls(container) {
   const groups = new Map();
 
@@ -1120,6 +1124,7 @@ function initGroupControls(container) {
       if (chevron) {
         chevron.classList.toggle('rotate-180', isOpen);
       }
+
     });
   };
 
@@ -1240,7 +1245,6 @@ export async function renderDashboard(container) {
   initAccordionControls(container);
   initGroupControls(container);
   initOptionModals(container);
-
 
   const directionsContainer = container.querySelector('[data-directions-container]');
   if (directionsContainer) {
