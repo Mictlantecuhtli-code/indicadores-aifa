@@ -1091,10 +1091,6 @@ function initAccordionControls(container) {
   applyState();
 }
 
-  applyState();
-}
-
-
 function initGroupControls(container) {
   const groups = new Map();
 
