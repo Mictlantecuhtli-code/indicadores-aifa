@@ -41,7 +41,7 @@ function buildHistoryTable(history) {
                   <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
                   <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
                   <td class="px-4 py-3 text-slate-500">${item.escenario ?? '—'}</td>
-                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.creado_en)}</td>
+                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_captura ?? item.creado_en)}</td>
                 </tr>
               `;
             })
@@ -79,7 +79,7 @@ function buildTargetsTable(targets) {
                   <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
                   <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
                   <td class="px-4 py-3 text-slate-500">${item.escenario ?? '—'}</td>
-                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_ultima_edicion)}</td>
+                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_actualizacion ?? item.fecha_ultima_edicion)}</td>
                 </tr>
               `;
             })
@@ -148,10 +148,10 @@ export async function renderCapture(container) {
                   <label class="flex flex-col gap-1 text-sm text-slate-600">
                     Escenario
                     <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      <option value="real">Real</option>
-                      <option value="bajo">Bajo</option>
-                      <option value="medio">Medio</option>
-                      <option value="alto">Alto</option>
+                      <option value="REAL">Real</option>
+                      <option value="BAJO">Bajo</option>
+                      <option value="MEDIO">Medio</option>
+                      <option value="ALTO">Alto</option>
                     </select>
                   </label>
                 </div>
@@ -190,9 +190,9 @@ export async function renderCapture(container) {
                   <label class="flex flex-col gap-1 text-sm text-slate-600">
                     Escenario
                     <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      <option value="bajo">Bajo</option>
-                      <option value="medio">Medio</option>
-                      <option value="alto">Alto</option>
+                      <option value="BAJO">Bajo</option>
+                      <option value="MEDIO">Medio</option>
+                      <option value="ALTO">Alto</option>
                     </select>
                   </label>
                 </div>
@@ -264,14 +264,14 @@ export async function renderCapture(container) {
       submit.disabled = true;
       submit.classList.add('opacity-70');
       const formData = new FormData(form);
-      const scenario = formData.get('scenario');
+      const scenario = (formData.get('scenario') ?? '').toString().toUpperCase();
 
       const payload = {
         indicador_id: state.indicatorId,
         anio: state.year,
         mes: Number(formData.get('month')),
         valor: Number(formData.get('value')),
-        escenario: scenario === 'real' ? null : scenario
+        escenario: scenario || null
       };
 
       try {
@@ -300,7 +300,7 @@ export async function renderCapture(container) {
         indicador_id: state.indicatorId,
         anio: state.year,
         mes: Number(formData.get('month')),
-        escenario: formData.get('scenario'),
+        escenario: (formData.get('scenario') ?? '').toString().toUpperCase(),
         valor: Number(formData.get('value'))
       };
 
