@@ -11,34 +11,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script>
-      window.tailwind = {
-        config: {
-          theme: {
-            extend: {
-              colors: {
-                primary: {
-                  50: '#edf5ff',
-                  100: '#cfe1ff',
-                  200: '#9bbdff',
-                  300: '#6798ff',
-                  400: '#3474ff',
-                  500: '#0a52ff',
-                  600: '#0841cc',
-                  700: '#063199',
-                  800: '#042066',
-                  900: '#021033'
-                }
-              },
-              fontFamily: {
-                sans: ['"Nunito"', '"Inter"', 'system-ui', 'sans-serif']
-              }
-            }
-          }
-        }
-      };
-    </script>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <!-- ❌ REMOVIDO: script de configuración de Tailwind CDN -->
+    <!-- ❌ REMOVIDO: script src="https://cdn.tailwindcss.com" -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -54,7 +28,7 @@
     <noscript class="block text-center p-4 bg-red-100 text-red-600">
       Es necesario habilitar JavaScript para utilizar el sistema de indicadores.
     </noscript>
-    <div id="app" class="min-h-screen"></div>
-    <script type="module" src="./src/main.js"></script>
+    <div id="root" class="min-h-screen"></div>
+    <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>
