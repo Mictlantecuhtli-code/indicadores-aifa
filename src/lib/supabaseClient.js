@@ -213,7 +213,6 @@ export async function getIndicators() {
 
 export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   if (!indicadorId) return [];
-
   const relations = [
     'v_mediciones_historico',
     'v_mediciones_historico_v2',
