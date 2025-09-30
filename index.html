@@ -11,8 +11,39 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <!-- ❌ REMOVIDO: script de configuración de Tailwind CDN -->
-    <!-- ❌ REMOVIDO: script src="https://cdn.tailwindcss.com" -->
+    <!-- Configuración de Tailwind CDN con colores AIFA -->
+    <script>
+      window.tailwind = {
+        config: {
+          theme: {
+            extend: {
+              colors: {
+                primary: {
+                  50: '#edf5ff',
+                  100: '#cfe1ff',
+                  200: '#9bbdff',
+                  300: '#6798ff',
+                  400: '#3474ff',
+                  500: '#0a52ff',
+                  600: '#0841cc',
+                  700: '#063199',
+                  800: '#042066',
+                  900: '#021033'
+                },
+                'aifa-blue': '#1E3A8A',
+                'aifa-light': '#3B82F6',
+                'aifa-green': '#047857',
+                'aifa-amber': '#F59E0B'
+              },
+              fontFamily: {
+                sans: ['"Nunito"', '"Inter"', 'system-ui', 'sans-serif']
+              }
+            }
+          }
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
