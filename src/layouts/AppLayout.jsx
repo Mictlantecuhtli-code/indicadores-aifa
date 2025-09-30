@@ -4,7 +4,7 @@ import { BarChart3, ListChecks, ClipboardPen, LogOut, Users, Presentation, Menu 
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navigation = [
-  { name: 'Panel directivos', to: '/panel-directivos', icon: BarChart3, exact: true },
+  { name: 'Panel directivos', to: '/panel-directivos', icon: BarChart3 },
   { name: 'Visualización', to: '/visualizacion', icon: Presentation },
   { name: 'Consulta de indicadores', to: '/indicadores', icon: ListChecks },
   { name: 'Captura de indicadores', to: '/captura', icon: ClipboardPen },
