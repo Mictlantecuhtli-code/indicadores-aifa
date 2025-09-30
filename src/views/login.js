@@ -58,7 +58,7 @@ export function renderLogin(container) {
                       required
                       autocomplete="email"
                       class="w-full rounded-2xl border border-slate-200 bg-white px-11 py-3 text-sm text-slate-700 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-4 focus:ring-primary-100"
-                      placeholder="correo@aifa.gob.mx"
+                      placeholder="correo@aifa.aero"
                     />
                   </div>
                 </div>

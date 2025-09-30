@@ -470,6 +470,7 @@ export default function IndicatorDetailPage() {
             {indicator.descripcion && (
               <p className="max-w-2xl text-sm text-slate-500">{indicator.descripcion}</p>
             )}
+
           </div>
           <div className="rounded-2xl bg-aifa-blue/10 px-4 py-3 text-right">
             <p className="text-xs uppercase tracking-widest text-aifa-blue">Unidad</p>
