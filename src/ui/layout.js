@@ -1,11 +1,43 @@
 import { getSession } from '../state/session.js';
+import { getUserRole } from '../state/session.js';
 
+function getFilteredNavItems() {
+  const userRole = getUserRole();
+  if (!userRole) return NAV_ITEMS; // Si no hay rol, mostrar todo (fallback)
+  
+  return NAV_ITEMS.filter(item => item.roles.includes(userRole));
+}
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Panel Directivos', icon: 'fa-chart-line' },
-  { id: 'visualizacion', label: 'Visualización de Indicadores', icon: 'fa-chart-area' },
-  { id: 'indicators', label: 'Consulta de Indicadores', icon: 'fa-table' },
-  { id: 'capture', label: 'Captura de Indicadores', icon: 'fa-pen-to-square' },
-  { id: 'users', label: 'Administración de Usuarios', icon: 'fa-users-gear' }
+  { 
+    id: 'dashboard', 
+    label: 'Panel Directivos', 
+    icon: 'fa-chart-line',
+    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
+  },
+  { 
+    id: 'visualizacion', 
+    label: 'Visualización de Indicadores', 
+    icon: 'fa-chart-area',
+    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
+  },
+  { 
+    id: 'indicators', 
+    label: 'Consulta de Indicadores', 
+    icon: 'fa-table',
+    roles: ['SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Director NO puede ver
+  },
+  { 
+    id: 'capture', 
+    label: 'Captura de Indicadores', 
+    icon: 'fa-pen-to-square',
+    roles: ['SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Director NO puede ver
+  },
+  { 
+    id: 'users', 
+    label: 'Administración de Usuarios', 
+    icon: 'fa-users-gear',
+    roles: ['ADMIN'] // Solo admin puede ver
+  }
 ];
 
 export function renderLayout(content) {
@@ -22,7 +54,7 @@ export function renderLayout(content) {
             </div>
           </div>
           <nav class="hidden items-center gap-2 lg:flex" id="main-menu">
-            ${NAV_ITEMS.map(
+            ${getFilteredNavItems().map(
               item => `
                 <a
                   href="#${item.id}"
@@ -60,7 +92,7 @@ export function renderLayout(content) {
         </div>
         <div class="border-t border-slate-200 bg-white px-4 py-3 shadow-inner lg:hidden" id="mobile-menu" hidden>
           <nav class="flex flex-col gap-2">
-            ${NAV_ITEMS.map(
+            ${getFilteredNavItems().map(
               item => `
                 <a
                   href="#${item.id}"
