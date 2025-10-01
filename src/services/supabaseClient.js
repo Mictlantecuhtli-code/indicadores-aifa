@@ -675,7 +675,10 @@ export async function getIndicatorsByUserAreas(userId, userRole) {
   
   try {
     // Si es administrador, devolver todos los indicadores
-    if (userRole === 'administrador' || userRole === 'admin') {
+    const esAdmin = userRole?.toLowerCase().includes('admin');
+    console.log('getIndicatorsByUserAreas - ¿Es admin?', esAdmin, { userRole });
+
+    if (esAdmin) {
       const { data, error } = await supabase
         .from('indicadores')
         .select('*, areas:area_id(*)')
