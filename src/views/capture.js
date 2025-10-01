@@ -168,7 +168,7 @@ export async function renderCapture(container) {
         <!-- Selector de área e indicador -->
         <div class="rounded-2xl bg-white p-6 shadow">
           <div class="flex items-center gap-2 mb-4">
-            <i class="fa-solid fa-filter text-emerald-600"></i>
+            <i class="fa-solid fa-filter text-blue-600"></i>
             <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-600">
               Seleccione indicador a capturar
             </h3>
@@ -181,7 +181,7 @@ export async function renderCapture(container) {
               </span>
               <select 
                 id="area-select" 
-                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
                 <option value="">Seleccione un área...</option>
                 ${currentAreas.map(ua => `
@@ -196,7 +196,7 @@ export async function renderCapture(container) {
               </span>
               <select 
                 id="indicator-select" 
-                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 disabled
               >
                 <option value="">Primero seleccione un área...</option>
@@ -211,7 +211,7 @@ export async function renderCapture(container) {
                 min="2022"
                 max="2100"
                 value="${currentYear}"
-                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </label>
           </div>
@@ -330,7 +330,7 @@ async function loadIndicatorContent(container, indicatorId) {
     }
 
     const [history, targets] = await Promise.all([
-      getIndicatorHistory(indicatorId, { limit: 24 }),
+      getIndicatorHistory(indicatorId, { limit: 12, year: currentYear }),
       getIndicatorTargets(indicatorId, { year: currentYear })
     ]);
 
@@ -478,8 +478,8 @@ function initializeFormHandlers(indicatorId, esSubdirector) {
         showToast('Medición registrada correctamente');
         measurementForm.reset();
         
-        // Recargar histórico
-        const history = await getIndicatorHistory(indicatorId, { limit: 24 });
+        // Recargar histórico del año actual
+        const history = await getIndicatorHistory(indicatorId, { limit: 12, year: currentYear });
         historyTable.innerHTML = buildHistoryTable(history);
       } catch (error) {
         console.error(error);
