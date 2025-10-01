@@ -1692,6 +1692,7 @@ function buildDirectionSectionsMarkup(tree) {
   const directions = extractDirectionRoots(tree);
 
   if (!directions.length) {
+
     return `
       <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
         No hay direcciones registradas.
@@ -1700,6 +1701,7 @@ function buildDirectionSectionsMarkup(tree) {
   }
 
   return directions.map(buildDirectionSection).join('');
+
 }
 
 async function renderDirections(container) {
