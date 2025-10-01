@@ -111,8 +111,7 @@ const ACCORDION_SECTIONS = [
     type: 'indicators',
     title: 'Indicadores FBO (Aviación General)',
     iconClass: 'fa-solid fa-plane-circle-check',
-    groupIds: ['fbo-operations', 'fbo-passengers'],
-    includeDirections: true
+    groupIds: ['fbo-operations', 'fbo-passengers']
   }
 ];
 
@@ -1376,106 +1375,11 @@ function buildIndicatorSectionContent(section) {
   `;
 }
 
-function buildDirectionsSectionContent() {
-  return `
-    <div class="space-y-3">
-      <p class="text-sm text-slate-500">
-        Seleccione una dirección para consultar sus áreas dependientes.
-      </p>
-      <div data-directions-container class="space-y-3"></div>
-
-    </div>
-  `;
-}
-
-function buildDirectionChildrenList(children) {
-  if (!children?.length) return '';
-  return `
-    <ul class="space-y-2">
-      ${children
-        .map(child => `
-          <li class="space-y-2">
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-              <span>${escapeHtml(child.nombre ?? '—')}</span>
-              <span
-                class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-                style="${getBadgeStyles(child.color_hex)}"
-              >
-                ${escapeHtml(child.clave ?? '—')}
-              </span>
-            </div>
-            ${child.children?.length
-              ? `<div class="ml-4 border-l border-slate-200 pl-4">${buildDirectionChildrenList(child.children)}</div>`
-              : ''}
-          </li>
-        `)
-        .join('')}
-    </ul>
-  `;
-}
-
-function buildDirectionItem(area) {
-  const hasChildren = Array.isArray(area.children) && area.children.length > 0;
-  return `
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2 ${
-          hasChildren ? 'hover:bg-slate-50' : 'cursor-default'
-        }"
-        data-direction-button
-        data-direction-id="${area.id}"
-        ${hasChildren ? 'aria-expanded="false"' : 'aria-disabled="true"'}
-      >
-        <span class="flex items-center gap-3">
-          <span class="text-sm font-semibold text-slate-800">${escapeHtml(area.nombre ?? '—')}</span>
-          <span
-            class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-            style="${getBadgeStyles(area.color_hex)}"
-          >
-            ${escapeHtml(area.clave ?? '—')}
-          </span>
-        </span>
-        ${
-          hasChildren
-            ? '<i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-direction-chevron></i>'
-            : ''
-        }
-      </button>
-      ${
-        hasChildren
-          ? `<div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-direction-panel="${area.id}" hidden>${buildDirectionChildrenList(
-              area.children
-            )}</div>`
-          : ''
-      }
-    </div>
-  `;
-}
-
-function buildDirectionsMarkup(tree) {
-  if (!tree?.length) {
-    return `
-      <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        No hay direcciones registradas.
-      </div>
-    `;
-  }
-
-  return `
-    <div class="space-y-3">
-      ${tree.map(buildDirectionItem).join('')}
-    </div>
-  `;
-}
-
 function buildSectionsMarkup() {
   return ACCORDION_SECTIONS.map(section => {
     const isInitiallyOpen = section.id === DEFAULT_ACCORDION_ID;
-    const content =
-      section.type === 'indicators'
-        ? buildIndicatorSectionContent(section)
-        : buildDirectionsSectionContent(section);
+    const content = buildIndicatorSectionContent(section);
+
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
@@ -1521,6 +1425,7 @@ function buildDashboardMarkup() {
       </header>
       <div class="space-y-5" data-accordion-root data-accordion-default="${DEFAULT_ACCORDION_ID}">
         ${buildSectionsMarkup()}
+        <div class="space-y-5" data-direction-sections></div>
       </div>
     </div>
   `;
@@ -1611,29 +1516,6 @@ function initGroupControls(container) {
   });
 }
 
-function initDirectionControls(container) {
-  container.querySelectorAll('[data-direction-button]').forEach(button => {
-    const directionId = button.dataset.directionId;
-    if (!directionId) return;
-    const panel = container.querySelector(`[data-direction-panel="${directionId}"]`);
-    if (!panel) return;
-    let isOpen = false;
-    button.addEventListener('click', () => {
-      isOpen = !isOpen;
-      button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      if (isOpen) {
-        panel.removeAttribute('hidden');
-      } else {
-        panel.setAttribute('hidden', '');
-      }
-      const chevron = button.querySelector('[data-direction-chevron]');
-      if (chevron) {
-        chevron.classList.toggle('rotate-180', isOpen);
-      }
-    });
-  });
-}
-
 function initOptionModals(container) {
   container.querySelectorAll('[data-option-button]').forEach(button => {
     button.addEventListener('click', async () => {
@@ -1687,6 +1569,109 @@ function buildAreaTree(areas) {
   return roots;
 }
 
+function buildDirectionPanelContent(direction) {
+  const children = Array.isArray(direction?.children) ? direction.children : [];
+  if (!children.length) {
+    return `
+      <p class="text-sm text-slate-500">
+        No hay subdirecciones registradas para esta dirección.
+      </p>
+    `;
+  }
+
+  const selectId = `direction-select-${direction.id}`;
+  const optionsMarkup = children
+    .map(child => {
+      const value = child.id != null ? String(child.id) : '';
+      const parts = [];
+      if (child.clave) {
+        parts.push(child.clave);
+      }
+      if (child.nombre) {
+        parts.push(child.nombre);
+      }
+      const label = parts.length ? parts.join(' - ') : '—';
+      return `
+        <option value="${escapeHtml(value)}">${escapeHtml(label)}</option>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="space-y-3">
+      <label class="block text-sm font-medium text-slate-700" for="${escapeHtml(selectId)}">
+        Subdirecciones
+      </label>
+      <div class="relative">
+        <select
+          id="${escapeHtml(selectId)}"
+          class="block w-full appearance-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-aifa-light focus:outline-none focus:ring-2 focus:ring-aifa-light"
+        >
+          <option value="">Seleccione una subdirección</option>
+          ${optionsMarkup}
+        </select>
+        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+          <i class="fa-solid fa-chevron-down h-4 w-4"></i>
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+function buildDirectionSection(direction) {
+  const sectionId = `direction-${direction.id}`;
+  const badgeMarkup = direction?.clave
+    ? `
+        <span
+          class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
+          style="${getBadgeStyles(direction.color_hex)}"
+        >
+          ${escapeHtml(direction.clave)}
+        </span>
+      `
+    : '';
+
+  return `
+    <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${escapeHtml(
+      sectionId
+    )}">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        data-accordion-button
+        data-accordion-id="${escapeHtml(sectionId)}"
+        aria-expanded="false"
+      >
+        <div class="flex items-start gap-3">
+          <span class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <i class="fa-solid fa-sitemap h-6 w-6"></i>
+          </span>
+          <div class="space-y-1">
+            <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(direction?.nombre ?? '—')}</h2>
+            ${badgeMarkup}
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-accordion-chevron></i>
+      </button>
+      <div class="border-t border-slate-100 bg-slate-50/60 px-6 py-5" data-accordion-panel="${escapeHtml(sectionId)}" hidden>
+        ${buildDirectionPanelContent(direction)}
+      </div>
+    </section>
+  `;
+}
+
+function buildDirectionSectionsMarkup(tree) {
+  if (!tree?.length) {
+    return `
+      <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+        No hay direcciones registradas.
+      </div>
+    `;
+  }
+
+  return tree.map(buildDirectionSection).join('');
+}
+
 async function renderDirections(container) {
   if (!container) return;
   renderLoading(container, 'Cargando direcciones...');
@@ -1694,8 +1679,7 @@ async function renderDirections(container) {
   try {
     const areas = await getAreas();
     const tree = buildAreaTree(areas ?? []);
-    container.innerHTML = buildDirectionsMarkup(tree);
-    initDirectionControls(container);
+    container.innerHTML = buildDirectionSectionsMarkup(tree);
   } catch (error) {
     console.error(error);
     renderError(container, error);
@@ -1707,12 +1691,13 @@ export async function renderDashboard(container) {
 
   container.innerHTML = buildDashboardMarkup();
 
-  initAccordionControls(container);
   initGroupControls(container);
   initOptionModals(container);
 
-  const directionsContainer = container.querySelector('[data-directions-container]');
+  const directionsContainer = container.querySelector('[data-direction-sections]');
   if (directionsContainer) {
     await renderDirections(directionsContainer);
   }
+
+  initAccordionControls(container);
 }
