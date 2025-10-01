@@ -1635,7 +1635,6 @@ function buildDirectionPanelContent(direction) {
 
 function buildDirectionSection(direction) {
   const sectionId = `direction-${direction.id}`;
-
   return `
     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${escapeHtml(
       sectionId
