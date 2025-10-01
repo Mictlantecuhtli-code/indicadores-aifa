@@ -1576,16 +1576,9 @@ function extractDirectionRoots(tree) {
 
 function buildSubdirectionItemMarkup(child) {
   if (!child) return '';
-
-  const labelParts = [];
-  if (child.clave) {
-    labelParts.push(child.clave);
-  }
-  if (child.nombre) {
-    labelParts.push(child.nombre);
-  }
-
-  const label = labelParts.length ? labelParts.join(' - ') : '—';
+  const label = child?.nombre?.trim?.()
+    ? child.nombre.trim()
+    : child?.clave?.trim?.() || '—';
 
   const dataAttributes = [];
   if (child.id != null) {
@@ -1635,6 +1628,7 @@ function buildDirectionPanelContent(direction) {
 
 function buildDirectionSection(direction) {
   const sectionId = `direction-${direction.id}`;
+
   return `
     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${escapeHtml(
       sectionId
