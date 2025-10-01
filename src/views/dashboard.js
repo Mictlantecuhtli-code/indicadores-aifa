@@ -394,29 +394,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function normalizeHex(color) {
-  if (typeof color !== 'string') return null;
-  const trimmed = color.trim();
-  if (!trimmed) return null;
-  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  if (/^#([0-9a-fA-F]{3}){1,2}$/.test(prefixed)) {
-    if (prefixed.length === 4) {
-      return `#${prefixed[1]}${prefixed[1]}${prefixed[2]}${prefixed[2]}${prefixed[3]}${prefixed[3]}`;
-    }
-    return prefixed;
-  }
-  return null;
-}
-
-function getBadgeStyles(color) {
-  const normalized = normalizeHex(color) ?? '#1e293b';
-  const r = parseInt(normalized.slice(1, 3), 16);
-  const g = parseInt(normalized.slice(3, 5), 16);
-  const b = parseInt(normalized.slice(5, 7), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  const textColor = luminance > 0.65 ? '#0f172a' : '#ffffff';
-  return `background-color: ${normalized}; color: ${textColor};`;
-}
 function buildSummary(realData, type, scenario) {
   if (!realData || !realData.history.length) {
     return {
@@ -1658,17 +1635,6 @@ function buildDirectionPanelContent(direction) {
 
 function buildDirectionSection(direction) {
   const sectionId = `direction-${direction.id}`;
-  const badgeMarkup = direction?.clave
-    ? `
-        <span
-          class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-          style="${getBadgeStyles(direction.color_hex)}"
-        >
-          ${escapeHtml(direction.clave)}
-        </span>
-      `
-    : '';
-
   return `
     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${escapeHtml(
       sectionId
@@ -1686,7 +1652,6 @@ function buildDirectionSection(direction) {
           </span>
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(direction?.nombre ?? '—')}</h2>
-            ${badgeMarkup}
           </div>
         </div>
         <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-accordion-chevron></i>
