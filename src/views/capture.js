@@ -105,7 +105,7 @@ export async function renderCapture(container) {
   
   try {
     const session = getSession();
-    const userId = session?.perfil?.id;
+    const userRole = session?.perfil?.rol_principal;
     
     if (!userId) {
       container.innerHTML = `
@@ -117,7 +117,7 @@ export async function renderCapture(container) {
     }
 
     // Cargar áreas donde el usuario puede capturar
-    currentAreas = await getUserCaptureAreas(userId);
+    currentAreas = await getUserCaptureAreas(userId, userRole);
     
     if (!currentAreas.length) {
       container.innerHTML = `
@@ -241,8 +241,11 @@ function initializeCaptureListeners(userId) {
 
     try {
       // Cargar indicadores del área
-      const allIndicators = await getIndicatorsByUserAreas(userId);
-      currentIndicators = allIndicators.filter(ind => ind.area_id === selectedAreaId);
+    const session = getSession();
+    const userRole = session?.perfil?.rol_principal;
+    const allIndicators = await getIndicatorsByUserAreas(userId, userRole);
+    currentIndicators = allIndicators.filter(ind => ind.area_id === selectedAreaId);
+    
       
       if (!currentIndicators.length) {
         indicatorSelect.innerHTML = '<option value="">No hay indicadores en esta área</option>';
