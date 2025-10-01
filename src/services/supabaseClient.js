@@ -620,7 +620,7 @@ export async function removeUserFromArea(usuario_id, area_id) {
 
   if (error) throw error;
   return data;
-
+}
   /**
  * Obtener indicadores que el usuario puede capturar según sus áreas asignadas
  */
@@ -669,5 +669,3 @@ export async function getUserCaptureAreas(userId) {
   if (error) throw error;
   return data || [];
 }
-}
-
