@@ -465,11 +465,15 @@ function initializeFormHandlers(indicatorId, esSubdirector) {
 
       const formData = new FormData(measurementForm);
 
+      const session = getSession();
+      const userId = session?.user?.id;
+
       const payload = {
         indicador_id: indicatorId,
         anio: currentYear,
         mes: Number(formData.get('month')),
-        valor: Number(formData.get('value'))
+        valor: Number(formData.get('value')),
+        capturado_por: userId
         // escenario removido - la tabla mediciones no tiene esta columna
       };
 
