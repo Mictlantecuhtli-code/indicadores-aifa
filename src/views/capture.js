@@ -142,17 +142,17 @@ export async function renderCapture(container) {
     container.innerHTML = `
       <div class="space-y-6">
         <!-- Header con año -->
-        <div class="rounded-2xl bg-emerald-600 p-6 text-white shadow-lg">
+        <div class="rounded-2xl bg-blue-600 p-6 text-white shadow-lg">
           <div class="flex items-center justify-between">
             <div>
               <h2 class="text-2xl font-bold">Captura de Mediciones</h2>
-              <p class="mt-1 text-sm text-emerald-100">
+              <p class="mt-1 text-sm text-blue-100">
                 Registre los valores mensuales de los indicadores
               </p>
             </div>
             <div class="rounded-xl bg-white/20 px-6 py-4 text-center backdrop-blur">
               <p class="text-4xl font-bold">${currentYear}</p>
-              <p class="text-xs uppercase tracking-wider text-emerald-100">Año actual</p>
+              <p class="text-xs uppercase tracking-wider text-blue-100">Año actual</p>
             </div>
           </div>
         </div>
@@ -310,6 +310,10 @@ async function loadIndicatorContent(container, indicatorId) {
   container.innerHTML = '<div class="text-center py-8 text-slate-500">Cargando datos del indicador...</div>';
 
   try {
+    const session = getSession();
+    const userRole = session?.perfil?.rol_principal || session?.perfil?.rol || 'usuario';
+    const esSubdirector = userRole?.toLowerCase().includes('subdirector');
+    
     const indicator = currentIndicators.find(ind => ind.id === indicatorId);
     
     if (!indicator) {
@@ -322,8 +326,11 @@ async function loadIndicatorContent(container, indicatorId) {
       getIndicatorTargets(indicatorId, { year: currentYear })
     ]);
 
+    // Construcción dinámica: solo 1 columna si NO es subdirector, 2 columnas si SÍ es
+    const gridClass = esSubdirector ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
+
     container.innerHTML = `
-      <section class="grid gap-6 lg:grid-cols-2">
+      <section class="grid gap-6 ${gridClass}">
         <!-- Formulario de medición -->
         <div class="space-y-4">
           <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -337,25 +344,16 @@ async function loadIndicatorContent(container, indicatorId) {
               </div>
             </div>
             <form id="measurement-form" class="space-y-4">
-              <div class="grid gap-4 md:grid-cols-2">
-                <label class="flex flex-col gap-1 text-sm text-slate-600">
-                  Mes
-                  <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    ${months.map((month) => `
-                      <option value="${month.value}" ${month.value === new Date().getMonth() + 1 ? 'selected' : ''}>
-                        ${month.label}
-                      </option>
-                    `).join('')}
-                  </select>
-                </label>
-                <label class="flex flex-col gap-1 text-sm text-slate-600">
-                  Escenario
-                  <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    <option value="REAL">Real</option>
-                    ${SCENARIOS.map(s => `<option value="${s}">${s}</option>`).join('')}
-                  </select>
-                </label>
-              </div>
+              <label class="flex flex-col gap-1 text-sm text-slate-600">
+                Mes
+                <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  ${months.map((month) => `
+                    <option value="${month.value}" ${month.value === new Date().getMonth() + 1 ? 'selected' : ''}>
+                      ${month.label}
+                    </option>
+                  `).join('')}
+                </select>
+              </label>
               <label class="flex flex-col gap-1 text-sm text-slate-600">
                 Valor ${indicator.unidad_medida ? `(${indicator.unidad_medida})` : ''}
                 <input
@@ -380,7 +378,8 @@ async function loadIndicatorContent(container, indicatorId) {
           </div>
         </div>
 
-        <!-- Formulario de metas -->
+        ${esSubdirector ? `
+        <!-- Formulario de metas (solo para subdirectores) -->
         <div class="space-y-4">
           <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="mb-4 flex items-center gap-3">
@@ -430,10 +429,11 @@ async function loadIndicatorContent(container, indicatorId) {
             <div id="targets-table">${buildTargetsTable(targets)}</div>
           </div>
         </div>
+        ` : ''}
       </section>
     `;
 
-    initializeFormHandlers(indicatorId);
+    initializeFormHandlers(indicatorId, esSubdirector);
   } catch (error) {
     console.error(error);
     container.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar el indicador</div>';
@@ -441,7 +441,7 @@ async function loadIndicatorContent(container, indicatorId) {
   }
 }
 
-function initializeFormHandlers(indicatorId) {
+function initializeFormHandlers(indicatorId, esSubdirector) {
   const measurementForm = document.getElementById('measurement-form');
   const targetForm = document.getElementById('target-form');
   const historyTable = document.getElementById('history-table');
@@ -456,14 +456,13 @@ function initializeFormHandlers(indicatorId) {
       submit.classList.add('opacity-70');
 
       const formData = new FormData(measurementForm);
-      const scenario = (formData.get('scenario') ?? '').toString().toUpperCase();
 
       const payload = {
         indicador_id: indicatorId,
         anio: currentYear,
         mes: Number(formData.get('month')),
         valor: Number(formData.get('value')),
-        escenario: scenario || null
+        escenario: 'REAL' // Siempre REAL para mediciones
       };
 
       try {
@@ -484,8 +483,8 @@ function initializeFormHandlers(indicatorId) {
     });
   }
 
-  // Handler para formulario de metas
-  if (targetForm) {
+  // Handler para formulario de metas (solo si es subdirector)
+  if (targetForm && esSubdirector) {
     targetForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submit = targetForm.querySelector('button[type="submit"]');
