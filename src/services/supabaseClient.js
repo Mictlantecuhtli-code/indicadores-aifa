@@ -686,9 +686,65 @@ export async function addUserArea(userId, areaAssignment) {
   if (!userId) throw new Error('userId es requerido');
   if (!areaAssignment.area_id) throw new Error('area_id es requerido');
 
-  // Obtener el usuario actual para asignado_por
-  const { data: { user } } = await supabase.auth.getUser();
-  
+  // Obtener usuario actual
+  let currentUserId = null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    currentUserId = user?.id || null;
+  } catch (error) {
+    console.warn('No se pudo obtener usuario actual:', error);
+  }
+
+  // 1. Verificar si ya existe una asignación (activa o inactiva)
+  const { data: existing, error: checkError } = await supabase
+    .from('usuario_areas')
+    .select('id, estado')
+    .eq('usuario_id', userId)
+    .eq('area_id', areaAssignment.area_id)
+    .maybeSingle();
+
+  if (checkError) {
+    console.error('Error verificando área existente:', checkError);
+  }
+
+  // 2. Si existe, actualizarla en lugar de insertar
+  if (existing) {
+    const updates = {
+      rol: areaAssignment.rol || null,
+      puede_capturar: areaAssignment.puede_capturar ?? false,
+      puede_editar: areaAssignment.puede_editar ?? false,
+      puede_eliminar: areaAssignment.puede_eliminar ?? false,
+      estado: 'ACTIVO', // Reactivar si estaba inactiva
+      asignado_por: currentUserId
+    };
+
+    const { data, error } = await supabase
+      .from('usuario_areas')
+      .update(updates)
+      .eq('id', existing.id)
+      .select(`
+        id,
+        area_id,
+        rol,
+        puede_capturar,
+        puede_editar,
+        puede_eliminar,
+        estado,
+        areas (
+          id,
+          nombre,
+          clave,
+          color_hex,
+          nivel
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  // 3. Si no existe, insertar nueva
   const payload = {
     usuario_id: userId,
     area_id: areaAssignment.area_id,
@@ -697,7 +753,7 @@ export async function addUserArea(userId, areaAssignment) {
     puede_editar: areaAssignment.puede_editar ?? false,
     puede_eliminar: areaAssignment.puede_eliminar ?? false,
     estado: 'ACTIVO',
-    asignado_por: user?.id || null
+    asignado_por: currentUserId
   };
 
   const { data, error } = await supabase
@@ -721,13 +777,7 @@ export async function addUserArea(userId, areaAssignment) {
     `)
     .single();
 
-  if (error) {
-    // Si el error es de duplicado, intentar actualizar en lugar de insertar
-    if (error.code === '23505') {
-      return updateUserArea(userId, areaAssignment.area_id, areaAssignment);
-    }
-    throw error;
-  }
+  if (error) throw error;
 
   return data;
 }
