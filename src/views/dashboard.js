@@ -7,42 +7,42 @@ const OPTION_BLUEPRINTS = [
     type: 'monthly',
     scenario: null,
     buildLabel: entity =>
-      `Cantidad de ${entity} real mensual del año en curso respecto al mismo periodo del año anterior`
+      `Mensual del año en curso vs. el año anterior`
   },
   {
     id: 'quarterly-yoy',
     type: 'quarterly',
     scenario: null,
     buildLabel: entity =>
-      `Cantidad de ${entity} real trimestral del año en curso respecto al mismo periodo del año anterior`
+      `Trimestral del año en curso vs. el año anterior`
   },
   {
     id: 'annual-yoy',
     type: 'annual',
     scenario: null,
     buildLabel: entity =>
-      `Cantidad de ${entity} real anual del año en curso respecto al mismo periodo del año anterior`
+      `Anual en curso vs. el año anterior`
   },
   {
     id: 'scenario-low',
     type: 'scenario',
     scenario: 'BAJO',
     buildLabel: entity =>
-      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Bajo`
+      `Mensual del año en curso vs. proyección de meta escenario Bajo (PMD)`
   },
   {
     id: 'scenario-mid',
     type: 'scenario',
     scenario: 'MEDIO',
     buildLabel: entity =>
-      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Mediano`
+      `Mensual del año en curso vs. proyección de meta escenario Mediano (PMD)`
   },
   {
     id: 'scenario-high',
     type: 'scenario',
     scenario: 'ALTO',
     buildLabel: entity =>
-      `Cantidad de ${entity} real mensual del año en curso respecto a la proyección de meta escenario Alto`
+      `Mensual del año en curso vs. proyección de meta escenario Alto (PMD)`
   }
 ];
 
