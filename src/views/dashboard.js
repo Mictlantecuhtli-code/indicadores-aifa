@@ -1597,6 +1597,43 @@ function extractDirectionRoots(tree) {
   return directions;
 }
 
+function buildSubdirectionItemMarkup(child) {
+  if (!child) return '';
+
+  const labelParts = [];
+  if (child.clave) {
+    labelParts.push(child.clave);
+  }
+  if (child.nombre) {
+    labelParts.push(child.nombre);
+  }
+
+  const label = labelParts.length ? labelParts.join(' - ') : '—';
+
+  const dataAttributes = [];
+  if (child.id != null) {
+    dataAttributes.push(`data-subdirection-id="${escapeHtml(String(child.id))}"`);
+  }
+  if (child.clave) {
+    dataAttributes.push(`data-subdirection-clave="${escapeHtml(child.clave)}"`);
+  }
+
+  return `
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        ${dataAttributes.length ? dataAttributes.join(' ') : ''}
+      >
+        <span class="mt-0.5 text-slate-500">
+          <i class="fa-solid fa-diagram-project h-4 w-4"></i>
+        </span>
+        <span>${escapeHtml(label)}</span>
+      </button>
+    </li>
+  `;
+}
+
 function buildDirectionPanelContent(direction) {
   const children = Array.isArray(direction?.children) ? direction.children : [];
   if (!children.length) {
@@ -1607,41 +1644,14 @@ function buildDirectionPanelContent(direction) {
     `;
   }
 
-  const selectId = `direction-select-${direction.id}`;
-  const optionsMarkup = children
-    .map(child => {
-      const value = child.id != null ? String(child.id) : '';
-      const parts = [];
-      if (child.clave) {
-        parts.push(child.clave);
-      }
-      if (child.nombre) {
-        parts.push(child.nombre);
-      }
-      const label = parts.length ? parts.join(' - ') : '—';
-      return `
-        <option value="${escapeHtml(value)}">${escapeHtml(label)}</option>
-      `;
-    })
-    .join('');
+  const itemsMarkup = children.map(buildSubdirectionItemMarkup).join('');
 
   return `
     <div class="space-y-3">
-      <label class="block text-sm font-medium text-slate-700" for="${escapeHtml(selectId)}">
-        Subdirecciones
-      </label>
-      <div class="relative">
-        <select
-          id="${escapeHtml(selectId)}"
-          class="block w-full appearance-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-aifa-light focus:outline-none focus:ring-2 focus:ring-aifa-light"
-        >
-          <option value="">Seleccione una subdirección</option>
-          ${optionsMarkup}
-        </select>
-        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-          <i class="fa-solid fa-chevron-down h-4 w-4"></i>
-        </span>
-      </div>
+      <p class="text-sm font-medium text-slate-700">Subdirecciones</p>
+      <ul class="space-y-2">
+        ${itemsMarkup}
+      </ul>
     </div>
   `;
 }
@@ -1692,7 +1702,6 @@ function buildDirectionSectionsMarkup(tree) {
   const directions = extractDirectionRoots(tree);
 
   if (!directions.length) {
-
     return `
       <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
         No hay direcciones registradas.
@@ -1701,7 +1710,6 @@ function buildDirectionSectionsMarkup(tree) {
   }
 
   return directions.map(buildDirectionSection).join('');
-
 }
 
 async function renderDirections(container) {
