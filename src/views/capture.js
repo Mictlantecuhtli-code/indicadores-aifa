@@ -32,6 +32,14 @@ function buildHistoryTable(history) {
     `;
   }
 
+  // Ordenar del más reciente al más antiguo
+  const sortedHistory = [...history].sort((a, b) => {
+    // Primero por año descendente
+    if (b.anio !== a.anio) return b.anio - a.anio;
+    // Luego por mes descendente
+    return (b.mes || 0) - (a.mes || 0);
+  });
+
   return `
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -44,7 +52,7 @@ function buildHistoryTable(history) {
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          ${history
+          ${sortedHistory
             .map((item) => {
               return `
                 <tr>
