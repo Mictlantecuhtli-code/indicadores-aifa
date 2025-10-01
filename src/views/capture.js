@@ -214,14 +214,14 @@ export async function renderCapture(container) {
       </div>
     `;
 
-    initializeCaptureListeners(userId);
+    initializeCaptureListeners(userId, userRole);
   } catch (error) {
     console.error(error);
     renderError(container, error);
   }
 }
 
-function initializeCaptureListeners(userId) {
+function initializeCaptureListeners(userId, userRole) {
   const areaSelect = document.getElementById('area-select');
   const indicatorSelect = document.getElementById('indicator-select');
   const yearSelect = document.getElementById('year-select');
