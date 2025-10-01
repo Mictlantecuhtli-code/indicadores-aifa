@@ -1368,6 +1368,7 @@ function buildGroupMarkup(groupId, rootId) {
 function buildIndicatorSectionContent(section) {
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
+
   return `
     <div class="space-y-3">
       ${groupsMarkup}
@@ -1379,7 +1380,6 @@ function buildSectionsMarkup() {
   return ACCORDION_SECTIONS.map(section => {
     const isInitiallyOpen = section.id === DEFAULT_ACCORDION_ID;
     const content = buildIndicatorSectionContent(section);
-
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
@@ -1569,6 +1569,34 @@ function buildAreaTree(areas) {
   return roots;
 }
 
+function isGeneralDirection(area) {
+  const name = area?.nombre?.toLowerCase?.() ?? '';
+  const key = area?.clave?.toLowerCase?.() ?? '';
+
+  if (!name && !key) return false;
+
+  return name.includes('dirección general') || key === 'dg';
+}
+
+function extractDirectionRoots(tree) {
+  if (!Array.isArray(tree)) return [];
+
+  const directions = [];
+
+  tree.forEach(node => {
+    if (!node) return;
+
+    if (isGeneralDirection(node) && Array.isArray(node.children) && node.children.length) {
+      directions.push(...node.children);
+      return;
+    }
+
+    directions.push(node);
+  });
+
+  return directions;
+}
+
 function buildDirectionPanelContent(direction) {
   const children = Array.isArray(direction?.children) ? direction.children : [];
   if (!children.length) {
@@ -1661,7 +1689,10 @@ function buildDirectionSection(direction) {
 }
 
 function buildDirectionSectionsMarkup(tree) {
-  if (!tree?.length) {
+  const directions = extractDirectionRoots(tree);
+
+  if (!directions.length) {
+
     return `
       <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
         No hay direcciones registradas.
@@ -1669,7 +1700,8 @@ function buildDirectionSectionsMarkup(tree) {
     `;
   }
 
-  return tree.map(buildDirectionSection).join('');
+  return directions.map(buildDirectionSection).join('');
+
 }
 
 async function renderDirections(container) {
