@@ -111,13 +111,8 @@ const ACCORDION_SECTIONS = [
     type: 'indicators',
     title: 'Indicadores FBO (Aviación General)',
     iconClass: 'fa-solid fa-plane-circle-check',
-    groupIds: ['fbo-operations', 'fbo-passengers']
-  },
-  {
-    id: 'direcciones',
-    type: 'directions',
-    title: 'Direcciones',
-    iconClass: 'fa-solid fa-sitemap'
+    groupIds: ['fbo-operations', 'fbo-passengers'],
+    includeDirections: true
   }
 ];
 
@@ -1374,7 +1369,6 @@ function buildGroupMarkup(groupId, rootId) {
 function buildIndicatorSectionContent(section) {
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
-
   return `
     <div class="space-y-3">
       ${groupsMarkup}
@@ -1389,6 +1383,7 @@ function buildDirectionsSectionContent() {
         Seleccione una dirección para consultar sus áreas dependientes.
       </p>
       <div data-directions-container class="space-y-3"></div>
+
     </div>
   `;
 }
