@@ -454,6 +454,7 @@ export async function getUsers() {
   }
 
   return [];
+}
   // ============================================
 // FUNCIONES PARA ADMINISTRACIÓN DE USUARIOS
 // ============================================
