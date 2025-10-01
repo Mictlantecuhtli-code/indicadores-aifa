@@ -1368,7 +1368,6 @@ function buildGroupMarkup(groupId, rootId) {
 function buildIndicatorSectionContent(section) {
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
-
   return `
     <div class="space-y-3">
       ${groupsMarkup}
@@ -1380,6 +1379,7 @@ function buildSectionsMarkup() {
   return ACCORDION_SECTIONS.map(section => {
     const isInitiallyOpen = section.id === DEFAULT_ACCORDION_ID;
     const content = buildIndicatorSectionContent(section);
+
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
