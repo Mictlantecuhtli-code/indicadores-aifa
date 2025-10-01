@@ -648,7 +648,7 @@ export async function getEditableAreasForUser(currentUserId) {
 /**
  * Actualiza los datos básicos de un usuario
  */
-export async function updateUser(userId, userData) {
+/**export async function updateUser(userId, userData) {
   if (!userId) throw new Error('userId es requerido');
 
   const allowedFields = {
@@ -677,7 +677,7 @@ export async function updateUser(userId, userData) {
   if (error) throw error;
 
   return data;
-}
+}*/
 
 /**
  * Asigna un área a un usuario con permisos específicos
