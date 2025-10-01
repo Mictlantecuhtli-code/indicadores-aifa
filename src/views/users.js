@@ -562,4 +562,3 @@ function initializeEventListeners() {
       });
     });
   } // ← Este es el cierre de bindModalActions
-}
