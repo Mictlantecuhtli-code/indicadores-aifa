@@ -112,12 +112,6 @@ const ACCORDION_SECTIONS = [
     title: 'Indicadores FBO (Aviación General)',
     iconClass: 'fa-solid fa-plane-circle-check',
     groupIds: ['fbo-operations', 'fbo-passengers']
-  },
-  {
-    id: 'direcciones',
-    type: 'directions',
-    title: 'Direcciones',
-    iconClass: 'fa-solid fa-sitemap'
   }
 ];
 
@@ -400,29 +394,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function normalizeHex(color) {
-  if (typeof color !== 'string') return null;
-  const trimmed = color.trim();
-  if (!trimmed) return null;
-  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  if (/^#([0-9a-fA-F]{3}){1,2}$/.test(prefixed)) {
-    if (prefixed.length === 4) {
-      return `#${prefixed[1]}${prefixed[1]}${prefixed[2]}${prefixed[2]}${prefixed[3]}${prefixed[3]}`;
-    }
-    return prefixed;
-  }
-  return null;
-}
-
-function getBadgeStyles(color) {
-  const normalized = normalizeHex(color) ?? '#1e293b';
-  const r = parseInt(normalized.slice(1, 3), 16);
-  const g = parseInt(normalized.slice(3, 5), 16);
-  const b = parseInt(normalized.slice(5, 7), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  const textColor = luminance > 0.65 ? '#0f172a' : '#ffffff';
-  return `background-color: ${normalized}; color: ${textColor};`;
-}
 function buildSummary(realData, type, scenario) {
   if (!realData || !realData.history.length) {
     return {
@@ -1372,90 +1343,12 @@ function buildGroupMarkup(groupId, rootId) {
 }
 
 function buildIndicatorSectionContent(section) {
-  return `
-    <div class="space-y-3">
-      ${section.groupIds.map(groupId => buildGroupMarkup(groupId, section.id)).join('')}
-    </div>
-  `;
-}
-
-function buildDirectionChildrenList(children) {
-  if (!children?.length) return '';
-  return `
-    <ul class="space-y-2">
-      ${children
-        .map(child => `
-          <li class="space-y-2">
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-              <span>${escapeHtml(child.nombre ?? '—')}</span>
-              <span
-                class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-                style="${getBadgeStyles(child.color_hex)}"
-              >
-                ${escapeHtml(child.clave ?? '—')}
-              </span>
-            </div>
-            ${child.children?.length
-              ? `<div class="ml-4 border-l border-slate-200 pl-4">${buildDirectionChildrenList(child.children)}</div>`
-              : ''}
-          </li>
-        `)
-        .join('')}
-    </ul>
-  `;
-}
-
-function buildDirectionItem(area) {
-  const hasChildren = Array.isArray(area.children) && area.children.length > 0;
-  return `
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2 ${
-          hasChildren ? 'hover:bg-slate-50' : 'cursor-default'
-        }"
-        data-direction-button
-        data-direction-id="${area.id}"
-        ${hasChildren ? 'aria-expanded="false"' : 'aria-disabled="true"'}
-      >
-        <span class="flex items-center gap-3">
-          <span class="text-sm font-semibold text-slate-800">${escapeHtml(area.nombre ?? '—')}</span>
-          <span
-            class="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-            style="${getBadgeStyles(area.color_hex)}"
-          >
-            ${escapeHtml(area.clave ?? '—')}
-          </span>
-        </span>
-        ${
-          hasChildren
-            ? '<i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-direction-chevron></i>'
-            : ''
-        }
-      </button>
-      ${
-        hasChildren
-          ? `<div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-direction-panel="${area.id}" hidden>${buildDirectionChildrenList(
-              area.children
-            )}</div>`
-          : ''
-      }
-    </div>
-  `;
-}
-
-function buildDirectionsMarkup(tree) {
-  if (!tree?.length) {
-    return `
-      <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        No hay direcciones registradas.
-      </div>
-    `;
-  }
+  const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
+  const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
 
   return `
     <div class="space-y-3">
-      ${tree.map(buildDirectionItem).join('')}
+      ${groupsMarkup}
     </div>
   `;
 }
@@ -1463,10 +1356,7 @@ function buildDirectionsMarkup(tree) {
 function buildSectionsMarkup() {
   return ACCORDION_SECTIONS.map(section => {
     const isInitiallyOpen = section.id === DEFAULT_ACCORDION_ID;
-    const content =
-      section.type === 'indicators'
-        ? buildIndicatorSectionContent(section)
-        : '<div data-directions-container class="min-h-[4rem]"></div>';
+    const content = buildIndicatorSectionContent(section);
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
@@ -1512,6 +1402,7 @@ function buildDashboardMarkup() {
       </header>
       <div class="space-y-5" data-accordion-root data-accordion-default="${DEFAULT_ACCORDION_ID}">
         ${buildSectionsMarkup()}
+        <div class="space-y-5" data-direction-sections></div>
       </div>
     </div>
   `;
@@ -1602,29 +1493,6 @@ function initGroupControls(container) {
   });
 }
 
-function initDirectionControls(container) {
-  container.querySelectorAll('[data-direction-button]').forEach(button => {
-    const directionId = button.dataset.directionId;
-    if (!directionId) return;
-    const panel = container.querySelector(`[data-direction-panel="${directionId}"]`);
-    if (!panel) return;
-    let isOpen = false;
-    button.addEventListener('click', () => {
-      isOpen = !isOpen;
-      button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      if (isOpen) {
-        panel.removeAttribute('hidden');
-      } else {
-        panel.setAttribute('hidden', '');
-      }
-      const chevron = button.querySelector('[data-direction-chevron]');
-      if (chevron) {
-        chevron.classList.toggle('rotate-180', isOpen);
-      }
-    });
-  });
-}
-
 function initOptionModals(container) {
   container.querySelectorAll('[data-option-button]').forEach(button => {
     button.addEventListener('click', async () => {
@@ -1678,6 +1546,138 @@ function buildAreaTree(areas) {
   return roots;
 }
 
+function isGeneralDirection(area) {
+  const name = area?.nombre?.toLowerCase?.() ?? '';
+  const key = area?.clave?.toLowerCase?.() ?? '';
+
+  if (!name && !key) return false;
+
+  return name.includes('dirección general') || key === 'dg';
+}
+
+function extractDirectionRoots(tree) {
+  if (!Array.isArray(tree)) return [];
+
+  const directions = [];
+
+  tree.forEach(node => {
+    if (!node) return;
+
+    if (isGeneralDirection(node) && Array.isArray(node.children) && node.children.length) {
+      directions.push(...node.children);
+      return;
+    }
+
+    directions.push(node);
+  });
+
+  return directions;
+}
+
+function buildSubdirectionItemMarkup(child) {
+  if (!child) return '';
+
+  const labelParts = [];
+  if (child.clave) {
+    labelParts.push(child.clave);
+  }
+  if (child.nombre) {
+    labelParts.push(child.nombre);
+  }
+
+  const label = labelParts.length ? labelParts.join(' - ') : '—';
+
+  const dataAttributes = [];
+  if (child.id != null) {
+    dataAttributes.push(`data-subdirection-id="${escapeHtml(String(child.id))}"`);
+  }
+  if (child.clave) {
+    dataAttributes.push(`data-subdirection-clave="${escapeHtml(child.clave)}"`);
+  }
+
+  return `
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        ${dataAttributes.length ? dataAttributes.join(' ') : ''}
+      >
+        <span class="mt-0.5 text-slate-500">
+          <i class="fa-solid fa-diagram-project h-4 w-4"></i>
+        </span>
+        <span>${escapeHtml(label)}</span>
+      </button>
+    </li>
+  `;
+}
+
+function buildDirectionPanelContent(direction) {
+  const children = Array.isArray(direction?.children) ? direction.children : [];
+  if (!children.length) {
+    return `
+      <p class="text-sm text-slate-500">
+        No hay subdirecciones registradas para esta dirección.
+      </p>
+    `;
+  }
+
+  const itemsMarkup = children.map(buildSubdirectionItemMarkup).join('');
+
+  return `
+    <div class="space-y-3">
+      <p class="text-sm font-medium text-slate-700">Subdirecciones</p>
+      <ul class="space-y-2">
+        ${itemsMarkup}
+      </ul>
+    </div>
+  `;
+}
+
+function buildDirectionSection(direction) {
+  const sectionId = `direction-${direction.id}`;
+
+  return `
+    <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${escapeHtml(
+      sectionId
+    )}">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        data-accordion-button
+        data-accordion-id="${escapeHtml(sectionId)}"
+        aria-expanded="false"
+      >
+        <div class="flex items-start gap-3">
+          <span class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <i class="fa-solid fa-sitemap h-6 w-6"></i>
+          </span>
+          <div class="space-y-1">
+            <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(direction?.nombre ?? '—')}</h2>
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-accordion-chevron></i>
+      </button>
+      <div class="border-t border-slate-100 bg-slate-50/60 px-6 py-5" data-accordion-panel="${escapeHtml(sectionId)}" hidden>
+        ${buildDirectionPanelContent(direction)}
+      </div>
+    </section>
+  `;
+}
+
+function buildDirectionSectionsMarkup(tree) {
+  const directions = extractDirectionRoots(tree);
+
+  if (!directions.length) {
+    return `
+      <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+        No hay direcciones registradas.
+      </div>
+    `;
+  }
+
+  return directions.map(buildDirectionSection).join('');
+}
+
 async function renderDirections(container) {
   if (!container) return;
   renderLoading(container, 'Cargando direcciones...');
@@ -1685,8 +1685,7 @@ async function renderDirections(container) {
   try {
     const areas = await getAreas();
     const tree = buildAreaTree(areas ?? []);
-    container.innerHTML = buildDirectionsMarkup(tree);
-    initDirectionControls(container);
+    container.innerHTML = buildDirectionSectionsMarkup(tree);
   } catch (error) {
     console.error(error);
     renderError(container, error);
@@ -1698,12 +1697,13 @@ export async function renderDashboard(container) {
 
   container.innerHTML = buildDashboardMarkup();
 
-  initAccordionControls(container);
   initGroupControls(container);
   initOptionModals(container);
 
-  const directionsContainer = container.querySelector('[data-directions-container]');
+  const directionsContainer = container.querySelector('[data-direction-sections]');
   if (directionsContainer) {
     await renderDirections(directionsContainer);
   }
+
+  initAccordionControls(container);
 }
