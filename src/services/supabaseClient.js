@@ -647,9 +647,9 @@ export async function getUserCaptureAreas(userId, userRole) {
       }));
     }
     
-    // Para usuarios normales, buscar en usuarios_areas
+    // Para usuarios normales, buscar en usuario_areas
     const { data, error } = await supabase
-      .from('usuarios_areas')
+      .from('usuario_areas')
       .select('*, areas:area_id(*)')
       .eq('usuario_id', userId)
       .eq('puede_capturar', true)
@@ -684,7 +684,7 @@ export async function getIndicatorsByUserAreas(userId, userRole) {
     
     // Para usuarios normales, obtener sus áreas primero
     const { data: userAreas, error: areasError } = await supabase
-      .from('usuarios_areas')
+      .from('usuario_areas')
       .select('area_id')
       .eq('usuario_id', userId)
       .eq('puede_capturar', true);
