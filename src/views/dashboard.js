@@ -1576,7 +1576,6 @@ function extractDirectionRoots(tree) {
 
 function buildSubdirectionItemMarkup(child) {
   if (!child) return '';
-
   const label = child?.nombre?.trim?.()
     ? child.nombre.trim()
     : child?.clave?.trim?.() || '—';
