@@ -625,7 +625,19 @@ export async function removeUserFromArea(usuario_id, area_id) {
  * Obtener indicadores que el usuario puede capturar según sus áreas asignadas
  */
 export async function getIndicatorsByUserAreas(userId) {
-  // 1. Obtener áreas del usuario
+  // Si es ADMIN, devolver todos los indicadores
+  if (userRole === 'ADMIN') {
+    const { data, error } = await supabase
+      .from('indicadores')
+      .select('id, nombre, codigo, unidad_medida, area_id, areas(id, nombre)')
+      .order('areas(nombre)', { ascending: true })
+      .order('nombre', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  // Para otros roles, filtrar por áreas asignadas
   const { data: userAreas, error: areasError } = await supabase
     .from('usuario_areas')
     .select('area_id, puede_capturar')
@@ -636,12 +648,11 @@ export async function getIndicatorsByUserAreas(userId) {
   if (areasError) throw areasError;
 
   if (!userAreas || userAreas.length === 0) {
-    return []; // Usuario no tiene áreas con permiso de captura
+    return [];
   }
 
   const areaIds = userAreas.map(ua => ua.area_id);
 
-  // 2. Obtener indicadores de esas áreas
   const { data: indicadores, error: indicadoresError } = await supabase
     .from('indicadores')
     .select('id, nombre, codigo, unidad_medida, area_id, areas(id, nombre)')
@@ -658,6 +669,26 @@ export async function getIndicatorsByUserAreas(userId) {
  * Obtener áreas donde el usuario puede capturar
  */
 export async function getUserCaptureAreas(userId) {
+ // Si es ADMIN, devolver todas las áreas
+  if (userRole === 'ADMIN') {
+    const { data, error } = await supabase
+      .from('areas')
+      .select('id, nombre')
+      .order('nombre', { ascending: true });
+
+    if (error) throw error;
+    
+    // Transformar para que coincida con la estructura esperada
+    return (data || []).map(area => ({
+      area_id: area.id,
+      areas: {
+        id: area.id,
+        nombre: area.nombre
+      }
+    }));
+  }
+
+  // Para otros roles, consultar usuario_areas
   const { data, error } = await supabase
     .from('usuario_areas')
     .select('area_id, areas(id, nombre)')
