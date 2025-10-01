@@ -1372,9 +1372,23 @@ function buildGroupMarkup(groupId, rootId) {
 }
 
 function buildIndicatorSectionContent(section) {
+  const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
+  const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
+
   return `
     <div class="space-y-3">
-      ${section.groupIds.map(groupId => buildGroupMarkup(groupId, section.id)).join('')}
+      ${groupsMarkup}
+    </div>
+  `;
+}
+
+function buildDirectionsSectionContent() {
+  return `
+    <div class="space-y-3">
+      <p class="text-sm text-slate-500">
+        Seleccione una dirección para consultar sus áreas dependientes.
+      </p>
+      <div data-directions-container class="space-y-3"></div>
     </div>
   `;
 }
@@ -1466,7 +1480,7 @@ function buildSectionsMarkup() {
     const content =
       section.type === 'indicators'
         ? buildIndicatorSectionContent(section)
-        : '<div data-directions-container class="min-h-[4rem]"></div>';
+        : buildDirectionsSectionContent(section);
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
