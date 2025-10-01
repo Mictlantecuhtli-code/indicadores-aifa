@@ -632,7 +632,10 @@ export async function getUserCaptureAreas(userId, userRole) {
   
   try {
     // Si es administrador, devolver todas las áreas
-    if (userRole === 'administrador' || userRole === 'admin') {
+      const esAdmin = userRole?.toLowerCase().includes('admin');
+      console.log('¿Es admin?', esAdmin, { userRole });
+      
+      if (esAdmin) {
       const { data, error } = await supabase
         .from('areas')
         .select('*, indicadores:indicadores(count)')
