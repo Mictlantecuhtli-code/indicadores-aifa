@@ -621,49 +621,6 @@ export async function removeUserFromArea(usuario_id, area_id) {
   if (error) throw error;
   return data;
 }
-  /**
- * Obtener indicadores que el usuario puede capturar según sus áreas asignadas
- */
-export async function getIndicatorsByUserAreas(userId) {
-  // Si es ADMIN, devolver todos los indicadores
-  if (userRole === 'ADMIN') {
-    const { data, error } = await supabase
-      .from('indicadores')
-      .select('id, nombre, codigo, unidad_medida, area_id, areas(id, nombre)')
-      .order('areas(nombre)', { ascending: true })
-      .order('nombre', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  // Para otros roles, filtrar por áreas asignadas
-  const { data: userAreas, error: areasError } = await supabase
-    .from('usuario_areas')
-    .select('area_id, puede_capturar')
-    .eq('usuario_id', userId)
-    .eq('estado', 'ACTIVO')
-    .eq('puede_capturar', true);
-
-  if (areasError) throw areasError;
-
-  if (!userAreas || userAreas.length === 0) {
-    return [];
-  }
-
-  const areaIds = userAreas.map(ua => ua.area_id);
-
-  const { data: indicadores, error: indicadoresError } = await supabase
-    .from('indicadores')
-    .select('id, nombre, codigo, unidad_medida, area_id, areas(id, nombre)')
-    .in('area_id', areaIds)
-    .order('areas(nombre)', { ascending: true })
-    .order('nombre', { ascending: true });
-
-  if (indicadoresError) throw indicadoresError;
-
-  return indicadores || [];
-}
 
 /**
  * Obtener áreas donde el usuario puede capturar
@@ -706,6 +663,9 @@ export async function getUserCaptureAreas(userId, userRole) {
     throw error;
   }
 }
+  /**
+ * Obtener indicadores que el usuario puede capturar según sus áreas asignadas
+ */
 
 export async function getIndicatorsByUserAreas(userId, userRole) {
   console.log('getIndicatorsByUserAreas llamada con:', { userId, userRole });
