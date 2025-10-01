@@ -668,35 +668,87 @@ export async function getIndicatorsByUserAreas(userId) {
 /**
  * Obtener áreas donde el usuario puede capturar
  */
-export async function getUserCaptureAreas(userId) {
- // Si es ADMIN, devolver todas las áreas
-  if (userRole === 'ADMIN') {
-    const { data, error } = await supabase
-      .from('areas')
-      .select('id, nombre')
-      .order('nombre', { ascending: true });
+// En supabaseClient.js, agrega estas funciones:
 
+export async function getUserCaptureAreas(userId, userRole) {
+  console.log('getUserCaptureAreas llamada con:', { userId, userRole });
+  
+  try {
+    // Si es administrador, devolver todas las áreas
+    if (userRole === 'administrador' || userRole === 'admin') {
+      const { data, error } = await supabase
+        .from('areas')
+        .select('*, indicadores:indicadores(count)')
+        .order('nombre', { ascending: true });
+      
+      if (error) throw error;
+      
+      return (data || []).map(area => ({
+        area_id: area.id,
+        areas: area,
+        puede_capturar: true
+      }));
+    }
+    
+    // Para usuarios normales, buscar en usuarios_areas
+    const { data, error } = await supabase
+      .from('usuarios_areas')
+      .select('*, areas:area_id(*)')
+      .eq('usuario_id', userId)
+      .eq('puede_capturar', true)
+      .order('areas(nombre)', { ascending: true });
+    
     if (error) throw error;
     
-    // Transformar para que coincida con la estructura esperada
-    return (data || []).map(area => ({
-      area_id: area.id,
-      areas: {
-        id: area.id,
-        nombre: area.nombre
-      }
-    }));
+    return data || [];
+  } catch (error) {
+    console.error('Error en getUserCaptureAreas:', error);
+    throw error;
   }
+}
 
-  // Para otros roles, consultar usuario_areas
-  const { data, error } = await supabase
-    .from('usuario_areas')
-    .select('area_id, areas(id, nombre)')
-    .eq('usuario_id', userId)
-    .eq('estado', 'ACTIVO')
-    .eq('puede_capturar', true)
-    .order('areas(nombre)', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
+export async function getIndicatorsByUserAreas(userId, userRole) {
+  console.log('getIndicatorsByUserAreas llamada con:', { userId, userRole });
+  
+  try {
+    // Si es administrador, devolver todos los indicadores
+    if (userRole === 'administrador' || userRole === 'admin') {
+      const { data, error } = await supabase
+        .from('indicadores')
+        .select('*, areas:area_id(*)')
+        .order('nombre', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    }
+    
+    // Para usuarios normales, obtener sus áreas primero
+    const { data: userAreas, error: areasError } = await supabase
+      .from('usuarios_areas')
+      .select('area_id')
+      .eq('usuario_id', userId)
+      .eq('puede_capturar', true);
+    
+    if (areasError) throw areasError;
+    
+    if (!userAreas || userAreas.length === 0) {
+      return [];
+    }
+    
+    const areaIds = userAreas.map(ua => ua.area_id);
+    
+    // Obtener indicadores de esas áreas
+    const { data, error } = await supabase
+      .from('indicadores')
+      .select('*, areas:area_id(*)')
+      .in('area_id', areaIds)
+      .order('nombre', { ascending: true });
+    
+    if (error) throw error;
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error en getIndicatorsByUserAreas:', error);
+    throw error;
+  }
 }
