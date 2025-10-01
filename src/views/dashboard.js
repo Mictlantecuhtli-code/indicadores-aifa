@@ -111,13 +111,8 @@ const ACCORDION_SECTIONS = [
     type: 'indicators',
     title: 'Indicadores FBO (Aviación General)',
     iconClass: 'fa-solid fa-plane-circle-check',
-    groupIds: ['fbo-operations', 'fbo-passengers']
-  },
-  {
-    id: 'direcciones',
-    type: 'directions',
-    title: 'Direcciones',
-    iconClass: 'fa-solid fa-sitemap'
+    groupIds: ['fbo-operations', 'fbo-passengers'],
+    includeDirections: true
   }
 ];
 
@@ -1372,9 +1367,23 @@ function buildGroupMarkup(groupId, rootId) {
 }
 
 function buildIndicatorSectionContent(section) {
+  const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
+  const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
+  const directionsMarkup = section.includeDirections
+    ? `
+        <div class="space-y-3">
+          <h3 class="text-sm font-semibold text-slate-900">Direcciones</h3>
+          <div data-directions-container class="min-h-[4rem]"></div>
+        </div>
+      `
+    : '';
+
   return `
-    <div class="space-y-3">
-      ${section.groupIds.map(groupId => buildGroupMarkup(groupId, section.id)).join('')}
+    <div class="space-y-6">
+      <div class="space-y-3">
+        ${groupsMarkup}
+      </div>
+      ${directionsMarkup}
     </div>
   `;
 }
