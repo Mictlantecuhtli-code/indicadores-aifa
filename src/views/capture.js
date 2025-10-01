@@ -22,6 +22,7 @@ let currentIndicators = [];
 let selectedAreaId = null;
 let selectedIndicatorId = null;
 let currentYear = new Date().getFullYear();
+
 function buildHistoryTable(history) {
   if (!history.length) {
     return `
@@ -105,9 +106,9 @@ export async function renderCapture(container) {
   
   try {
     const session = getSession();
-    const userRole = session?.perfil?.rol_principal;
     
-    if (!userId) {
+    // Validar que exista sesión
+    if (!session || !session.user) {
       container.innerHTML = `
         <div class="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-6">
           No se pudo identificar el usuario. Por favor, inicie sesión nuevamente.
@@ -115,6 +116,10 @@ export async function renderCapture(container) {
       `;
       return;
     }
+
+    // Extraer userId y userRole de la sesión
+    const userId = session.user.id;
+    const userRole = session.perfil?.rol_principal || session.perfil?.rol || 'usuario';
 
     // Cargar áreas donde el usuario puede capturar
     currentAreas = await getUserCaptureAreas(userId, userRole);
@@ -241,11 +246,8 @@ function initializeCaptureListeners(userId, userRole) {
 
     try {
       // Cargar indicadores del área
-    const session = getSession();
-    const userRole = session?.perfil?.rol_principal;
-    const allIndicators = await getIndicatorsByUserAreas(userId, userRole);
-    currentIndicators = allIndicators.filter(ind => ind.area_id === selectedAreaId);
-    
+      const allIndicators = await getIndicatorsByUserAreas(userId, userRole);
+      currentIndicators = allIndicators.filter(ind => ind.area_id === selectedAreaId);
       
       if (!currentIndicators.length) {
         indicatorSelect.innerHTML = '<option value="">No hay indicadores en esta área</option>';
@@ -435,6 +437,7 @@ async function loadIndicatorContent(container, indicatorId) {
     showToast('Error al cargar el indicador', { type: 'error' });
   }
 }
+
 function initializeFormHandlers(indicatorId) {
   const measurementForm = document.getElementById('measurement-form');
   const targetForm = document.getElementById('target-form');
