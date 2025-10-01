@@ -6,6 +6,7 @@ import {
   AlertCircle,
   BarChart3,
   BarChartHorizontal,
+  Building2, 
   Calendar,
   ChevronDown,
   LineChart as LineChartIcon,
@@ -591,103 +592,75 @@ function buildAreaTree(areas) {
 
   return buildBranch(null);
 }
-
-function DirectionChildrenList({ areas }) {
-  if (!areas?.length) return null;
+// 🆕 NUEVO: Componente para subdirecciones
+function SubdirectionsList({ subdirections }) {
+  if (!subdirections?.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
+        Sin subdirecciones registradas
+      </div>
+    );
+  }
 
   return (
     <ul className="space-y-2">
-      {areas.map(area => (
-        <li key={area.id} className="space-y-2">
+      {subdirections.map(subdir => (
+        <li key={subdir.id}>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-            <span>{area.nombre}</span>
+            <span>{subdir.nombre}</span>
             <span
               className="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-              style={getBadgeStyles(area.color_hex)}
+              style={getBadgeStyles(subdir.color_hex)}
             >
-              {area.clave ?? '—'}
+              {subdir.clave ?? '—'}
             </span>
           </div>
-          {area.children?.length ? (
-            <div className="ml-4 border-l border-slate-200 pl-4">
-              <DirectionChildrenList areas={area.children} />
+          {subdir.children?.length > 0 && (
+            <div className="ml-4 mt-2 border-l border-slate-200 pl-4">
+              <SubdirectionsList subdirections={subdir.children} />
             </div>
-          ) : null}
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
-function DirectionsSection({ areas, isLoading, error }) {
-  const [openDirectionId, setOpenDirectionId] = useState(null);
-  const hasDirections = areas?.length;
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Cargando direcciones...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        No se pudieron cargar las direcciones.
-      </div>
-    );
-  }
-
-  if (!hasDirections) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        No hay direcciones registradas.
-      </div>
-    );
-  }
-
+// 🆕 NUEVO: Sección individual de dirección como AccordionSection
+function DirectionAccordion({ direction, isOpen, onToggle }) {
   return (
-    <div className="space-y-3">
-      {areas.map(area => {
-        const hasChildren = area.children?.length;
-        const isOpen = openDirectionId === area.id;
-        return (
-          <div key={area.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <button
-              type="button"
-              onClick={() => (hasChildren ? setOpenDirectionId(prev => (prev === area.id ? null : area.id)) : null)}
-              aria-expanded={hasChildren ? isOpen : undefined}
-              className={classNames(
-                'flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2',
-                hasChildren ? 'hover:bg-slate-50' : 'cursor-default'
-              )}
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => onToggle(direction.id)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <Building2 className="h-6 w-6" />
+          </span>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">{direction.nombre}</h2>
+            <span
+              className="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
+              style={getBadgeStyles(direction.color_hex)}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-slate-800">{area.nombre}</span>
-                <span
-                  className="inline-flex min-w-[3rem] items-center justify-center rounded-full px-2 py-1 text-xs font-semibold"
-                  style={getBadgeStyles(area.color_hex)}
-                >
-                  {area.clave ?? '—'}
-                </span>
-              </div>
-              {hasChildren && (
-                <ChevronDown
-                  className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
-                />
-              )}
-            </button>
-            {hasChildren && isOpen && (
-              <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
-                <DirectionChildrenList areas={area.children} />
-              </div>
-            )}
+              {direction.clave ?? '—'}
+            </span>
           </div>
-        );
-      })}
-    </div>
+        </div>
+        <ChevronDown
+          className={classNames('h-5 w-5 text-slate-400 transition-transform', isOpen ? 'rotate-180' : '')}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-slate-100 bg-slate-50/60 px-6 py-5">
+          <SubdirectionsList subdirections={direction.children} />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1067,16 +1040,30 @@ export default function DashboardPage() {
               <IndicatorCategoriesList categories={fboSection?.categories} onSelectOption={setActiveOptionId} />
             )}
           </AccordionSection>
-
-          <AccordionSection
-            id="direcciones"
-            title="Direcciones"
-            isOpen={openSection === 'direcciones'}
-            onToggle={next => setOpenSection(prev => (prev === next ? null : next))}
-            icon={Users}
-          >
-            <DirectionsSection areas={directions} isLoading={areasQuery.isLoading} error={areasQuery.error} />
-          </AccordionSection>
+          {/* 🆕 Direcciones - Ahora cada dirección es un acordeón independiente */}
+          {areasQuery.isLoading ? (
+            <div className="flex items-center gap-2 rounded-3xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <span className="text-sm text-slate-500">Cargando direcciones...</span>
+            </div>
+          ) : areasQuery.error ? (
+            <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700">
+              No se pudieron cargar las direcciones.
+            </div>
+          ) : directions.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-5 text-sm text-slate-500">
+              No hay direcciones registradas.
+            </div>
+          ) : (
+            directions.map(direction => (
+              <DirectionAccordion
+                key={direction.id}
+                direction={direction}
+                isOpen={openSection === direction.id}
+                onToggle={next => setOpenSection(prev => (prev === next ? null : next))}
+              />
+            ))
+          )}
         </div>
       </div>
 
