@@ -1,5 +1,6 @@
 import {
-  getIndicators,
+  getIndicatorsByUserAreas,
+  getUserCaptureAreas,
   getIndicatorHistory,
   getIndicatorTargets,
   saveMeasurement,
@@ -7,12 +8,20 @@ import {
 } from '../services/supabaseClient.js';
 import { renderLoading, renderError, showToast } from '../ui/feedback.js';
 import { formatNumber, monthName, formatDate } from '../utils/formatters.js';
+import { getSession } from '../state/session.js';
 
 const months = Array.from({ length: 12 }).map((_, index) => ({
   value: index + 1,
   label: monthName(index + 1)
 }));
 
+const SCENARIOS = ['BAJO', 'MEDIO', 'ALTO'];
+
+let currentAreas = [];
+let currentIndicators = [];
+let selectedAreaId = null;
+let selectedIndicatorId = null;
+let currentYear = new Date().getFullYear();
 function buildHistoryTable(history) {
   if (!history.length) {
     return `
@@ -60,6 +69,7 @@ function buildTargetsTable(targets) {
       </div>
     `;
   }
+  
   return `
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -92,14 +102,29 @@ function buildTargetsTable(targets) {
 
 export async function renderCapture(container) {
   renderLoading(container, 'Preparando módulo de captura...');
+  
   try {
-    const indicators = await getIndicators();
-    if (!indicators.length) {
+    const session = getSession();
+    const userId = session?.perfil?.id;
+    
+    if (!userId) {
+      container.innerHTML = `
+        <div class="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-6">
+          No se pudo identificar el usuario. Por favor, inicie sesión nuevamente.
+        </div>
+      `;
+      return;
+    }
+
+    // Cargar áreas donde el usuario puede capturar
+    currentAreas = await getUserCaptureAreas(userId);
+    
+    if (!currentAreas.length) {
       container.innerHTML = `
         <div class="space-y-4">
-          <h2 class="text-2xl font-semibold text-slate-900">Captura de indicadores</h2>
+          <h2 class="text-2xl font-semibold text-slate-900">Captura de mediciones</h2>
           <div class="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-6">
-            Debes registrar indicadores antes de capturar mediciones o metas.
+            No tienes áreas asignadas con permisos de captura. Contacta al administrador.
           </div>
         </div>
       `;
@@ -108,167 +133,325 @@ export async function renderCapture(container) {
 
     container.innerHTML = `
       <div class="space-y-6">
-        <div>
-          <h2 class="text-2xl font-semibold text-slate-900">Captura de indicadores</h2>
-          <p class="text-sm text-slate-500">
-            Registra nuevas mediciones operativas y actualiza las metas por escenario.
-          </p>
-        </div>
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-slate-600">Indicador operativo</span>
-            <select id="indicator-select" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-              ${indicators.map((indicator) => `<option value="${indicator.id}">${indicator.nombre}</option>`).join('')}
-            </select>
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-slate-600">Año</span>
-            <input
-              id="target-year"
-              type="number"
-              min="2022"
-              max="2100"
-              value="${new Date().getFullYear()}"
-              class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-          </label>
-        </div>
-        <section class="grid gap-6 lg:grid-cols-2">
-          <div class="space-y-4">
-            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 class="text-lg font-semibold text-slate-800 mb-4">Registrar medición</h3>
-              <form id="measurement-form" class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-2">
-                  <label class="flex flex-col gap-1 text-sm text-slate-600">
-                    Mes
-                    <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      ${months.map((month) => `<option value="${month.value}">${month.label}</option>`).join('')}
-                    </select>
-                  </label>
-                  <label class="flex flex-col gap-1 text-sm text-slate-600">
-                    Escenario
-                    <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      <option value="REAL">Real</option>
-                      <option value="BAJO">Bajo</option>
-                      <option value="MEDIO">Medio</option>
-                      <option value="ALTO">Alto</option>
-                    </select>
-                  </label>
-                </div>
-                <label class="flex flex-col gap-1 text-sm text-slate-600">
-                  Valor
-                  <input
-                    name="value"
-                    type="number"
-                    step="0.01"
-                    required
-                    class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  />
-                </label>
-                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-                  <i class="fa-solid fa-floppy-disk"></i>
-                  Guardar medición
-                </button>
-              </form>
+        <!-- Header con año -->
+        <div class="rounded-2xl bg-emerald-600 p-6 text-white shadow-lg">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-bold">Captura de Mediciones</h2>
+              <p class="mt-1 text-sm text-emerald-100">
+                Registre los valores mensuales de los indicadores
+              </p>
             </div>
-            <div class="space-y-3">
-              <h3 class="text-sm font-semibold text-slate-600">Histórico de mediciones</h3>
-              <div id="history-table"></div>
+            <div class="rounded-xl bg-white/20 px-6 py-4 text-center backdrop-blur">
+              <p class="text-4xl font-bold">${currentYear}</p>
+              <p class="text-xs uppercase tracking-wider text-emerald-100">Año actual</p>
             </div>
           </div>
-          <div class="space-y-4">
-            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 class="text-lg font-semibold text-slate-800 mb-4">Actualizar metas</h3>
-              <form id="target-form" class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-2">
-                  <label class="flex flex-col gap-1 text-sm text-slate-600">
-                    Mes
-                    <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      ${months.map((month) => `<option value="${month.value}">${month.label}</option>`).join('')}
-                    </select>
-                  </label>
-                  <label class="flex flex-col gap-1 text-sm text-slate-600">
-                    Escenario
-                    <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400">
-                      <option value="BAJO">Bajo</option>
-                      <option value="MEDIO">Medio</option>
-                      <option value="ALTO">Alto</option>
-                    </select>
-                  </label>
-                </div>
-                <label class="flex flex-col gap-1 text-sm text-slate-600">
-                  Meta
-                  <input
-                    name="value"
-                    type="number"
-                    step="0.01"
-                    required
-                    class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  />
-                </label>
-                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">
-                  <i class="fa-solid fa-bullseye"></i>
-                  Guardar meta
-                </button>
-              </form>
-            </div>
-            <div class="space-y-3">
-              <h3 class="text-sm font-semibold text-slate-600">Metas registradas</h3>
-              <div id="targets-table"></div>
+        </div>
+
+        <!-- Selector de área e indicador -->
+        <div class="rounded-2xl bg-white p-6 shadow">
+          <div class="flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-filter text-emerald-600"></i>
+            <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-600">
+              Seleccione indicador a capturar
+            </h3>
+          </div>
+          
+          <div class="grid gap-4 md:grid-cols-3">
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-slate-600">
+                Área <span class="text-red-500">*</span>
+              </span>
+              <select 
+                id="area-select" 
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <option value="">Seleccione un área...</option>
+                ${currentAreas.map(ua => `
+                  <option value="${ua.area_id}">${ua.areas?.nombre || 'Área sin nombre'}</option>
+                `).join('')}
+              </select>
+            </label>
+            
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-slate-600">
+                Indicador <span class="text-red-500">*</span>
+              </span>
+              <select 
+                id="indicator-select" 
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                disabled
+              >
+                <option value="">Primero seleccione un área...</option>
+              </select>
+            </label>
+
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-slate-600">Año</span>
+              <input
+                id="year-select"
+                type="number"
+                min="2022"
+                max="2100"
+                value="${currentYear}"
+                class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </label>
+          </div>
+        </div>
+
+        <!-- Área de contenido (formularios y tablas) -->
+        <div id="capture-content">
+          <div class="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
+            <div class="text-center text-slate-400">
+              <i class="fa-solid fa-clipboard-list mb-3 text-4xl"></i>
+              <p class="text-sm font-medium">Seleccione un indicador</p>
+              <p class="text-xs">Elija un área e indicador para comenzar a capturar mediciones</p>
             </div>
           </div>
-        </section>
+        </div>
       </div>
     `;
 
-    const state = {
-      indicatorId: Number(indicators[0].id),
-      year: Number(document.getElementById('target-year').value)
-    };
+    initializeCaptureListeners(userId);
+  } catch (error) {
+    console.error(error);
+    renderError(container, error);
+  }
+}
 
-    const historyContainer = document.getElementById('history-table');
-    const targetsContainer = document.getElementById('targets-table');
+function initializeCaptureListeners(userId) {
+  const areaSelect = document.getElementById('area-select');
+  const indicatorSelect = document.getElementById('indicator-select');
+  const yearSelect = document.getElementById('year-select');
+  const contentArea = document.getElementById('capture-content');
 
-    async function refreshData() {
-      historyContainer.innerHTML = '<div class="text-sm text-slate-500">Cargando mediciones...</div>';
-      targetsContainer.innerHTML = '<div class="text-sm text-slate-500">Cargando metas...</div>';
-      try {
-        const [history, targets] = await Promise.all([
-          getIndicatorHistory(state.indicatorId, { limit: 24 }),
-          getIndicatorTargets(state.indicatorId, { year: state.year })
-        ]);
-        historyContainer.innerHTML = buildHistoryTable(history);
-        targetsContainer.innerHTML = buildTargetsTable(targets);
-      } catch (error) {
-        console.error(error);
-        historyContainer.innerHTML = '';
-        targetsContainer.innerHTML = '';
-        showToast('No fue posible consultar la información del indicador seleccionado.', { type: 'error' });
-      }
+  // Cambio de área
+  areaSelect.addEventListener('change', async (e) => {
+    selectedAreaId = e.target.value;
+    selectedIndicatorId = null;
+    
+    if (!selectedAreaId) {
+      indicatorSelect.innerHTML = '<option value="">Primero seleccione un área...</option>';
+      indicatorSelect.disabled = true;
+      showEmptyState(contentArea);
+      return;
     }
 
-    document.getElementById('indicator-select').addEventListener('change', (event) => {
-      state.indicatorId = Number(event.target.value);
-      refreshData();
-    });
+    try {
+      // Cargar indicadores del área
+      const allIndicators = await getIndicatorsByUserAreas(userId);
+      currentIndicators = allIndicators.filter(ind => ind.area_id === selectedAreaId);
+      
+      if (!currentIndicators.length) {
+        indicatorSelect.innerHTML = '<option value="">No hay indicadores en esta área</option>';
+        indicatorSelect.disabled = true;
+        showEmptyState(contentArea);
+        return;
+      }
 
-    document.getElementById('target-year').addEventListener('change', (event) => {
-      state.year = Number(event.target.value) || new Date().getFullYear();
-      refreshData();
-    });
+      indicatorSelect.innerHTML = `
+        <option value="">Seleccione un indicador...</option>
+        ${currentIndicators.map(ind => `
+          <option value="${ind.id}">${ind.nombre}</option>
+        `).join('')}
+      `;
+      indicatorSelect.disabled = false;
+      showEmptyState(contentArea);
+    } catch (error) {
+      console.error(error);
+      showToast('Error al cargar indicadores', { type: 'error' });
+    }
+  });
 
-    document.getElementById('measurement-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const submit = form.querySelector('button[type="submit"]');
+  // Cambio de indicador
+  indicatorSelect.addEventListener('change', async (e) => {
+    selectedIndicatorId = e.target.value;
+    
+    if (!selectedIndicatorId) {
+      showEmptyState(contentArea);
+      return;
+    }
+
+    await loadIndicatorContent(contentArea, selectedIndicatorId);
+  });
+
+  // Cambio de año
+  yearSelect.addEventListener('change', (e) => {
+    currentYear = parseInt(e.target.value) || new Date().getFullYear();
+    if (selectedIndicatorId) {
+      loadIndicatorContent(contentArea, selectedIndicatorId);
+    }
+  });
+}
+
+function showEmptyState(container) {
+  container.innerHTML = `
+    <div class="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
+      <div class="text-center text-slate-400">
+        <i class="fa-solid fa-clipboard-list mb-3 text-4xl"></i>
+        <p class="text-sm font-medium">Seleccione un indicador</p>
+        <p class="text-xs">Elija un área e indicador para comenzar a capturar mediciones</p>
+      </div>
+    </div>
+  `;
+}
+
+async function loadIndicatorContent(container, indicatorId) {
+  container.innerHTML = '<div class="text-center py-8 text-slate-500">Cargando datos del indicador...</div>';
+
+  try {
+    const indicator = currentIndicators.find(ind => ind.id === indicatorId);
+    
+    if (!indicator) {
+      container.innerHTML = '<div class="text-center py-8 text-red-500">Indicador no encontrado</div>';
+      return;
+    }
+
+    const [history, targets] = await Promise.all([
+      getIndicatorHistory(indicatorId, { limit: 24 }),
+      getIndicatorTargets(indicatorId, { year: currentYear })
+    ]);
+
+    container.innerHTML = `
+      <section class="grid gap-6 lg:grid-cols-2">
+        <!-- Formulario de medición -->
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-4 flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-slate-800">Registrar medición</h3>
+                <p class="text-xs text-slate-500">${indicator.nombre}</p>
+              </div>
+            </div>
+            <form id="measurement-form" class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm text-slate-600">
+                  Mes
+                  <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    ${months.map((month) => `
+                      <option value="${month.value}" ${month.value === new Date().getMonth() + 1 ? 'selected' : ''}>
+                        ${month.label}
+                      </option>
+                    `).join('')}
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm text-slate-600">
+                  Escenario
+                  <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="REAL">Real</option>
+                    ${SCENARIOS.map(s => `<option value="${s}">${s}</option>`).join('')}
+                  </select>
+                </label>
+              </div>
+              <label class="flex flex-col gap-1 text-sm text-slate-600">
+                Valor ${indicator.unidad_medida ? `(${indicator.unidad_medida})` : ''}
+                <input
+                  name="value"
+                  type="number"
+                  step="0.01"
+                  required
+                  class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="Ingrese el valor"
+                />
+              </label>
+              <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                <i class="fa-solid fa-floppy-disk"></i>
+                Guardar medición
+              </button>
+            </form>
+          </div>
+
+          <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-slate-600">Histórico de mediciones</h3>
+            <div id="history-table">${buildHistoryTable(history)}</div>
+          </div>
+        </div>
+
+        <!-- Formulario de metas -->
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-4 flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <i class="fa-solid fa-bullseye"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-slate-800">Actualizar metas</h3>
+                <p class="text-xs text-slate-500">${indicator.nombre}</p>
+              </div>
+            </div>
+            <form id="target-form" class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm text-slate-600">
+                  Mes
+                  <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                    ${months.map((month) => `<option value="${month.value}">${month.label}</option>`).join('')}
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm text-slate-600">
+                  Escenario
+                  <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                    ${SCENARIOS.map(s => `<option value="${s}">${s}</option>`).join('')}
+                  </select>
+                </label>
+              </div>
+              <label class="flex flex-col gap-1 text-sm text-slate-600">
+                Meta ${indicator.unidad_medida ? `(${indicator.unidad_medida})` : ''}
+                <input
+                  name="value"
+                  type="number"
+                  step="0.01"
+                  required
+                  class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  placeholder="Ingrese la meta"
+                />
+              </label>
+              <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                <i class="fa-solid fa-bullseye"></i>
+                Guardar meta
+              </button>
+            </form>
+          </div>
+
+          <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-slate-600">Metas registradas</h3>
+            <div id="targets-table">${buildTargetsTable(targets)}</div>
+          </div>
+        </div>
+      </section>
+    `;
+
+    initializeFormHandlers(indicatorId);
+  } catch (error) {
+    console.error(error);
+    container.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar el indicador</div>';
+    showToast('Error al cargar el indicador', { type: 'error' });
+  }
+}
+function initializeFormHandlers(indicatorId) {
+  const measurementForm = document.getElementById('measurement-form');
+  const targetForm = document.getElementById('target-form');
+  const historyTable = document.getElementById('history-table');
+  const targetsTable = document.getElementById('targets-table');
+
+  // Handler para formulario de mediciones
+  if (measurementForm) {
+    measurementForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submit = measurementForm.querySelector('button[type="submit"]');
       submit.disabled = true;
       submit.classList.add('opacity-70');
-      const formData = new FormData(form);
+
+      const formData = new FormData(measurementForm);
       const scenario = (formData.get('scenario') ?? '').toString().toUpperCase();
 
       const payload = {
-        indicador_id: state.indicatorId,
-        anio: state.year,
+        indicador_id: indicatorId,
+        anio: currentYear,
         mes: Number(formData.get('month')),
         valor: Number(formData.get('value')),
         escenario: scenario || null
@@ -276,29 +459,35 @@ export async function renderCapture(container) {
 
       try {
         await saveMeasurement(payload);
-        showToast('Medición registrada correctamente.');
-        form.reset();
-        refreshData();
+        showToast('Medición registrada correctamente');
+        measurementForm.reset();
+        
+        // Recargar histórico
+        const history = await getIndicatorHistory(indicatorId, { limit: 24 });
+        historyTable.innerHTML = buildHistoryTable(history);
       } catch (error) {
         console.error(error);
-        showToast(error.message ?? 'No fue posible registrar la medición.', { type: 'error' });
+        showToast(error.message ?? 'No fue posible registrar la medición', { type: 'error' });
       } finally {
         submit.disabled = false;
         submit.classList.remove('opacity-70');
       }
     });
+  }
 
-    document.getElementById('target-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const submit = form.querySelector('button[type="submit"]');
+  // Handler para formulario de metas
+  if (targetForm) {
+    targetForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submit = targetForm.querySelector('button[type="submit"]');
       submit.disabled = true;
       submit.classList.add('opacity-70');
-      const formData = new FormData(form);
+
+      const formData = new FormData(targetForm);
 
       const payload = {
-        indicador_id: state.indicatorId,
-        anio: state.year,
+        indicador_id: indicatorId,
+        anio: currentYear,
         mes: Number(formData.get('month')),
         escenario: (formData.get('scenario') ?? '').toString().toUpperCase(),
         valor: Number(formData.get('value'))
@@ -306,21 +495,19 @@ export async function renderCapture(container) {
 
       try {
         await upsertTarget(payload);
-        showToast('Meta actualizada correctamente.');
-        form.reset();
-        refreshData();
+        showToast('Meta actualizada correctamente');
+        targetForm.reset();
+        
+        // Recargar metas
+        const targets = await getIndicatorTargets(indicatorId, { year: currentYear });
+        targetsTable.innerHTML = buildTargetsTable(targets);
       } catch (error) {
         console.error(error);
-        showToast(error.message ?? 'No fue posible actualizar la meta.', { type: 'error' });
+        showToast(error.message ?? 'No fue posible actualizar la meta', { type: 'error' });
       } finally {
         submit.disabled = false;
         submit.classList.remove('opacity-70');
       }
     });
-
-    await refreshData();
-  } catch (error) {
-    console.error(error);
-    renderError(container, error);
   }
 }
