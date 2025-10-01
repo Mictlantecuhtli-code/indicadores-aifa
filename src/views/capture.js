@@ -121,6 +121,9 @@ export async function renderCapture(container) {
     const userId = session.user.id;
     const userRole = session.perfil?.rol_principal || session.perfil?.rol || 'usuario';
 
+    console.log('Debug capture - userId:', userId);
+    console.log('Debug capture - userRole:', userRole);
+
     // Cargar áreas donde el usuario puede capturar
     currentAreas = await getUserCaptureAreas(userId, userRole);
     
