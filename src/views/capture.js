@@ -469,8 +469,8 @@ function initializeFormHandlers(indicatorId, esSubdirector) {
         indicador_id: indicatorId,
         anio: currentYear,
         mes: Number(formData.get('month')),
-        valor: Number(formData.get('value')),
-        escenario: 'REAL' // Siempre REAL para mediciones
+        valor: Number(formData.get('value'))
+        // escenario removido - la tabla mediciones no tiene esta columna
       };
 
       try {
