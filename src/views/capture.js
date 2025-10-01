@@ -334,6 +334,22 @@ async function loadIndicatorContent(container, indicatorId) {
       getIndicatorTargets(indicatorId, { year: currentYear })
     ]);
 
+    // Calcular el siguiente mes a capturar
+    let nextMonth = new Date().getMonth() + 1; // Mes actual por defecto
+    
+    if (history && history.length > 0) {
+      // Encontrar el último mes capturado
+      const lastCapture = history[0]; // Ya está ordenado descendente
+      if (lastCapture.anio === currentYear) {
+        // Si hay capturas del año actual, sugerir el mes siguiente
+        nextMonth = (lastCapture.mes % 12) + 1;
+        // Si ya completó el año, volver a enero
+        if (lastCapture.mes === 12) {
+          nextMonth = 1;
+        }
+      }
+    }
+
     // Construcción dinámica: solo 1 columna si NO es subdirector, 2 columnas si SÍ es
     const gridClass = esSubdirector ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
 
@@ -356,7 +372,7 @@ async function loadIndicatorContent(container, indicatorId) {
                 Mes
                 <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
                   ${months.map((month) => `
-                    <option value="${month.value}" ${month.value === new Date().getMonth() + 1 ? 'selected' : ''}>
+                    <option value="${month.value}" ${month.value === nextMonth ? 'selected' : ''}>
                       ${month.label}
                     </option>
                   `).join('')}
