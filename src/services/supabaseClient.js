@@ -306,9 +306,9 @@ export async function getIndicators() {
   return [];
 }
 
-export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
+export async function getIndicatorHistory(indicadorId, { limit = 24, year } = {}) {
   if (!indicadorId) return [];
-
+  
   const relations = [
     'v_mediciones_historico',
     'v_mediciones_historico_v2',
@@ -320,12 +320,19 @@ export async function getIndicatorHistory(indicadorId, { limit = 24 } = {}) {
   ];
 
   for (const relation of relations) {
-    const { data, error } = await supabase
+    let query = supabase
       .from(relation)
       .select('*')
-      .eq('indicador_id', indicadorId)
-      .order('anio', { ascending: true })
-      .order('mes', { ascending: true })
+      .eq('indicador_id', indicadorId);
+    
+    // Filtrar por año si se proporciona
+    if (year) {
+      query = query.eq('anio', year);
+    }
+    
+    const { data, error } = await query
+      .order('anio', { ascending: false })
+      .order('mes', { ascending: false })
       .limit(limit);
 
     if (!error) {
