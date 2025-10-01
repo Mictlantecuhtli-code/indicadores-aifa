@@ -1369,21 +1369,21 @@ function buildGroupMarkup(groupId, rootId) {
 function buildIndicatorSectionContent(section) {
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
-  const directionsMarkup = section.includeDirections
-    ? `
-        <div class="space-y-3">
-          <h3 class="text-sm font-semibold text-slate-900">Direcciones</h3>
-          <div data-directions-container class="min-h-[4rem]"></div>
-        </div>
-      `
-    : '';
-
   return `
-    <div class="space-y-6">
-      <div class="space-y-3">
-        ${groupsMarkup}
-      </div>
-      ${directionsMarkup}
+    <div class="space-y-3">
+      ${groupsMarkup}
+    </div>
+  `;
+}
+
+function buildDirectionsSectionContent() {
+  return `
+    <div class="space-y-3">
+      <p class="text-sm text-slate-500">
+        Seleccione una dirección para consultar sus áreas dependientes.
+      </p>
+      <div data-directions-container class="space-y-3"></div>
+
     </div>
   `;
 }
@@ -1475,7 +1475,7 @@ function buildSectionsMarkup() {
     const content =
       section.type === 'indicators'
         ? buildIndicatorSectionContent(section)
-        : '<div data-directions-container class="min-h-[4rem]"></div>';
+        : buildDirectionsSectionContent(section);
 
     return `
       <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" data-accordion-section="${
