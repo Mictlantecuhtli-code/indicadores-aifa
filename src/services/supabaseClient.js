@@ -621,4 +621,4 @@ export async function removeUserFromArea(usuario_id, area_id) {
   if (error) throw error;
   return data;
 }
-}
+
