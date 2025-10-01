@@ -620,5 +620,54 @@ export async function removeUserFromArea(usuario_id, area_id) {
 
   if (error) throw error;
   return data;
+
+  /**
+ * Obtener indicadores que el usuario puede capturar según sus áreas asignadas
+ */
+export async function getIndicatorsByUserAreas(userId) {
+  // 1. Obtener áreas del usuario
+  const { data: userAreas, error: areasError } = await supabase
+    .from('usuario_areas')
+    .select('area_id, puede_capturar')
+    .eq('usuario_id', userId)
+    .eq('estado', 'ACTIVO')
+    .eq('puede_capturar', true);
+
+  if (areasError) throw areasError;
+
+  if (!userAreas || userAreas.length === 0) {
+    return []; // Usuario no tiene áreas con permiso de captura
+  }
+
+  const areaIds = userAreas.map(ua => ua.area_id);
+
+  // 2. Obtener indicadores de esas áreas
+  const { data: indicadores, error: indicadoresError } = await supabase
+    .from('indicadores')
+    .select('id, nombre, codigo, unidad_medida, area_id, areas(id, nombre)')
+    .in('area_id', areaIds)
+    .order('areas(nombre)', { ascending: true })
+    .order('nombre', { ascending: true });
+
+  if (indicadoresError) throw indicadoresError;
+
+  return indicadores || [];
+}
+
+/**
+ * Obtener áreas donde el usuario puede capturar
+ */
+export async function getUserCaptureAreas(userId) {
+  const { data, error } = await supabase
+    .from('usuario_areas')
+    .select('area_id, areas(id, nombre)')
+    .eq('usuario_id', userId)
+    .eq('estado', 'ACTIVO')
+    .eq('puede_capturar', true)
+    .order('areas(nombre)', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
 }
 
