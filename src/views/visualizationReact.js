@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 let root = null;
 
 export async function renderVisualizationReact(container) {
-  // Limpiar contenedor
   container.innerHTML = '<div id="react-visualization-root"></div>';
   
   const reactRoot = document.getElementById('react-visualization-root');
@@ -14,19 +13,18 @@ export async function renderVisualizationReact(container) {
   }
 
   try {
-    // Importar dinámicamente el componente React
-    const { default: AdvancedVisualization } = await import('../pages/AdvancedVisualization.jsx');
+    // Importar React y el componente
     const React = await import('react');
+    const { default: AdvancedVisualization } = await import('../pages/AdvancedVisualization.jsx');
 
-    // Limpiar root anterior si existe
+    // Limpiar root anterior
     if (root) {
       root.unmount();
     }
     
-    // Crear nuevo root y renderizar
+    // Crear y renderizar
     root = createRoot(reactRoot);
     
-    // Usar React.createElement en lugar de JSX
     root.render(
       React.createElement(
         React.StrictMode,
@@ -34,6 +32,7 @@ export async function renderVisualizationReact(container) {
         React.createElement(AdvancedVisualization)
       )
     );
+    
   } catch (error) {
     console.error('Error cargando componente React:', error);
     container.innerHTML = `
@@ -41,6 +40,12 @@ export async function renderVisualizationReact(container) {
         <i class="fa-solid fa-triangle-exclamation text-4xl text-red-500"></i>
         <h3 class="mt-4 text-lg font-semibold text-red-900">Error al cargar la visualización</h3>
         <p class="mt-2 text-sm text-red-600">${error.message}</p>
+        <button 
+          onclick="location.reload()"
+          class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+        >
+          Reintentar
+        </button>
       </div>
     `;
   }
