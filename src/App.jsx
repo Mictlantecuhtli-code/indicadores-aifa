@@ -55,7 +55,7 @@ export default function App() {
         <Route path="captura" element={<CapturePage />} />
         <Route path="usuarios" element={<UsersPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={session ? '/panel-directivos' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={session ? defaultRoute : '/login'} replace />} />
     </Routes>
   );
 }
