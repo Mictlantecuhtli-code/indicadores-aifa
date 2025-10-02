@@ -23,34 +23,59 @@ export default function AppLayout() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const logoUrl = useMemo(() => new URL('../../assets/AIFA_logo.png', import.meta.url).href, []);
 
-  const availableNavigation = useMemo(() => {
-    const role = (profile?.rol ?? profile?.puesto)?.toString().toLowerCase();
+  const normalizedRole = useMemo(
+    () => (profile?.rol ?? profile?.puesto)?.toString().toLowerCase() ?? null,
+    [profile]
+  );
 
-    if (role?.includes('director')) {
-      return navigation.filter(item => item.to === '/panel-directivos');
+  const allowedPaths = useMemo(() => {
+    if (!normalizedRole) {
+      return navigation.map(item => item.to);
     }
 
-    return navigation;
-  }, [profile]);
+    if (normalizedRole.includes('director')) {
+      return ['/panel-directivos'];
+    }
+
+    if (normalizedRole.includes('capturista')) {
+      return ['/visualizacion', '/captura'];
+    }
+
+    return navigation.map(item => item.to);
+  }, [normalizedRole]);
+
+  const availableNavigation = useMemo(() => {
+    const allowedSet = new Set(allowedPaths);
+    const filtered = navigation.filter(item => allowedSet.has(item.to));
+    return filtered.length ? filtered : navigation;
+  }, [allowedPaths]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  const isDirector = useMemo(() => {
-    const role = (profile?.rol ?? profile?.puesto)?.toString().toLowerCase();
-    return role?.includes('director');
-  }, [profile]);
+  const fallbackPath = useMemo(() => {
+    if (normalizedRole?.includes('capturista')) {
+      return '/captura';
+    }
+
+    return '/panel-directivos';
+  }, [normalizedRole]);
 
   useEffect(() => {
-    if (!isDirector) return;
+    if (!normalizedRole) return;
 
-    const isDashboardRoute = location.pathname === '/panel-directivos' || location.pathname.startsWith('/panel-directivos/');
+    const isAllowed = allowedPaths.some(path => {
+      if (path === '/') {
+        return location.pathname === '/';
+      }
+      return location.pathname === path || location.pathname.startsWith(`${path}/`);
+    });
 
-    if (!isDashboardRoute) {
-      navigate('/panel-directivos', { replace: true });
+    if (!isAllowed) {
+      navigate(fallbackPath, { replace: true });
     }
-  }, [isDirector, location.pathname, navigate]);
+  }, [allowedPaths, fallbackPath, location.pathname, navigate, normalizedRole]);
 
   const activeNavigation = useMemo(() => {
     const items = availableNavigation.length ? availableNavigation : navigation;

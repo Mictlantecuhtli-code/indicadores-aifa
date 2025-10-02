@@ -1,6 +1,7 @@
 import { signInWithEmail } from '../services/supabaseClient.js';
 import { setSession } from '../state/session.js';
 import { showToast } from '../ui/feedback.js';
+import { getDefaultRouteForRole } from '../constants/legacyAccess.js';
 
 export function renderLogin(container) {
   container.innerHTML = `
@@ -110,7 +111,8 @@ export function renderLogin(container) {
     try {
       const { data } = await signInWithEmail(credentials);
       setSession(data);
-      window.location.hash = '#dashboard';
+      const defaultRoute = getDefaultRouteForRole(data?.perfil?.rol_principal);
+      window.location.hash = `#${defaultRoute}`;
     } catch (error) {
       console.error(error);
       showToast(error.message ?? 'No fue posible iniciar sesión.', { type: 'error' });

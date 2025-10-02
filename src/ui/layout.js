@@ -8,27 +8,27 @@ function getFilteredNavItems() {
   return NAV_ITEMS.filter(item => item.roles.includes(userRole));
 }
 const NAV_ITEMS = [
-  { 
-    id: 'dashboard', 
-    label: 'Panel Directivos', 
+  {
+    id: 'dashboard',
+    label: 'Panel Directivos',
     icon: 'fa-chart-line',
-    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
+    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN']
   },
-  { 
-    id: 'visualizacion', 
-    label: 'Visualización de Indicadores', 
+  {
+    id: 'visualizacion',
+    label: 'Visualización de Indicadores',
     icon: 'fa-chart-area',
     roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
   },
-  { 
-    id: 'indicators', 
-    label: 'Consulta de Indicadores', 
+  {
+    id: 'indicators',
+    label: 'Consulta de Indicadores',
     icon: 'fa-table',
-    roles: ['SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Director NO puede ver
+    roles: ['SUBDIRECTOR', 'ADMIN'] // Director y capturista NO pueden ver
   },
-  { 
-    id: 'capture', 
-    label: 'Captura de Indicadores', 
+  {
+    id: 'capture',
+    label: 'Captura de Indicadores',
     icon: 'fa-pen-to-square',
     roles: ['SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Director NO puede ver
   },

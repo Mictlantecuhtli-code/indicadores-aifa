@@ -30,11 +30,15 @@ function ProtectedRoute({ children }) {
 }
 
 export default function App() {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
+
+  const normalizedRole = (profile?.rol ?? profile?.puesto)?.toString().toLowerCase() ?? '';
+  const defaultRoute = normalizedRole.includes('capturista') ? '/captura' : '/panel-directivos';
+  const defaultSubpath = defaultRoute.replace(/^\//, '');
 
   return (
     <Routes>
-      <Route path="/login" element={session ? <Navigate to="/panel-directivos" replace /> : <LoginPage />} />
+      <Route path="/login" element={session ? <Navigate to={defaultRoute} replace /> : <LoginPage />} />
       <Route
         path="/"
         element={
@@ -43,7 +47,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="panel-directivos" replace />} />
+        <Route index element={<Navigate to={defaultSubpath} replace />} />
         <Route path="panel-directivos" element={<DashboardPage />} />
         <Route path="panel-directivos/:optionId" element={<IndicatorDetailPage />} />
         <Route path="visualizacion" element={<VisualizationPage />} />
@@ -51,7 +55,7 @@ export default function App() {
         <Route path="captura" element={<CapturePage />} />
         <Route path="usuarios" element={<UsersPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={session ? '/panel-directivos' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={session ? defaultRoute : '/login'} replace />} />
     </Routes>
   );
 }

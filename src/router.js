@@ -8,6 +8,7 @@ import { getSession, setSession, subscribe } from './state/session.js';
 import { renderLayout, highlightActiveRoute } from './ui/layout.js';
 import { signOut } from './services/supabaseClient.js';
 import { showToast } from './ui/feedback.js';
+import { getRoutesForRole, getDefaultRouteForRole } from './constants/legacyAccess.js';
 
 const routes = {
   login: renderLogin,
@@ -19,7 +20,14 @@ const routes = {
 };
 
 function getRouteFromHash() {
-  return (window.location.hash || '#dashboard').replace('#', '');
+  const currentHash = (window.location.hash || '').replace('#', '');
+
+  if (currentHash) {
+    return currentHash;
+  }
+
+  const role = getUserRole();
+  return getDefaultRouteForRole(role);
 }
 
 import { getUserRole } from './state/session.js';
@@ -39,27 +47,20 @@ async function ensureAuthenticated(routeId) {
   if (session) {
     const userRole = getUserRole();
     const allowedRoutes = getRoutesForRole(userRole);
-    
+
     if (!allowedRoutes.includes(routeId)) {
-      showToast('No tienes permisos para acceder a esta sección', { type: 'error' });
-      window.location.hash = '#dashboard';
+      const fallbackRoute = getDefaultRouteForRole(userRole);
+
+      if (routeId !== fallbackRoute) {
+        showToast('No tienes permisos para acceder a esta sección', { type: 'error' });
+      }
+
+      window.location.hash = `#${fallbackRoute}`;
       return false;
     }
   }
   
   return true;
-}
-
-// Función auxiliar para obtener rutas permitidas por rol
-function getRoutesForRole(role) {
-  const routesByRole = {
-    'DIRECTOR': ['dashboard', 'visualizacion'],
-    'SUBDIRECTOR': ['dashboard', 'visualizacion', 'indicators', 'capture'],
-    'CAPTURISTA': ['dashboard', 'visualizacion', 'indicators', 'capture'],
-    'ADMIN': ['dashboard', 'visualizacion', 'indicators', 'capture', 'users']
-  };
-  
-  return routesByRole[role] || ['dashboard']; // Por defecto solo dashboard
 }
 
 function bindLayoutActions() {
