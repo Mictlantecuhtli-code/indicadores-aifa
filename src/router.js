@@ -1,7 +1,7 @@
 import { renderDashboard } from './views/dashboard.js';
 import { renderIndicators } from './views/indicators.js';
 import { renderCapture } from './views/capture.js';
-import { renderVisualizationReact } from './views/visualizationReact.js';
+import { renderVisualizationReact } from './views/visualizationReact.jsx';
 import { renderUsers } from './views/users.js';
 import { renderLogin } from './views/login.js';
 import { getSession, setSession, subscribe } from './state/session.js';
