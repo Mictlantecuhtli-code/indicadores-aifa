@@ -567,20 +567,28 @@ function getBadgeStyles(color) {
   };
 }
 
+// Función buildAreaTree modificada para excluir "Sin Asignar"
+
 function buildAreaTree(areas) {
   const byParent = new Map();
-
-  (areas ?? []).forEach(area => {
+  
+  // CAMBIO: Filtrar áreas que contengan "sin asignar" en el nombre
+  const filteredAreas = (areas ?? []).filter(area => {
+    const nombre = (area?.nombre ?? '').toLowerCase();
+    return !nombre.includes('sin asignar');
+  });
+  
+  filteredAreas.forEach(area => {
     const parentId = area?.parent_area_id ?? null;
     if (!byParent.has(parentId)) {
       byParent.set(parentId, []);
     }
     byParent.get(parentId).push(area);
   });
-
+  
   const sortAreas = list =>
     (list ?? []).slice().sort((a, b) => (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' }));
-
+  
   const buildBranch = parentId => {
     const children = sortAreas(byParent.get(parentId));
     return children.map(child => ({
@@ -588,7 +596,7 @@ function buildAreaTree(areas) {
       children: buildBranch(child.id)
     }));
   };
-
+  
   return buildBranch(null);
 }
 
