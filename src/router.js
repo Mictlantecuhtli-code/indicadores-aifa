@@ -39,10 +39,13 @@ async function ensureAuthenticated(routeId) {
   if (session) {
     const userRole = getUserRole();
     const allowedRoutes = getRoutesForRole(userRole);
-    
+
     if (!allowedRoutes.includes(routeId)) {
       showToast('No tienes permisos para acceder a esta sección', { type: 'error' });
-      window.location.hash = '#dashboard';
+      const fallbackRoute = allowedRoutes.includes('visualizacion')
+        ? 'visualizacion'
+        : allowedRoutes[0] ?? 'dashboard';
+      window.location.hash = `#${fallbackRoute}`;
       return false;
     }
   }
@@ -55,10 +58,10 @@ function getRoutesForRole(role) {
   const routesByRole = {
     'DIRECTOR': ['dashboard', 'visualizacion'],
     'SUBDIRECTOR': ['dashboard', 'visualizacion', 'indicators', 'capture'],
-    'CAPTURISTA': ['dashboard', 'visualizacion', 'indicators', 'capture'],
+    'CAPTURISTA': ['visualizacion', 'capture'],
     'ADMIN': ['dashboard', 'visualizacion', 'indicators', 'capture', 'users']
   };
-  
+
   return routesByRole[role] || ['dashboard']; // Por defecto solo dashboard
 }
 
