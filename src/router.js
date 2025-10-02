@@ -1,7 +1,7 @@
 import { renderDashboard } from './views/dashboard.js';
 import { renderIndicators } from './views/indicators.js';
 import { renderCapture } from './views/capture.js';
-import { renderVisualization } from './views/visualization.js';
+import { renderVisualizationReact } from './views/visualizationReact.js';
 import { renderUsers } from './views/users.js';
 import { renderLogin } from './views/login.js';
 import { getSession, setSession, subscribe } from './state/session.js';
@@ -12,7 +12,7 @@ import { showToast } from './ui/feedback.js';
 const routes = {
   login: renderLogin,
   dashboard: renderDashboard,
-  visualizacion: renderVisualization,
+  visualizacion: renderVisualizationReact,
   indicators: renderIndicators,
   capture: renderCapture,
   users: renderUsers
