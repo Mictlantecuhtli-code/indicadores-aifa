@@ -114,8 +114,8 @@ function useIndicatorsData() {
       const currentYear = new Date().getFullYear();
       const { data: measurementsData, error: measError } = await supabase
         .from('mediciones')
-        .select('indicador_id, año, mes, valor')
-        .eq('año', currentYear)
+        .select('indicador_id, anio, mes, valor')
+        .eq('anio', currentYear)
         .order('mes', { ascending: true });
 
       if (measError) throw measError;
@@ -123,8 +123,8 @@ function useIndicatorsData() {
       // 4. Cargar metas del año actual
       const { data: metasData, error: metasError } = await supabase
         .from('indicador_metas')
-        .select('indicador_id, año, mes, escenario, valor')
-        .eq('año', currentYear);
+        .select('indicador_id, anio, mes, escenario, valor')
+        .eq('anio', currentYear);
 
       if (metasError) throw metasError;
 
@@ -697,9 +697,19 @@ function ComparativeTableRow({ indicator }) {
 // ═══════════════════════════════════════════════════════════════════
 
 function TemporalView({ data }) {
-  const [selectedId, setSelectedId] = useState(data[0]?.id);
+  const [selectedId, setSelectedId] = useState(() =>
+    data[0] ? String(data[0].id) : ''
+  );
 
-  const selectedIndicator = data.find(ind => ind.id === selectedId) || data[0];
+  useEffect(() => {
+    if (!data || data.length === 0) return;
+    const exists = data.some(ind => String(ind.id) === selectedId);
+    if (!exists) {
+      setSelectedId(String(data[0].id));
+    }
+  }, [data, selectedId]);
+
+  const selectedIndicator = data.find(ind => String(ind.id) === selectedId) || data[0];
   const measurements = selectedIndicator?.mediciones || [];
 
   return h('div', { className: 'space-y-6' },
@@ -711,10 +721,12 @@ function TemporalView({ data }) {
         ),
         h('select', {
           value: selectedId,
-          onChange: (e) => setSelectedId(Number(e.target.value)),
+          onChange: (e) => setSelectedId(e.target.value),
           className: 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20'
         },
-          data.map(ind => h('option', { key: ind.id, value: ind.id }, ind.nombre || 'Sin nombre'))
+          data.map(ind =>
+            h('option', { key: ind.id, value: String(ind.id) }, ind.nombre || 'Sin nombre')
+          )
         )
       )
     ),
