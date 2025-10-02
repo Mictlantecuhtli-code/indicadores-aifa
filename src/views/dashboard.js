@@ -809,7 +809,8 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   ];
   
   // Generar labels basados en trimestres completos
-  const labels = Array.from({ length: completeQuarters }, (_, i) => `Q${i + 1}`);
+  const quarterNames = ['Primer trimestre', 'Segundo trimestre', 'Tercer trimestre', 'Cuarto trimestre'];
+  const labels = Array.from({ length: completeQuarters }, (_, i) => quarterNames[i]);
   
   for (let i = 0; i < yearsToShow; i++) {
     const year = startYear + i;
@@ -1153,11 +1154,11 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
                 <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.comparisonValue)}</p>
               </article>
               <!-- CAMBIO 1: Porcentaje arriba y diferencia numérica abajo -->
-              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
-                <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatPercentage(summary.pct)}</p>
-                <p class="mt-1 text-sm text-slate-600">${formatSignedNumber(summary.diff)}</p>
-              </article>
+            <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
+              <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatPercentage(summary.pct)}</p>
+              <p class="mt-1 text-sm text-slate-600">(${formatSignedNumber(summary.diff)})</p>
+            </article>
             </div>
           </section>
 
@@ -1172,7 +1173,7 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
               <canvas data-modal-chart aria-label="Gráfica del indicador"></canvas>
             </div>
             <!-- CAMBIO 2: Checkbox para mostrar últimos 4 años (solo para monthly, quarterly, annual) -->
-            ${['monthly', 'quarterly', 'annual'].includes(type) ? `
+            ${['monthly', 'quarterly'].includes(type) ? `
               <div class="mt-3 flex justify-end">
                 <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                   <input 
@@ -1287,7 +1288,7 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
     }
 
     // CAMBIO: Agregar estado para el checkbox de histórico
-    let currentChartType = 'line';
+    let currentChartType = type === 'quarterly' ? 'bar' : 'line';
     let showHistorical = false;
 
     const renderModal = (chartType, historical) => {
