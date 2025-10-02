@@ -114,8 +114,8 @@ function useIndicatorsData() {
       const currentYear = new Date().getFullYear();
       const { data: measurementsData, error: measError } = await supabase
         .from('mediciones')
-        .select('indicador_id, año, mes, valor')
-        .eq('año', currentYear)
+        .select('indicador_id, anio, mes, valor')
+        .eq('anio', currentYear)
         .order('mes', { ascending: true });
 
       if (measError) throw measError;
@@ -123,8 +123,8 @@ function useIndicatorsData() {
       // 4. Cargar metas del año actual
       const { data: metasData, error: metasError } = await supabase
         .from('indicador_metas')
-        .select('indicador_id, año, mes, escenario, valor')
-        .eq('año', currentYear);
+        .select('indicador_id, anio, mes, escenario, valor')
+        .eq('anio', currentYear);
 
       if (metasError) throw metasError;
 
