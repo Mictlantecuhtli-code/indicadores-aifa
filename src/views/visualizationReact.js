@@ -15,7 +15,7 @@ export async function renderVisualizationReact(container) {
   try {
     // Importar React y el componente
     const React = await import('react');
-    const { default: AdvancedVisualization } = await import('../pages/AdvancedVisualization.jsx');
+    const { default: AdvancedVisualization } = await import('../pages/AdvancedVisualization.js');
 
     // Limpiar root anterior
     if (root) {
