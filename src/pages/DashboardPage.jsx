@@ -575,7 +575,7 @@ function buildAreaTree(areas) {
   // CAMBIO: Filtrar áreas que contengan "sin asignar" en el nombre
   const filteredAreas = (areas ?? []).filter(area => {
   const nombre = (area?.nombre ?? '').toString().toLowerCase().trim();
-  return nombre && !nombre.includes('sin asignar');
+  return nombre && !nombre.includes('Sin asignar');
   });
   
   filteredAreas.forEach(area => {
