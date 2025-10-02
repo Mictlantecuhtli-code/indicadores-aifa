@@ -58,15 +58,27 @@ function calculateMetrics(indicators) {
 }
 
 function exportToCSV(data) {
-  const headers = ['ID', 'Nombre', 'Área', 'Unidad', 'Cumplimiento %', 'Estado'];
-  const rows = data.map(ind => [
-    ind.id || '',
-    ind.nombre || '',
-    ind.area_nombre || '',
-    ind.unidad_medida || '',
-    ((ind.cumplimiento || 0) * 100).toFixed(2),
-    calculateIndicatorStatus(ind)
-  ]);
+  const headers = ['Indicador', 'Área', 'Unidad', 'Escenario', 'Meta Objetivo', 'Promedio Real', 'Cumplimiento %', 'Estado'];
+  const rows = data.map(ind => {
+    const metaObjetivo = ind.meta_objetivo ?? Number(ind.meta_anual ?? 0);
+    const promedioReal = ind.promedio_real ?? ind.valor_real ?? 0;
+
+    const formatNumber = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num.toFixed(2) : '';
+    };
+
+    return [
+      ind.nombre || '',
+      ind.area_nombre || '',
+      ind.unidad_medida || '',
+      ind.escenario_seleccionado === 'meta_anual' ? 'Meta anual del indicador' : ind.escenario_seleccionado || '',
+      formatNumber(metaObjetivo),
+      formatNumber(promedioReal),
+      ((ind.cumplimiento || 0) * 100).toFixed(2),
+      calculateIndicatorStatus(ind)
+    ];
+  });
 
   const csvContent = [
     headers.join(','),
@@ -85,6 +97,7 @@ function exportToCSV(data) {
 
 function useIndicatorsData() {
   const [indicators, setIndicators] = useState([]);
+  const [scenarios, setScenarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -129,37 +142,56 @@ function useIndicatorsData() {
       if (metasError) throw metasError;
 
       // 5. Enriquecer indicadores con datos relacionados
+      const availableScenarios = new Set();
       const enrichedIndicators = indicatorsData.map(ind => {
         // Encontrar área
         const area = areasData.find(a => a.id === ind.area_id);
-        
+
         // Encontrar mediciones del indicador
         const indMeasurements = measurementsData.filter(m => m.indicador_id === ind.id);
-        
+
         // Encontrar metas del indicador
         const indMetas = metasData.filter(m => m.indicador_id === ind.id);
-        
+
+        const metasPorEscenario = indMetas.reduce((acc, meta) => {
+          const escenario = meta.escenario?.trim();
+          if (!escenario) return acc;
+
+          availableScenarios.add(escenario);
+
+          if (!acc[escenario]) {
+            acc[escenario] = { total: 0, count: 0 };
+          }
+
+          acc[escenario].total += Number(meta.valor) || 0;
+          acc[escenario].count += 1;
+          return acc;
+        }, {});
+
+        const metasPromedioPorEscenario = Object.entries(metasPorEscenario).reduce((acc, [escenario, info]) => {
+          acc[escenario] = info.count > 0 ? info.total / info.count : 0;
+          return acc;
+        }, {});
+
         // Calcular promedio de valores reales
         const avgReal = indMeasurements.length > 0
           ? indMeasurements.reduce((sum, m) => sum + (Number(m.valor) || 0), 0) / indMeasurements.length
           : 0;
-        
-        // Calcular cumplimiento vs meta anual
-        const metaAnual = Number(ind.meta_anual) || 100;
-        const cumplimiento = metaAnual > 0 ? avgReal / metaAnual : 0;
-        
+
         return {
           ...ind,
           area_nombre: area?.nombre || 'Sin área',
           area_clave: area?.clave || 'N/A',
-          cumplimiento,
           valor_real: avgReal,
+          promedio_real: avgReal,
           mediciones: indMeasurements,
-          metas: indMetas
+          metas: indMetas,
+          metas_por_escenario: metasPromedioPorEscenario
         };
       });
 
       setIndicators(enrichedIndicators);
+      setScenarios(Array.from(availableScenarios).sort((a, b) => a.localeCompare(b, 'es-MX', { sensitivity: 'base' })));
 
     } catch (err) {
       console.error('Error cargando datos:', err);
@@ -169,23 +201,54 @@ function useIndicatorsData() {
     }
   }
 
-  return { indicators, loading, error, reload: loadData };
+  return { indicators, scenarios, loading, error, reload: loadData };
 }
 // ═══════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════
 
 export default function AdvancedVisualization() {
-  const { indicators, loading, error, reload } = useIndicatorsData();
-  
+  const { indicators, scenarios, loading, error, reload } = useIndicatorsData();
+
   const [currentView, setCurrentView] = useState(CONFIG.VIEW_TYPES.EXECUTIVE);
   const [selectedArea, setSelectedArea] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedScenario, setSelectedScenario] = useState('meta_anual');
+
+  useEffect(() => {
+    if (selectedScenario !== 'meta_anual' && !scenarios.includes(selectedScenario)) {
+      setSelectedScenario('meta_anual');
+    }
+  }, [scenarios, selectedScenario]);
+
+  const scenarioAdjustedIndicators = useMemo(() => {
+    return indicators.map(ind => {
+      const promedioReal = ind.promedio_real ?? ind.valor_real ?? 0;
+
+      let metaObjetivo = Number(ind.meta_anual) || 0;
+      if (selectedScenario !== 'meta_anual') {
+        const metaEscenario = ind.metas_por_escenario?.[selectedScenario];
+        if (metaEscenario !== undefined) {
+          metaObjetivo = Number(metaEscenario) || 0;
+        }
+      }
+
+      const cumplimiento = metaObjetivo > 0 ? promedioReal / metaObjetivo : 0;
+
+      return {
+        ...ind,
+        meta_objetivo: metaObjetivo,
+        promedio_real: promedioReal,
+        cumplimiento,
+        escenario_seleccionado: selectedScenario
+      };
+    });
+  }, [indicators, selectedScenario]);
 
   // Filtrar datos
   const filteredData = useMemo(() => {
-    let filtered = [...indicators];
+    let filtered = [...scenarioAdjustedIndicators];
 
     if (selectedArea !== 'all') {
       filtered = filtered.filter(ind => String(ind.area_id) === selectedArea);
@@ -204,7 +267,7 @@ export default function AdvancedVisualization() {
     }
 
     return filtered;
-  }, [indicators, selectedArea, selectedType, selectedStatus]);
+  }, [scenarioAdjustedIndicators, selectedArea, selectedType, selectedStatus]);
 
   // Calcular métricas
   const metrics = useMemo(() => calculateMetrics(filteredData), [filteredData]);
@@ -256,7 +319,10 @@ export default function AdvancedVisualization() {
       selectedType,
       setSelectedType,
       selectedStatus,
-      setSelectedStatus
+      setSelectedStatus,
+      scenarios,
+      selectedScenario,
+      setSelectedScenario
     }),
     
     // Selector de Vistas
@@ -266,7 +332,7 @@ export default function AdvancedVisualization() {
     h(QuickMetrics, { metrics }),
     
     // Contenido de la Vista Actual
-    h(ViewRenderer, { currentView, data: filteredData })
+    h(ViewRenderer, { currentView, data: filteredData, selectedScenario })
   );
 }
 // ═══════════════════════════════════════════════════════════════════
@@ -306,7 +372,18 @@ function Header({ onExport, onRefresh }) {
 // COMPONENTE: FILTROS
 // ═══════════════════════════════════════════════════════════════════
 
-function Filters({ areas, selectedArea, setSelectedArea, selectedType, setSelectedType, selectedStatus, setSelectedStatus }) {
+function Filters({
+  areas,
+  selectedArea,
+  setSelectedArea,
+  selectedType,
+  setSelectedType,
+  selectedStatus,
+  setSelectedStatus,
+  scenarios,
+  selectedScenario,
+  setSelectedScenario
+}) {
   return h('div', { className: 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm' },
     h('div', { className: 'grid gap-4 md:grid-cols-2 lg:grid-cols-4' },
       
@@ -362,17 +439,21 @@ function Filters({ areas, selectedArea, setSelectedArea, selectedType, setSelect
         )
       ),
 
-      // Espacio para futuro filtro de periodo
+      // Filtro: Escenario de metas
       h('div', { className: 'flex flex-col gap-2' },
         h('label', { className: 'text-xs font-semibold uppercase tracking-wider text-slate-500' },
-          h('i', { className: 'fa-solid fa-calendar mr-1' }),
-          'Periodo'
+          h('i', { className: 'fa-solid fa-bullseye mr-1' }),
+          'Escenario de meta'
         ),
         h('select', {
-          disabled: true,
-          className: 'rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500 shadow-sm'
+          value: selectedScenario,
+          onChange: (e) => setSelectedScenario(e.target.value),
+          className: 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20'
         },
-          h('option', null, 'Año actual (2025)')
+          h('option', { value: 'meta_anual' }, 'Meta anual del indicador'),
+          scenarios.length === 0
+            ? null
+            : scenarios.map(escenario => h('option', { key: escenario, value: escenario }, escenario))
         )
       )
     )
@@ -507,7 +588,7 @@ function QuickMetrics({ metrics }) {
 // COMPONENTE: ROUTER DE VISTAS
 // ═══════════════════════════════════════════════════════════════════
 
-function ViewRenderer({ currentView, data }) {
+function ViewRenderer({ currentView, data, selectedScenario }) {
   if (!data || data.length === 0) {
     return h('div', { className: 'rounded-2xl bg-white p-12 text-center shadow-sm' },
       h('i', { className: 'fa-solid fa-inbox text-5xl text-slate-300' }),
@@ -525,7 +606,7 @@ function ViewRenderer({ currentView, data }) {
     case CONFIG.VIEW_TYPES.HEATMAP:
       return h(HeatmapView, { data });
     case CONFIG.VIEW_TYPES.TABLE:
-      return h(TableView, { data });
+      return h(TableView, { data, selectedScenario });
     default:
       return h('div', { className: 'rounded-2xl bg-white p-8 text-center text-slate-500 shadow-sm' },
         'Vista no reconocida'
@@ -846,7 +927,11 @@ function HeatmapCell({ indicator }) {
 // VISTA DE TABLA
 // ═══════════════════════════════════════════════════════════════════
 
-function TableView({ data }) {
+function TableView({ data, selectedScenario }) {
+  const scenarioLabel = selectedScenario === 'meta_anual'
+    ? 'Comparando contra: Meta anual del indicador'
+    : `Comparando contra: ${selectedScenario}`;
+
   return h('div', { className: 'rounded-2xl border border-slate-200 bg-white shadow-sm' },
     h('div', { className: 'border-b border-slate-200 p-6' },
       h('div', { className: 'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between' },
@@ -857,6 +942,10 @@ function TableView({ data }) {
           ),
           h('p', { className: 'mt-1 text-sm text-slate-500' },
             `${data.length} indicador${data.length !== 1 ? 'es' : ''} encontrado${data.length !== 1 ? 's' : ''}`
+          ),
+          h('div', { className: 'mt-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600' },
+            h('i', { className: 'fa-solid fa-bullseye text-slate-500' }),
+            scenarioLabel
           )
         ),
         h('button', {
@@ -873,10 +962,11 @@ function TableView({ data }) {
       h('table', { className: 'min-w-full divide-y divide-slate-200' },
         h('thead', { className: 'bg-slate-50' },
           h('tr', null,
-            h('th', { className: 'px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'ID'),
             h('th', { className: 'px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Indicador'),
             h('th', { className: 'px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Área'),
             h('th', { className: 'px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Unidad'),
+            h('th', { className: 'px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Meta objetivo'),
+            h('th', { className: 'px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Promedio real'),
             h('th', { className: 'px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Cumplimiento'),
             h('th', { className: 'px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-600' }, 'Estado')
           )
@@ -909,11 +999,23 @@ function DetailedTableRow({ indicator }) {
 
   const config = statusConfig[status] || statusConfig.warning;
 
+  const metaObjetivoRaw = indicator.meta_objetivo ?? indicator.meta_anual;
+  const promedioRealRaw = indicator.promedio_real ?? indicator.valor_real;
+
+  const formatNumber = (value) => Number.isFinite(value) ? value.toLocaleString('es-MX', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) : '-';
+
+  const metaObjetivoDisplay = formatNumber(Number(metaObjetivoRaw));
+  const promedioRealDisplay = formatNumber(Number(promedioRealRaw));
+
   return h('tr', { className: 'transition hover:bg-slate-50' },
-    h('td', { className: 'whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900' }, `#${indicator.id || '-'}`),
-    h('td', { className: 'px-6 py-4 text-sm text-slate-900' }, indicator.nombre || 'Sin nombre'),
+    h('td', { className: 'px-6 py-4 text-sm font-medium text-slate-900' }, indicator.nombre || 'Sin nombre'),
     h('td', { className: 'whitespace-nowrap px-6 py-4 text-sm text-slate-600' }, indicator.area_nombre || 'Sin área'),
     h('td', { className: 'whitespace-nowrap px-6 py-4 text-sm text-slate-600' }, indicator.unidad_medida || '-'),
+    h('td', { className: 'whitespace-nowrap px-6 py-4 text-right text-sm text-slate-600' }, metaObjetivoDisplay),
+    h('td', { className: 'whitespace-nowrap px-6 py-4 text-right text-sm text-slate-600' }, promedioRealDisplay),
     h('td', { className: 'whitespace-nowrap px-6 py-4 text-center' },
       h('span', { className: 'text-sm font-bold text-slate-900' }, `${compliance}%`)
     ),
