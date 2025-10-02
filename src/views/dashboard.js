@@ -452,17 +452,23 @@ function buildSummary(realData, type, scenario) {
   }
 
   if (type === 'quarterly') {
-    const completeQuarters = filterCompleteQuarters(history, currentYear);
-    
-    if (completeQuarters === 0) {
-      return {
-        title: 'Sin trimestres completos',
-        currentLabel: `${currentYear}`,
-        comparisonLabel: `${currentYear - 1}`,
-        currentValue: null,
-        comparisonValue: null,
-        diff: null,
-        pct: null
+  const quarterName = quarterNames[completeQuarters - 1] || `Trimestre ${completeQuarters}`;
+  
+  const quarterly = aggregateQuarterlyData(history, currentYear, completeQuarters);
+  const latest = quarterly[quarterly.length - 1];
+  
+  return {
+    title: `Comparativo trimestral (${quarterName} ${currentYear})`,
+    currentLabel: `${currentYear}`,
+    comparisonLabel: `${currentYear - 1}`,
+    currentValue: latest?.value ?? null,
+    comparisonValue: aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1]?.value ?? null,
+    diff: latest?.value != null && aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1]?.value != null
+      ? latest.value - aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1].value
+      : null,
+    pct: latest?.value != null && aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1]?.value != null
+      ? (latest.value - aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1].value) / aggregateQuarterlyData(history, currentYear - 1, completeQuarters)[completeQuarters - 1].value
+      : null
       };
     }
     
