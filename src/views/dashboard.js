@@ -696,52 +696,50 @@ function renderModalChart(canvas, config) {
   activeModalChart = new Chart(canvas, config);
 }
 
-function buildMonthlyChartConfig(realData, chartType = 'line') {
+// Función buildMonthlyChartConfig corregida
+// CAMBIO: Ahora soporta mostrar últimos 4 años cuando showHistorical = true
+
+function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = false) {
   if (!realData || !realData.history.length) {
     return null;
   }
-
+  
   const currentYear = CURRENT_YEAR;
-  const currentData = getDataByYear(realData.history, currentYear);
-  const previousData = getDataByYear(realData.history, currentYear - 1);
-
-  const currentValues = Array(12).fill(null);
-  const previousValues = Array(12).fill(null);
-
-  currentData.forEach(item => {
-    if (item.mes >= 1 && item.mes <= 12) {
-      currentValues[item.mes - 1] = Number(item.valor) || null;
-    }
-  });
-
-  previousData.forEach(item => {
-    if (item.mes >= 1 && item.mes <= 12) {
-      previousValues[item.mes - 1] = Number(item.valor) || null;
-    }
-  });
-
+  
+  // CAMBIO: Determinar cuántos años mostrar
+  const yearsToShow = showHistorical ? 4 : 2;
+  const startYear = currentYear - (yearsToShow - 1);
+  
+  // CAMBIO: Generar datasets dinámicamente para los años solicitados
+  const datasets = [];
+  const colors = ['#2563eb', '#10b981', '#f97316', '#8b5cf6']; // 4 colores distintos
+  
+  for (let i = 0; i < yearsToShow; i++) {
+    const year = startYear + i;
+    const yearData = getDataByYear(realData.history, year);
+    const yearValues = Array(12).fill(null);
+    
+    yearData.forEach(item => {
+      if (item.mes >= 1 && item.mes <= 12) {
+        yearValues[item.mes - 1] = Number(item.valor) || null;
+      }
+    });
+    
+    datasets.push({
+      label: `${year}`,
+      data: yearValues,
+      borderColor: colors[i],
+      backgroundColor: chartType === 'bar' ? colors[i] : `${colors[i]}26`, // 26 en hex = 15% opacidad
+      borderWidth: 2,
+      spanGaps: true
+    });
+  }
+  
   const config = {
     type: chartType,
     data: {
       labels: MONTHS.map(month => month.short),
-      datasets: [
-        {
-          label: `${currentYear}`,
-          data: currentValues,
-          borderColor: '#2563eb',
-          backgroundColor: chartType === 'bar' ? '#2563eb' : 'rgba(37, 99, 235, 0.15)',
-          borderWidth: 2,
-          spanGaps: true
-        },
-        {
-          label: `${currentYear - 1}`,
-          data: previousValues,
-          borderColor: '#10b981',
-          backgroundColor: chartType === 'bar' ? '#10b981' : 'rgba(16, 185, 129, 0.15)',
-          borderWidth: 2,
-          spanGaps: true
-        }
-      ]
+      datasets: datasets
     },
     options: {
       responsive: true,
@@ -761,7 +759,8 @@ function buildMonthlyChartConfig(realData, chartType = 'line') {
       }
     }
   };
-
+  
+  // Configuración específica para gráficas de línea
   if (chartType === 'line') {
     config.data.datasets.forEach(dataset => {
       dataset.tension = 0.3;
@@ -769,45 +768,78 @@ function buildMonthlyChartConfig(realData, chartType = 'line') {
       dataset.pointRadius = 3;
     });
   }
-
+  
+  // Configuración específica para gráficas de barras
+  if (chartType === 'bar') {
+    config.options.scales.x = {
+      stacked: false
+    };
+    config.options.scales.y.stacked = false;
+  }
+  
   return config;
 }
 
-function buildQuarterlyChartConfig(realData) {
+// Función buildQuarterlyChartConfig corregida
+// CAMBIO: Ahora soporta chartType (line/bar) y showHistorical (2 o 4 años)
+
+function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical = false) {
   if (!realData || !realData.history.length) {
     return null;
   }
-
+  
   const currentYear = CURRENT_YEAR;
   const completeQuarters = filterCompleteQuarters(realData.history, currentYear);
-
+  
   if (completeQuarters === 0) {
     return null;
   }
-
-  const currentQuarters = aggregateQuarterlyData(realData.history, currentYear, completeQuarters);
-  const previousQuarters = aggregateQuarterlyData(realData.history, currentYear - 1, completeQuarters);
-
-  const labels = currentQuarters.map(q => `Q${q.quarter}`);
-  const currentValues = currentQuarters.map(q => q.value);
-  const previousValues = previousQuarters.map(q => q.value);
-
-  return {
-    type: 'bar',
+  
+  // CAMBIO: Determinar cuántos años mostrar
+  const yearsToShow = showHistorical ? 4 : 2;
+  const startYear = currentYear - (yearsToShow - 1);
+  
+  // CAMBIO: Generar datasets dinámicamente para los años solicitados
+  const datasets = [];
+  const colors = [
+    { bg: 'rgba(37, 99, 235, 0.65)', border: '#2563eb' },
+    { bg: 'rgba(16, 185, 129, 0.45)', border: '#10b981' },
+    { bg: 'rgba(249, 115, 22, 0.65)', border: '#f97316' },
+    { bg: 'rgba(139, 92, 246, 0.65)', border: '#8b5cf6' }
+  ];
+  
+  // Generar labels basados en trimestres completos
+  const labels = Array.from({ length: completeQuarters }, (_, i) => `Q${i + 1}`);
+  
+  for (let i = 0; i < yearsToShow; i++) {
+    const year = startYear + i;
+    const quarterData = aggregateQuarterlyData(realData.history, year, completeQuarters);
+    const values = quarterData.map(q => q.value);
+    
+    const dataset = {
+      label: `${year}`,
+      data: values,
+      backgroundColor: colors[i].bg,
+      borderColor: colors[i].border,
+      borderWidth: chartType === 'line' ? 2 : 0
+    };
+    
+    // Configuración específica para líneas
+    if (chartType === 'line') {
+      dataset.tension = 0.3;
+      dataset.fill = true;
+      dataset.pointRadius = 4;
+      dataset.pointBackgroundColor = colors[i].border;
+    }
+    
+    datasets.push(dataset);
+  }
+  
+  const config = {
+    type: chartType,
     data: {
       labels,
-      datasets: [
-        {
-          label: `${currentYear}`,
-          data: currentValues,
-          backgroundColor: 'rgba(37, 99, 235, 0.65)'
-        },
-        {
-          label: `${currentYear - 1}`,
-          data: previousValues,
-          backgroundColor: 'rgba(16, 185, 129, 0.45)'
-        }
-      ]
+      datasets
     },
     options: {
       responsive: true,
@@ -827,6 +859,16 @@ function buildQuarterlyChartConfig(realData) {
       }
     }
   };
+  
+  // Asegurar que las barras no estén apiladas
+  if (chartType === 'bar') {
+    config.options.scales.x = {
+      stacked: false
+    };
+    config.options.scales.y.stacked = false;
+  }
+  
+  return config;
 }
 
 function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
@@ -917,29 +959,39 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
   return config;
 }
 
-function buildAnnualChartConfig(realData) {
+// Función buildAnnualChartConfig corregida
+// CAMBIO: Ahora soporta chartType (line/bar) y showHistorical (ajusta cantidad de años)
+
+function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = false) {
   if (!realData || !realData.history.length) {
     return null;
   }
-
+  
+  // CAMBIO: Ajustar la cantidad de años según showHistorical
+  // Si showHistorical = false: últimos 5 años
+  // Si showHistorical = true: últimos 4 años (para comparación año contra año)
+  const yearsLimit = showHistorical ? 4 : 5;
+  
   const years = Array.from(new Set(realData.history.map(item => item.anio)))
     .sort((a, b) => a - b)
-    .slice(-5);
-
+    .slice(-yearsLimit);
+  
   const values = years.map(year => {
     const yearData = getDataByYear(realData.history, year);
     return sum(yearData.map(item => item.valor));
   });
-
-  return {
-    type: 'bar',
+  
+  const config = {
+    type: chartType,
     data: {
       labels: years.map(String),
       datasets: [
         {
           label: 'Total anual',
           data: values,
-          backgroundColor: 'rgba(37, 99, 235, 0.7)'
+          backgroundColor: 'rgba(37, 99, 235, 0.7)',
+          borderColor: '#2563eb',
+          borderWidth: chartType === 'line' ? 3 : 0
         }
       ]
     },
@@ -961,24 +1013,46 @@ function buildAnnualChartConfig(realData) {
       }
     }
   };
+  
+  // Configuración específica para gráficas de línea
+  if (chartType === 'line') {
+    config.data.datasets[0].tension = 0.3;
+    config.data.datasets[0].fill = true;
+    config.data.datasets[0].pointRadius = 5;
+    config.data.datasets[0].pointBackgroundColor = '#2563eb';
+    config.data.datasets[0].pointBorderColor = '#fff';
+    config.data.datasets[0].pointBorderWidth = 2;
+    config.data.datasets[0].backgroundColor = 'rgba(37, 99, 235, 0.15)';
+  }
+  
+  return config;
 }
 
-function buildChartConfig(realData, type, scenario, chartType = 'line') {
+// Función buildChartConfig corregida
+// CAMBIO: Ahora acepta el parámetro showHistorical para mostrar últimos 4 años
+
+function buildChartConfig(realData, type, scenario, chartType = 'line', showHistorical = false) {
   if (!realData) return null;
   
   if (type === 'monthly') {
-    return buildMonthlyChartConfig(realData, chartType);
+    return buildMonthlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'quarterly') {
-    return buildQuarterlyChartConfig(realData);
+    return buildQuarterlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'annual') {
-    return buildAnnualChartConfig(realData);
+    return buildAnnualChartConfig(realData, chartType, showHistorical);
   } else {
+    // Los escenarios no usan el histórico de 4 años
     return buildScenarioChartConfig(realData, scenario, chartType);
   }
 }
 
+// Función buildChartTypeToggle corregida
+// CAMBIO: Ahora también muestra el toggle para 'quarterly' y 'annual'
+
 function buildChartTypeToggle(currentType, type) {
-  if (type !== 'monthly' && type !== 'scenario') {
+  // Mostrar toggle para todos EXCEPTO monthly (que solo usa líneas)
+  // Entonces: quarterly, annual y scenario tendrán el toggle
+  if (type === 'monthly') {
     return '';
   }
   
@@ -1078,10 +1152,11 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
                 <p class="text-xs uppercase tracking-widest text-slate-400">${escapeHtml(scenarioLabel)}</p>
                 <p class="mt-2 text-2xl font-semibold text-slate-900">${formatNumber(summary.comparisonValue)}</p>
               </article>
+              <!-- CAMBIO 1: Porcentaje arriba y diferencia numérica abajo -->
               <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
-                <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatSignedNumber(summary.diff)}</p>
-                <p class="text-xs text-slate-500">${formatPercentage(summary.pct)}</p>
+                <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatPercentage(summary.pct)}</p>
+                <p class="mt-1 text-sm text-slate-600">${formatSignedNumber(summary.diff)}</p>
               </article>
             </div>
           </section>
@@ -1089,11 +1164,26 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
           <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div class="mb-3 flex items-center justify-between flex-wrap gap-3">
               <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Visualización</h3>
-              ${chartToggle}
+              <div class="flex items-center gap-3">
+                ${chartToggle}
+              </div>
             </div>
             <div class="h-72">
               <canvas data-modal-chart aria-label="Gráfica del indicador"></canvas>
             </div>
+            <!-- CAMBIO 2: Checkbox para mostrar últimos 4 años (solo para monthly, quarterly, annual) -->
+            ${['monthly', 'quarterly', 'annual'].includes(type) ? `
+              <div class="mt-3 flex justify-end">
+                <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    data-show-historical
+                    class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>Mostrar últimos 4 años</span>
+                </label>
+              </div>
+            ` : ''}
           </section>
 
           <section class="rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -1196,9 +1286,11 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       return;
     }
 
+    // CAMBIO: Agregar estado para el checkbox de histórico
     let currentChartType = 'line';
+    let showHistorical = false;
 
-    const renderModal = (chartType) => {
+    const renderModal = (chartType, historical) => {
       root.innerHTML = buildModalMarkup({ 
         label: foundIndicator.nombre, 
         realData, 
@@ -1211,6 +1303,7 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       const closeButton = root.querySelector('[data-modal-close]');
       const canvas = root.querySelector('[data-modal-chart]');
       const chartToggle = root.querySelector('[data-chart-toggle]');
+      const historicalCheckbox = root.querySelector('[data-show-historical]'); // NUEVO
 
       const handleClose = () => {
         overlay?.removeEventListener('click', overlayListener);
@@ -1235,25 +1328,40 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       closeButton?.addEventListener('click', handleClose);
       document.addEventListener('keydown', escListener);
 
+      // Evento para cambiar tipo de gráfica
       if (chartToggle) {
         chartToggle.querySelectorAll('[data-chart-type]').forEach(btn => {
           btn.addEventListener('click', () => {
             const newChartType = btn.dataset.chartType;
             if (newChartType !== currentChartType) {
               currentChartType = newChartType;
-              renderModal(newChartType);
+              renderModal(newChartType, showHistorical);
             }
           });
         });
       }
 
-      const chartConfig = buildChartConfig(realData, type, scenario, chartType);
+      // NUEVO: Evento para checkbox de histórico
+      if (historicalCheckbox) {
+        historicalCheckbox.checked = historical;
+        historicalCheckbox.addEventListener('change', (event) => {
+          showHistorical = event.target.checked;
+          // Re-renderizar la gráfica con el nuevo estado
+          const chartConfig = buildChartConfig(realData, type, scenario, currentChartType, showHistorical);
+          if (chartConfig) {
+            renderModalChart(canvas, chartConfig);
+          }
+        });
+      }
+
+      // Renderizar gráfica inicial
+      const chartConfig = buildChartConfig(realData, type, scenario, chartType, historical);
       if (chartConfig) {
         renderModalChart(canvas, chartConfig);
       }
     };
 
-    renderModal(currentChartType);
+    renderModal(currentChartType, showHistorical);
 
   } catch (error) {
     console.error('Error al abrir modal:', error);
