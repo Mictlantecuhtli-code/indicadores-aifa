@@ -364,20 +364,35 @@ function normalizeUser(record) {
       `usuario-${Math.random().toString(36).slice(2)}`,
     nombre: record.nombre_completo ?? record.nombre ?? record.full_name ?? 'Sin nombre',
     puesto: record.puesto ?? record.cargo ?? null,
-    rol: record.rol ?? record.perfil ?? record.tipo ?? null,
+    rol: record.rol ?? record.perfil ?? record.tipo ?? record.rol_principal ?? null,
+    rol_principal: record.rol_principal ?? record.rol ?? record.perfil ?? record.tipo ?? null,
     email: email ?? '—',
     direccion: record.direccion ?? record.area ?? record.area_nombre ?? record.subdireccion ?? null,
-    ultimo_acceso: lastAccess
+    ultimo_acceso: lastAccess,
+    estado: record.estado ?? record.estatus ?? record.status ?? null
   };
 }
 
 export async function getUsers() {
   const relationCandidates = [
-    { relation: 'v_usuarios_sistema', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,subdireccion,ultima_conexion,ultimo_acceso,usuario:usuarios(email,ultimo_acceso)' },
-    { relation: 'vw_usuarios', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,ultima_conexion' },
-    { relation: 'usuarios_detalle', select: 'id,nombre_completo,nombre,puesto,rol,correo,email,direccion,ultima_conexion' },
-    { relation: 'usuarios', select: 'id,nombre,correo,rol,ultimo_acceso' },
-    { relation: 'perfiles', select: 'id,nombre_completo,nombre,puesto,rol,usuario:usuarios(email,ultimo_acceso)' }
+    {
+      relation: 'v_usuarios_sistema',
+      select:
+        'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,subdireccion,ultima_conexion,ultimo_acceso,usuario:usuarios(email,ultimo_acceso)'
+    },
+    {
+      relation: 'vw_usuarios',
+      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
+    },
+    {
+      relation: 'usuarios_detalle',
+      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
+    },
+    { relation: 'usuarios', select: 'id,nombre,correo,rol,rol_principal,estado,ultimo_acceso' },
+    {
+      relation: 'perfiles',
+      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,usuario:usuarios(email,ultimo_acceso)'
+    }
   ];
 
   for (const candidate of relationCandidates) {
@@ -393,4 +408,108 @@ export async function getUsers() {
   }
 
   return [];
+}
+
+export async function getUserById(userId) {
+  if (!userId) throw new Error('userId es requerido');
+
+  const { data, error } = await supabase
+    .from('perfiles')
+    .select(`
+      id,
+      email,
+      nombre_completo,
+      rol_principal,
+      telefono,
+      puesto,
+      estado,
+      ultimo_acceso,
+      fecha_creacion,
+      fecha_actualizacion,
+      usuario_areas (
+        id,
+        area_id,
+        rol,
+        puede_capturar,
+        puede_editar,
+        puede_eliminar,
+        estado,
+        fecha_asignacion,
+        areas (
+          id,
+          nombre,
+          clave,
+          color_hex,
+          parent_area_id,
+          nivel,
+          path
+        )
+      )
+    `)
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data ?? null;
+}
+
+export async function updateUser(userId, userData) {
+  if (!userId) throw new Error('userId es requerido');
+
+  const allowedFields = {
+    nombre_completo: userData.nombre_completo,
+    rol_principal: userData.rol_principal,
+    telefono: userData.telefono,
+    puesto: userData.puesto,
+    estado: userData.estado
+  };
+
+  const updateData = {};
+  Object.entries(allowedFields).forEach(([key, value]) => {
+    if (value !== undefined) {
+      updateData[key] = value;
+    }
+  });
+
+  const { data, error } = await supabase
+    .from('perfiles')
+    .update(updateData)
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return data;
+}
+
+export async function deleteUser(userId) {
+  if (!userId) throw new Error('userId es requerido');
+
+  await supabase
+    .from('usuario_areas')
+    .delete()
+    .eq('usuario_id', userId)
+    .catch(() => {});
+
+  const { data, error } = await supabase
+    .from('perfiles')
+    .delete()
+    .eq('id', userId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+
+  try {
+    await supabase.auth.admin.deleteUser(userId);
+  } catch (adminError) {
+    const message = adminError?.message ?? '';
+    if (!/service role|admin access/i.test(message)) {
+      throw adminError;
+    }
+  }
+
+  return data;
 }
