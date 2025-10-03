@@ -7,7 +7,6 @@ import {
   updateUserAreaPermissions,
   getAreas,
   createUser
-
 } from '../services/supabaseClient.js';
 import { formatDate } from '../utils/formatters.js';
 import { showToast, renderLoading, renderError } from '../ui/feedback.js';
@@ -133,7 +132,7 @@ function buildCreateModal() {
           <div>
             <h3 class="text-lg font-semibold text-slate-800">Registrar nuevo usuario</h3>
             <p class="text-xs text-slate-500">
-              Asegúrese de que el usuario exista previamente en Supabase Authentication y pegue aquí su ID.
+              Al guardar enviaremos una invitación al correo capturado para que el usuario active su acceso.
             </p>
           </div>
           <button type="button" class="text-slate-400 hover:text-slate-600" data-modal-close>
@@ -142,20 +141,6 @@ function buildCreateModal() {
         </div>
 
         <form id="create-user-form" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">ID del usuario (UUID)</label>
-            <input
-              type="text"
-              name="id"
-              required
-              placeholder="00000000-0000-0000-0000-000000000000"
-              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
-            <p class="mt-1 text-xs text-slate-400">
-              Lo puede copiar desde la sección de Authentication del panel de Supabase.
-            </p>
-          </div>
-
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Nombre completo</label>
             <input
@@ -700,7 +685,6 @@ function initializeEventListeners() {
         e.preventDefault();
         const formData = new FormData(e.target);
         const payload = {
-          id: formData.get('id')?.trim(),
           nombre_completo: formData.get('nombre_completo')?.trim(),
           email: formData.get('email')?.trim(),
           puesto: formData.get('puesto')?.trim() || null,
@@ -708,9 +692,12 @@ function initializeEventListeners() {
           rol_principal: formData.get('rol_principal')
         };
 
-        if (!payload.id) {
-          showToast('Debe capturar el ID que genera Supabase Authentication para el usuario', { type: 'warning' });
-          return;
+        const submitButton = createForm.querySelector('button[type="submit"]');
+        const originalLabel = submitButton?.innerHTML;
+
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Guardando...';
         }
 
         try {
@@ -724,9 +711,16 @@ function initializeEventListeners() {
           console.error(error);
           let message = 'No fue posible crear el usuario';
           if (error?.code === '23505' || /duplicate/i.test(error?.message ?? '')) {
-            message = 'Ya existe un usuario registrado con ese ID o correo electrónico';
+            message = 'Ya existe un usuario registrado con ese correo electrónico';
+          } else if (/correo electr[oó]nico es obligatorio/i.test(error?.message ?? '')) {
+            message = 'Debe capturar un correo electrónico válido';
           }
           showToast(message, { type: 'error' });
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalLabel;
+          }
         }
       });
     }

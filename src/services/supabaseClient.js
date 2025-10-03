@@ -1177,27 +1177,112 @@ export async function getAllUsers() {
 /**
  * Crear nuevo usuario
  */
-export async function createUser({ id, email, nombre_completo, puesto, rol_principal, telefono }) {
-  const payload = {
-    email,
-    nombre_completo,
-    puesto,
-    rol_principal,
-    telefono,
-    estado: 'ACTIVO'
-  };
+export async function createUser({ email, nombre_completo, puesto, rol_principal, telefono }) {
+  if (!email) {
+    throw new Error('El correo electrónico es obligatorio');
+  }
 
-  if (id) {
-    payload.id = id;
+  const normalizedEmail = email.trim().toLowerCase();
+  const fullName = nombre_completo?.trim() || null;
+
+  let authUserId = null;
+  let createdAuthUser = false;
+
+  // Verificar si ya existe en Supabase Auth
+  let matchedUser = null;
+  let page = 1;
+  const perPage = 200;
+
+  while (!matchedUser) {
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers({
+      page,
+      perPage
+    });
+
+    if (listError) {
+      throw listError;
+    }
+
+    matchedUser = existingUsers?.users?.find(
+      (user) => user.email?.toLowerCase() === normalizedEmail
+    ) ?? null;
+
+    const hasMore = (existingUsers?.users?.length ?? 0) === perPage;
+    if (matchedUser || !hasMore) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  if (matchedUser) {
+    authUserId = matchedUser.id;
+
+    // Actualizar el nombre si cambió
+    if (
+      fullName &&
+      (matchedUser.user_metadata?.full_name || '').trim() !== fullName
+    ) {
+      await supabase.auth.admin.updateUserById(authUserId, {
+        user_metadata: {
+          ...matchedUser.user_metadata,
+          full_name: fullName
+        }
+      }).catch(() => {
+        // Ignorar errores de metadatos para no bloquear el flujo
+      });
+    }
+  } else {
+    const { data: createdUser, error: createError } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      user_metadata: {
+        full_name: fullName
+      }
+    });
+
+    if (createError) {
+      throw createError;
+    }
+
+    authUserId = createdUser?.user?.id ?? createdUser?.id ?? null;
+    createdAuthUser = Boolean(authUserId);
+
+    if (!authUserId) {
+      throw new Error('No fue posible obtener el identificador del usuario creado');
+    }
+
+    // Enviar invitación para que el usuario establezca su contraseña
+    await supabase.auth.admin.inviteUserByEmail(normalizedEmail).catch(() => {
+      // Ignorar errores de invitación para no bloquear el alta
+    });
+
   }
 
   const { data, error } = await supabase
     .from('perfiles')
-    .insert(payload)
+    .insert({
+      id: authUserId,
+      email: normalizedEmail,
+      nombre_completo: fullName,
+      puesto,
+      rol_principal,
+      telefono,
+      estado: 'ACTIVO'
+    })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (createdAuthUser && authUserId) {
+      await supabase.auth.admin.deleteUser(authUserId).catch(() => {
+        // Si falla la eliminación del usuario en Auth, solo lo registramos en consola
+        console.warn('No se pudo revertir el usuario recién creado en Supabase Auth');
+      });
+    }
+
+    throw error;
+  }
+
   return data;
 }
 
