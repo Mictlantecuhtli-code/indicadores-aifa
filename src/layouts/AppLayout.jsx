@@ -63,6 +63,11 @@ export default function AppLayout() {
     [profile?.email, profile?.usuario?.email, session?.user?.email]
   );
 
+  const displayRole = useMemo(
+    () => profile?.puesto ?? profile?.rol ?? 'Cuenta',
+    [profile?.puesto, profile?.rol]
+  );
+
   const allowedPaths = useMemo(() => {
     if (!normalizedRole) {
       return navigation.map(item => item.to);
@@ -353,23 +358,26 @@ export default function AppLayout() {
                   <button
                     type="button"
                     onClick={() => setIsAccountMenuOpen(open => !open)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-aifa-green hover:text-aifa-green"
+                    className="inline-flex items-center gap-2 rounded-full border border-aifa-blue/80 bg-white px-4 py-2 text-sm font-semibold text-aifa-blue transition hover:border-aifa-light hover:bg-aifa-light/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
                     aria-haspopup="menu"
                     aria-expanded={isAccountMenuOpen}
                   >
-                    <span className="max-w-[10rem] truncate text-left sm:max-w-none">
-                      {accountEmail || 'Cuenta'}
+                    <span className="max-w-[12rem] truncate text-left sm:max-w-none">
+                      {displayRole}
                     </span>
                     <ChevronDown
-                      className={`h-4 w-4 transition-transform ${isAccountMenuOpen ? 'rotate-180 text-aifa-green' : ''}`}
+                      className={classNames(
+                        'h-4 w-4 text-aifa-blue transition-transform',
+                        isAccountMenuOpen && 'rotate-180 text-aifa-light'
+                      )}
                     />
                   </button>
 
                   {isAccountMenuOpen && (
                     <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-                      <div className="border-b border-slate-100 px-4 py-3 text-sm">
-                        <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
-                        <p className="mt-1 break-all text-xs uppercase tracking-widest text-slate-400">
+                      <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3 text-sm text-slate-700">
+                        <p className="font-semibold text-aifa-blue">{profile.nombre_completo ?? profile.nombre}</p>
+                        <p className="mt-1 break-all text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
                           {profile.puesto ?? profile.rol}
                         </p>
                         <p className="mt-1 break-all text-xs text-slate-500">{accountEmail}</p>
@@ -377,7 +385,7 @@ export default function AppLayout() {
                       <div className="flex flex-col py-1 text-sm text-slate-600">
                         <button
                           type="button"
-                          className="flex items-center gap-2 px-4 py-2 text-left transition hover:bg-emerald-50 hover:text-aifa-green"
+                          className="flex items-center gap-2 px-4 py-2 text-left transition hover:bg-aifa-light/10 hover:text-aifa-blue"
                           onClick={handleOpenChangePassword}
                         >
                           <KeyRound className="h-4 w-4" />

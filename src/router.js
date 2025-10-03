@@ -107,7 +107,7 @@ function bindLayoutActions() {
     accountMenu.classList.remove('hidden');
     isAccountMenuOpen = true;
     accountMenuToggle?.setAttribute('aria-expanded', 'true');
-    accountChevron?.classList.add('rotate-180', 'text-primary-600');
+    accountChevron?.classList.add('rotate-180', 'text-aifa-light');
     document.addEventListener('mousedown', handleAccountClickOutside);
     document.addEventListener('keydown', handleAccountEscape);
   }
@@ -117,7 +117,7 @@ function bindLayoutActions() {
     accountMenu.classList.add('hidden');
     isAccountMenuOpen = false;
     accountMenuToggle?.setAttribute('aria-expanded', 'false');
-    accountChevron?.classList.remove('rotate-180', 'text-primary-600');
+    accountChevron?.classList.remove('rotate-180', 'text-aifa-light');
     document.removeEventListener('mousedown', handleAccountClickOutside);
     document.removeEventListener('keydown', handleAccountEscape);
   }
