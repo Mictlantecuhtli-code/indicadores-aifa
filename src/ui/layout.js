@@ -85,7 +85,7 @@ export function renderLayout(content) {
                 aria-haspopup="menu"
                 aria-expanded="false"
               >
-                <span class="flex min-w-0 flex-col text-left">
+                <span class="flex min-w-0 flex-col items-center text-center">
                   <span class="truncate text-xs font-semibold text-slate-800 sm:text-sm">${accountName || 'Sesión no iniciada'}</span>
                   <span class="truncate text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400 sm:text-[11px]">${accountRole || 'AIFA'}</span>
                   <span class="truncate text-xs text-slate-500 sm:text-sm">${accountEmail || 'Cuenta'}</span>
