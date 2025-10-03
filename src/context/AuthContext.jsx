@@ -115,7 +115,7 @@ export function AuthProvider({ children }) {
           const { data: profileData, error: profileError } = await supabase
             .from('perfiles')
             .select('estado')
-            .eq('id', userId)
+            .eq('usuario_id', userId)
             .maybeSingle();
 
           if (profileError && profileError.code !== 'PGRST116') {

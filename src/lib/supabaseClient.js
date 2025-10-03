@@ -354,14 +354,19 @@ function normalizeUser(record) {
   const email = record.email ?? record.correo ?? record.usuario?.email ?? record.usuario_email ?? null;
   const lastAccess =
     record.ultimo_acceso ?? record.ultima_conexion ?? record.ultimo_login ?? record.actualizado_en ?? null;
+  const profileId = record.id ?? record.perfil_id ?? null;
+  const authUserId = record.usuario_id ?? record.user_id ?? record.auth_user_id ?? record.usuario?.id ?? null;
+
   return {
     id:
-      record.id ??
-      record.usuario_id ??
+      profileId ??
+      authUserId ??
       email ??
       record.nombre_completo ??
       record.nombre ??
       `usuario-${Math.random().toString(36).slice(2)}`,
+    perfil_id: profileId ?? null,
+    usuario_id: authUserId ?? null,
     nombre: record.nombre_completo ?? record.nombre ?? record.full_name ?? 'Sin nombre',
     puesto: record.puesto ?? record.cargo ?? null,
     rol: record.rol ?? record.perfil ?? record.tipo ?? record.rol_principal ?? null,
@@ -378,20 +383,24 @@ export async function getUsers() {
     {
       relation: 'v_usuarios_sistema',
       select:
-        'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,subdireccion,ultima_conexion,ultimo_acceso,usuario:usuarios(email,ultimo_acceso)'
+        'id,usuario_id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,subdireccion,ultima_conexion,ultimo_acceso,usuario:usuarios(id,email,ultimo_acceso)'
     },
     {
       relation: 'vw_usuarios',
-      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
+      select: 'id,usuario_id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
     },
     {
       relation: 'usuarios_detalle',
-      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
+      select: 'id,usuario_id,nombre_completo,nombre,puesto,rol,rol_principal,estado,correo,email,direccion,ultima_conexion'
     },
-    { relation: 'usuarios', select: 'id,nombre,correo,rol,rol_principal,estado,ultimo_acceso' },
+    {
+      relation: 'usuarios',
+      select: 'id,usuario_id,nombre,correo,rol,rol_principal,estado,ultimo_acceso'
+    },
     {
       relation: 'perfiles',
-      select: 'id,nombre_completo,nombre,puesto,rol,rol_principal,estado,usuario:usuarios(email,ultimo_acceso)'
+      select:
+        'id,usuario_id,nombre_completo,nombre,puesto,rol,rol_principal,estado,usuario:usuarios(id,email,ultimo_acceso)'
     }
   ];
 
@@ -413,10 +422,9 @@ export async function getUsers() {
 export async function getUserById(userId) {
   if (!userId) throw new Error('userId es requerido');
 
-  const { data, error } = await supabase
-    .from('perfiles')
-    .select(`
+  const selectFields = `
       id,
+      usuario_id,
       email,
       nombre_completo,
       rol_principal,
@@ -445,13 +453,29 @@ export async function getUserById(userId) {
           path
         )
       )
-    `)
+    `;
+
+  const { data: byProfile, error: byProfileError } = await supabase
+    .from('perfiles')
+    .select(selectFields)
     .eq('id', userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (byProfileError && byProfileError.code !== 'PGRST116') throw byProfileError;
 
-  return data ?? null;
+  if (byProfile) {
+    return byProfile;
+  }
+
+  const { data: byAuth, error: byAuthError } = await supabase
+    .from('perfiles')
+    .select(selectFields)
+    .eq('usuario_id', userId)
+    .maybeSingle();
+
+  if (byAuthError && byAuthError.code !== 'PGRST116') throw byAuthError;
+
+  return byAuth ?? null;
 }
 
 export async function updateUser(userId, userData) {
@@ -487,29 +511,83 @@ export async function updateUser(userId, userData) {
 export async function deleteUser(userId) {
   if (!userId) throw new Error('userId es requerido');
 
-  await supabase
-    .from('usuario_areas')
-    .delete()
-    .eq('usuario_id', userId)
-    .catch(() => {});
+  const identifierFields = 'id,usuario_id';
 
-  const { data, error } = await supabase
+  const { data: profileById, error: profileByIdError } = await supabase
     .from('perfiles')
-    .delete()
+    .select(identifierFields)
     .eq('id', userId)
-    .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (profileByIdError && profileByIdError.code !== 'PGRST116') {
+    throw profileByIdError;
+  }
 
-  try {
-    await supabase.auth.admin.deleteUser(userId);
-  } catch (adminError) {
-    const message = adminError?.message ?? '';
-    if (!/service role|admin access/i.test(message)) {
-      throw adminError;
+  let targetProfile = profileById ?? null;
+
+  if (!targetProfile) {
+    const { data: profileByAuth, error: profileByAuthError } = await supabase
+      .from('perfiles')
+      .select(identifierFields)
+      .eq('usuario_id', userId)
+      .maybeSingle();
+
+    if (profileByAuthError && profileByAuthError.code !== 'PGRST116') {
+      throw profileByAuthError;
+    }
+
+    targetProfile = profileByAuth ?? null;
+  }
+
+  const profileId = targetProfile?.id ?? null;
+  const authUserId = targetProfile?.usuario_id ?? null;
+
+  if (authUserId) {
+    await supabase
+      .from('usuario_areas')
+      .delete()
+      .eq('usuario_id', authUserId)
+      .catch(() => {});
+  }
+
+  let deletedProfile = null;
+
+  if (profileId) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .delete()
+      .eq('id', profileId)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    deletedProfile = data ?? null;
+  } else {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .delete()
+      .eq('usuario_id', userId)
+      .select()
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') throw error;
+
+    deletedProfile = data ?? null;
+  }
+
+  const authIdForDeletion = authUserId ?? (profileId ? null : userId);
+
+  if (authIdForDeletion) {
+    try {
+      await supabase.auth.admin.deleteUser(authIdForDeletion);
+    } catch (adminError) {
+      const message = adminError?.message ?? '';
+      if (!/service role|admin access/i.test(message)) {
+        throw adminError;
+      }
     }
   }
 
-  return data;
+  return deletedProfile;
 }
