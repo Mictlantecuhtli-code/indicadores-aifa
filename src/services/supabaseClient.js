@@ -1177,21 +1177,23 @@ export async function getAllUsers() {
 /**
  * Crear nuevo usuario
  */
-export async function createUser({ email, password, nombre_completo, puesto, rol_principal, telefono }) {
-  // 1. Crear usuario en Supabase Auth (requiere permisos de admin)
-  // NOTA: Esto normalmente se hace desde una función del servidor (Edge Function)
-  // Por ahora solo creamos el perfil, el admin debe crear el usuario Auth manualmente
-  
+export async function createUser({ id, email, nombre_completo, puesto, rol_principal, telefono }) {
+  const payload = {
+    email,
+    nombre_completo,
+    puesto,
+    rol_principal,
+    telefono,
+    estado: 'ACTIVO'
+  };
+
+  if (id) {
+    payload.id = id;
+  }
+
   const { data, error } = await supabase
     .from('perfiles')
-    .insert({
-      email,
-      nombre_completo,
-      puesto,
-      rol_principal,
-      telefono,
-      estado: 'ACTIVO'
-    })
+    .insert(payload)
     .select()
     .single();
 

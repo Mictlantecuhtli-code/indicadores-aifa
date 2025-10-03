@@ -5,7 +5,9 @@ import {
   assignUserToArea,
   removeUserFromArea,
   updateUserAreaPermissions,
-  getAreas
+  getAreas,
+  createUser
+
 } from '../services/supabaseClient.js';
 import { formatDate } from '../utils/formatters.js';
 import { showToast, renderLoading, renderError } from '../ui/feedback.js';
@@ -121,6 +123,112 @@ function buildUsersTable(users, searchTerm = '') {
       `
     )
     .join('');
+}
+
+function buildCreateModal() {
+  return `
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" data-modal="create-user">
+      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800">Registrar nuevo usuario</h3>
+            <p class="text-xs text-slate-500">
+              Asegúrese de que el usuario exista previamente en Supabase Authentication y pegue aquí su ID.
+            </p>
+          </div>
+          <button type="button" class="text-slate-400 hover:text-slate-600" data-modal-close>
+            <i class="fa-solid fa-xmark text-xl"></i>
+          </button>
+        </div>
+
+        <form id="create-user-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">ID del usuario (UUID)</label>
+            <input
+              type="text"
+              name="id"
+              required
+              placeholder="00000000-0000-0000-0000-000000000000"
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+            <p class="mt-1 text-xs text-slate-400">
+              Lo puede copiar desde la sección de Authentication del panel de Supabase.
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Nombre completo</label>
+            <input
+              type="text"
+              name="nombre_completo"
+              required
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
+            <input
+              type="email"
+              name="email"
+              required
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Puesto</label>
+              <input
+                type="text"
+                name="puesto"
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
+              <input
+                type="tel"
+                name="telefono"
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Rol principal</label>
+            <select
+              name="rol_principal"
+              required
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            >
+              <option value="">Seleccionar rol</option>
+              ${ROLES.map(rol => `
+                <option value="${rol}">${rol}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div class="flex gap-3 pt-2">
+            <button
+              type="submit"
+              class="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+            >
+              <i class="fa-solid fa-user-plus mr-2"></i>
+              Registrar usuario
+            </button>
+            <button
+              type="button"
+              data-modal-close
+              class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
 }
 
 function buildEditModal(user) {
@@ -522,9 +630,8 @@ function initializeEventListeners() {
   // Botón nuevo usuario
   if (newUserButton) {
     newUserButton.addEventListener('click', () => {
-      showToast('Para crear un nuevo usuario, primero debe crearse en Supabase Authentication', { 
-        type: 'warning' 
-      });
+      modalContainer.innerHTML = buildCreateModal();
+      bindModalActions();
     });
   }
 
@@ -586,6 +693,43 @@ function initializeEventListeners() {
         modalContainer.innerHTML = '';
       });
     });
+
+    const createForm = modalContainer.querySelector('#create-user-form');
+    if (createForm) {
+      createForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const payload = {
+          id: formData.get('id')?.trim(),
+          nombre_completo: formData.get('nombre_completo')?.trim(),
+          email: formData.get('email')?.trim(),
+          puesto: formData.get('puesto')?.trim() || null,
+          telefono: formData.get('telefono')?.trim() || null,
+          rol_principal: formData.get('rol_principal')
+        };
+
+        if (!payload.id) {
+          showToast('Debe capturar el ID que genera Supabase Authentication para el usuario', { type: 'warning' });
+          return;
+        }
+
+        try {
+          await createUser(payload);
+          showToast('Usuario creado correctamente');
+          modalContainer.innerHTML = '';
+          currentUsers = await getAllUsers();
+          tableBody.innerHTML = buildUsersTable(currentUsers);
+          bindTableActions();
+        } catch (error) {
+          console.error(error);
+          let message = 'No fue posible crear el usuario';
+          if (error?.code === '23505' || /duplicate/i.test(error?.message ?? '')) {
+            message = 'Ya existe un usuario registrado con ese ID o correo electrónico';
+          }
+          showToast(message, { type: 'error' });
+        }
+      });
+    }
 
     // Form editar usuario
     const editForm = modalContainer.querySelector('#edit-user-form');
