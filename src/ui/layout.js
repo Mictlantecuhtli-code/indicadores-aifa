@@ -77,19 +77,19 @@ export function renderLayout(content) {
             ).join('')}
           </nav>
           <div class="flex items-center gap-3">
-            <div class="hidden text-right text-xs sm:block">
-              <p class="font-semibold text-slate-800">${accountName || 'Sesión no iniciada'}</p>
-              <p class="text-[11px] uppercase tracking-[0.4em] text-slate-400">${accountRole || 'AIFA'}</p>
-            </div>
             <div class="relative" id="account-menu-container">
               <button
                 id="account-menu-toggle"
                 type="button"
-                class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-primary-500 hover:text-primary-600"
+                class="inline-flex items-center gap-3 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:border-primary-500 hover:text-primary-600"
                 aria-haspopup="menu"
                 aria-expanded="false"
               >
-                <span class="max-w-[10rem] truncate text-left sm:max-w-none">${accountEmail || 'Cuenta'}</span>
+                <span class="flex min-w-0 flex-col text-left">
+                  <span class="truncate text-xs font-semibold text-slate-800 sm:text-sm">${accountName || 'Sesión no iniciada'}</span>
+                  <span class="truncate text-[10px] font-semibold uppercase tracking-[0.4em] text-slate-400 sm:text-[11px]">${accountRole || 'AIFA'}</span>
+                  <span class="truncate text-xs text-slate-500 sm:text-sm">${accountEmail || 'Cuenta'}</span>
+                </span>
                 <i class="fa-solid fa-chevron-down text-xs transition-transform" id="account-menu-chevron"></i>
               </button>
               <div
