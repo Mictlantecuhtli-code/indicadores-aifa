@@ -1255,6 +1255,7 @@ export async function createUser({ email, nombre_completo, puesto, rol_principal
     await supabase.auth.admin.inviteUserByEmail(normalizedEmail).catch(() => {
       // Ignorar errores de invitación para no bloquear el alta
     });
+
   }
 
   const { data, error } = await supabase
