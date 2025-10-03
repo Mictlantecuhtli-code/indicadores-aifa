@@ -3,6 +3,11 @@ import { supabase } from '../lib/supabaseClient.js';
 
 const AuthContext = createContext(null);
 
+function normalizeAccountState(value) {
+  if (value == null) return null;
+  return value.toString().trim().toUpperCase();
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -55,7 +60,9 @@ export function AuthProvider({ children }) {
 
         if (error) throw error;
 
-        if (data?.estado && data.estado !== 'ACTIVO') {
+        const normalizedState = normalizeAccountState(data?.estado);
+
+        if (!data || (normalizedState && normalizedState !== 'ACTIVO')) {
           await supabase.auth.signOut().catch(() => {});
           setSession(null);
           setProfile(null);
@@ -123,9 +130,9 @@ export function AuthProvider({ children }) {
             return { data: null, error: profileError };
           }
 
-          const estado = profileData?.estado ?? null;
+          const normalizedState = normalizeAccountState(profileData?.estado);
 
-          if (estado && estado !== 'ACTIVO') {
+          if (!profileData || (normalizedState && normalizedState !== 'ACTIVO')) {
             await supabase.auth.signOut().catch(() => {});
             return {
               data: null,
