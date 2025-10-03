@@ -1140,7 +1140,9 @@ export async function getAllUsers() {
   const { data: usuariosAreas, error: areasError } = await supabase
     .from('usuario_areas')
     .select(`
+      id,
       usuario_id,
+      area_id,
       rol,
       puede_capturar,
       puede_editar,
