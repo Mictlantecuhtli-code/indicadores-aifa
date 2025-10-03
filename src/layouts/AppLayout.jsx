@@ -1,7 +1,22 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, ListChecks, ClipboardPen, LogOut, Users, Presentation, Menu } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BarChart3,
+  ListChecks,
+  ClipboardPen,
+  Users,
+  Presentation,
+  Menu,
+  ChevronDown,
+  KeyRound,
+  Eye,
+  EyeOff,
+  LogOut,
+  X
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { supabase } from '../lib/supabaseClient.js';
+import { showToast } from '../ui/feedback.js';
 
 const navigation = [
   { name: 'Panel directivos', to: '/panel-directivos', icon: BarChart3 },
@@ -16,16 +31,41 @@ function classNames(...classes) {
 }
 
 export default function AppLayout() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [passwordVisibility, setPasswordVisibility] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false
+  });
   const logoUrl = useMemo(() => new URL('../../assets/AIFA_logo.png', import.meta.url).href, []);
+  const accountMenuRef = useRef(null);
 
   const normalizedRole = useMemo(
     () => (profile?.rol ?? profile?.puesto)?.toString().toLowerCase() ?? null,
     [profile]
+  );
+
+  const accountEmail = useMemo(
+    () => (profile?.email ?? profile?.usuario?.email ?? session?.user?.email ?? '').toLowerCase(),
+    [profile?.email, profile?.usuario?.email, session?.user?.email]
+  );
+
+  const displayRole = useMemo(
+    () => profile?.puesto ?? profile?.rol ?? 'Cuenta',
+    [profile?.puesto, profile?.rol]
   );
 
   const allowedPaths = useMemo(() => {
@@ -52,6 +92,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     setMobileOpen(false);
+    setIsAccountMenuOpen(false);
   }, [location.pathname]);
 
   const fallbackPath = useMemo(() => {
@@ -89,6 +130,9 @@ export default function AppLayout() {
 
   const handleSignOut = async () => {
     if (isSigningOut) return;
+    setIsAccountMenuOpen(false);
+    setMobileOpen(false);
+    setIsChangePasswordOpen(false);
     setIsSigningOut(true);
     try {
       await signOut();
@@ -100,9 +144,174 @@ export default function AppLayout() {
     }
   };
 
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+
+    const handleClickOutside = event => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    const handleEscape = event => {
+      if (event.key === 'Escape') {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isAccountMenuOpen]);
+
+  useEffect(() => {
+    if (!isChangePasswordOpen) return;
+
+    const handleEscape = event => {
+      if (event.key === 'Escape') {
+        setIsChangePasswordOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isChangePasswordOpen]);
+
+  useEffect(() => {
+    document.body.style.overflow = isChangePasswordOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isChangePasswordOpen]);
+
+  const resetPasswordForm = () => {
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setPasswordErrors({});
+    setPasswordVisibility({ currentPassword: false, newPassword: false, confirmPassword: false });
+  };
+
+  const handleOpenChangePassword = () => {
+    resetPasswordForm();
+    setIsAccountMenuOpen(false);
+    setIsChangePasswordOpen(true);
+  };
+
+  const handleCloseChangePassword = () => {
+    setIsChangePasswordOpen(false);
+    resetPasswordForm();
+  };
+
+  const togglePasswordVisibility = field => {
+    setPasswordVisibility(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  const handlePasswordInputChange = (field, value) => {
+    setPasswordForm(prev => ({ ...prev, [field]: value }));
+    setPasswordErrors(prev => ({ ...prev, [field]: undefined }));
+  };
+
+  const validatePasswordForm = () => {
+    const errors = {};
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+
+    if (!currentPassword) {
+      errors.currentPassword = 'Capture la contraseña anterior.';
+    }
+
+    if (!newPassword) {
+      errors.newPassword = ['Capture la nueva contraseña.'];
+    } else {
+      const newPasswordErrors = [];
+
+      if (newPassword === currentPassword) {
+        newPasswordErrors.push('La nueva contraseña debe ser diferente a la anterior.');
+      }
+
+      const requirementErrors = [
+        { test: newPassword.length >= 8, message: 'Debe tener al menos 8 caracteres.' },
+        { test: /[A-Z]/.test(newPassword), message: 'Debe incluir al menos una letra mayúscula.' },
+        { test: /[a-z]/.test(newPassword), message: 'Debe incluir al menos una letra minúscula.' },
+        { test: /[0-9]/.test(newPassword), message: 'Debe incluir al menos un número.' },
+        { test: /[^A-Za-z0-9]/.test(newPassword), message: 'Debe incluir al menos un carácter especial.' }
+      ]
+        .filter(requirement => !requirement.test)
+        .map(requirement => requirement.message);
+
+      if (requirementErrors.length) {
+        newPasswordErrors.push(...requirementErrors);
+      }
+
+      if (newPasswordErrors.length) {
+        errors.newPassword = newPasswordErrors;
+      }
+    }
+
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Confirme la nueva contraseña.';
+    } else if (newPassword !== confirmPassword) {
+      errors.confirmPassword = 'Las contraseñas no coinciden.';
+    }
+
+    return errors;
+  };
+
+  const handlePasswordSubmit = async event => {
+    event.preventDefault();
+    const errors = validatePasswordForm();
+    if (Object.keys(errors).length) {
+      setPasswordErrors(errors);
+      return;
+    }
+
+    if (!accountEmail) {
+      showToast('No se pudo identificar el correo de la cuenta.', { type: 'error' });
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      const { currentPassword, newPassword } = passwordForm;
+      const { error: verificationError } = await supabase.auth.signInWithPassword({
+        email: accountEmail,
+        password: currentPassword
+      });
+
+      if (verificationError) {
+        setPasswordErrors(prev => ({ ...prev, currentPassword: 'La contraseña anterior no es correcta.' }));
+        showToast('La contraseña anterior no es correcta.', { type: 'error' });
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      showToast('Contraseña actualizada correctamente.');
+      setIsChangePasswordOpen(false);
+      resetPasswordForm();
+    } catch (error) {
+      console.error('No fue posible actualizar la contraseña', error);
+      if (!/contraseña anterior no es correcta/i.test(error?.message ?? '')) {
+        showToast('No fue posible actualizar la contraseña. Intente nuevamente.', { type: 'error' });
+      }
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-100">
-      <header className="relative z-20 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+      <header className="relative z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
           <div className="flex flex-1 items-center gap-4">
             <img src={logoUrl} alt="Logotipo AIFA" className="h-12 w-auto" />
@@ -145,14 +354,56 @@ export default function AppLayout() {
                   <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
                   <p className="text-[11px] uppercase tracking-widest text-slate-400">{profile.puesto ?? profile.rol}</p>
                 </div>
-                <button
-                  onClick={handleSignOut}
-                  disabled={isSigningOut}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-aifa-green hover:text-aifa-green disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Cerrar sesión</span>
-                </button>
+                <div className="relative" ref={accountMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsAccountMenuOpen(open => !open)}
+                    className="inline-flex items-center gap-2 rounded-full border border-aifa-blue/80 bg-white px-4 py-2 text-sm font-semibold text-aifa-blue transition hover:border-aifa-light hover:bg-aifa-light/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+                    aria-haspopup="menu"
+                    aria-expanded={isAccountMenuOpen}
+                  >
+                    <span className="max-w-[12rem] truncate text-left sm:max-w-none">
+                      {displayRole}
+                    </span>
+                    <ChevronDown
+                      className={classNames(
+                        'h-4 w-4 text-aifa-blue transition-transform',
+                        isAccountMenuOpen && 'rotate-180 text-aifa-light'
+                      )}
+                    />
+                  </button>
+
+                  {isAccountMenuOpen && (
+                    <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                      <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3 text-sm text-slate-700">
+                        <p className="font-semibold text-aifa-blue">{profile.nombre_completo ?? profile.nombre}</p>
+                        <p className="mt-1 break-all text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+                          {profile.puesto ?? profile.rol}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-slate-500">{accountEmail}</p>
+                      </div>
+                      <div className="flex flex-col py-1 text-sm text-slate-600">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 px-4 py-2 text-left transition hover:bg-aifa-light/10 hover:text-aifa-blue"
+                          onClick={handleOpenChangePassword}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                          Cambiar contraseña
+                        </button>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 px-4 py-2 text-left transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+                          onClick={handleSignOut}
+                          disabled={isSigningOut}
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Cerrar sesión
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="text-sm text-slate-500">Sesión no disponible</p>
@@ -194,6 +445,38 @@ export default function AppLayout() {
                 );
               })}
             </nav>
+            {profile && (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-600">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Cuenta</p>
+                <p className="mt-1 font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
+                <p className="mt-1 break-all text-xs text-slate-500">{accountEmail}</p>
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      handleOpenChangePassword();
+                    }}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    Cambiar contraseña
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      handleSignOut();
+                    }}
+                    disabled={isSigningOut}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Cerrar sesión
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </header>
@@ -206,6 +489,134 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
+
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Cambiar contraseña</h2>
+                <p className="text-xs text-slate-500">
+                  La contraseña debe incluir al menos 8 caracteres, combinando mayúsculas, minúsculas, números y símbolos.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                onClick={handleCloseChangePassword}
+                aria-label="Cerrar"
+              >
+                <span className="sr-only">Cerrar modal</span>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form className="space-y-4" onSubmit={handlePasswordSubmit}>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Contraseña anterior</label>
+                <div className="relative mt-1">
+                  <input
+                    type={passwordVisibility.currentPassword ? 'text' : 'password'}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                      passwordErrors.currentPassword ? 'border-rose-400' : 'border-slate-200'
+                    }`}
+                    value={passwordForm.currentPassword}
+                    onChange={event => handlePasswordInputChange('currentPassword', event.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                    onClick={() => togglePasswordVisibility('currentPassword')}
+                    aria-label={passwordVisibility.currentPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {passwordVisibility.currentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {passwordErrors.currentPassword && (
+                  <p className="mt-1 text-xs text-rose-600">{passwordErrors.currentPassword}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700">Nueva contraseña</label>
+                <div className="relative mt-1">
+                  <input
+                    type={passwordVisibility.newPassword ? 'text' : 'password'}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                      passwordErrors.newPassword ? 'border-rose-400' : 'border-slate-200'
+                    }`}
+                    value={passwordForm.newPassword}
+                    onChange={event => handlePasswordInputChange('newPassword', event.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                    onClick={() => togglePasswordVisibility('newPassword')}
+                    aria-label={passwordVisibility.newPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {passwordVisibility.newPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {Array.isArray(passwordErrors.newPassword) && passwordErrors.newPassword.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-rose-600">
+                    {passwordErrors.newPassword.map((message, index) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span className="mt-0.5 block h-1 w-1 rounded-full bg-rose-500" />
+                        <span>{message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700">Confirmar nueva contraseña</label>
+                <div className="relative mt-1">
+                  <input
+                    type={passwordVisibility.confirmPassword ? 'text' : 'password'}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                      passwordErrors.confirmPassword ? 'border-rose-400' : 'border-slate-200'
+                    }`}
+                    value={passwordForm.confirmPassword}
+                    onChange={event => handlePasswordInputChange('confirmPassword', event.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                    onClick={() => togglePasswordVisibility('confirmPassword')}
+                    aria-label={passwordVisibility.confirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {passwordVisibility.confirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {passwordErrors.confirmPassword && (
+                  <p className="mt-1 text-xs text-rose-600">{passwordErrors.confirmPassword}</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-aifa-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={isUpdatingPassword}
+                >
+                  {isUpdatingPassword ? 'Guardando...' : 'Guardar nueva contraseña'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                  onClick={handleCloseChangePassword}
+                  disabled={isUpdatingPassword}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
