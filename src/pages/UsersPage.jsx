@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { getUsers } from '../lib/supabaseClient.js';
-import { Search, UserPlus, Edit2, Shield } from 'lucide-react';
+import { deleteUser, getUsers } from '../lib/supabaseClient.js';
+import { Search, UserPlus, Edit2, Shield, Trash2, Loader2 } from 'lucide-react';
 import { formatDate } from '../utils/formatters.js';
 import { useUserPermissions } from '../hooks/useUserPermissions.js';
 import { ROLE_LABELS, ESTADO_COLORS, ESTADO_LABELS } from '../lib/permissions.js';
@@ -11,10 +11,18 @@ export default function UsersPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const { permissions } = useUserPermissions();
+  const queryClient = useQueryClient();
   
-  const usersQuery = useQuery({ 
-    queryKey: ['users'], 
-    queryFn: getUsers 
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: getUsers
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
   });
 
   const filteredUsers = useMemo(() => {
@@ -29,6 +37,22 @@ export default function UsersPage() {
 
   const handleEditUser = (userId) => {
     navigate(`/usuarios/${userId}/editar`);
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!user?.id) return;
+
+    const confirmed = window.confirm(
+      `¿Desea eliminar al usuario ${user.nombre || user.email || 'seleccionado'}? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteUserMutation.mutateAsync(user.id);
+    } catch (error) {
+      console.error('Error eliminando usuario', error);
+    }
   };
 
   return (
@@ -123,15 +147,31 @@ export default function UsersPage() {
                   {permissions.canManageUsers && (
                     <td className="px-4 py-3">
                       <div className="flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => handleEditUser(user.id)}
-                          className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue/10"
-                          title="Editar usuario"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                          Editar
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditUser(user.id)}
+                            className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-aifa-blue transition hover:bg-aifa-blue/10"
+                            title="Editar usuario"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deleteUserMutation.isPending}
+                            className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            title="Eliminar usuario"
+                          >
+                            {deleteUserMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
                     </td>
                   )}
@@ -160,6 +200,11 @@ export default function UsersPage() {
         {usersQuery.isError && (
           <div className="border-t border-red-100 bg-red-50 px-4 py-3 text-center text-xs text-red-600">
             Error al cargar usuarios: {usersQuery.error?.message || 'Error desconocido'}
+          </div>
+        )}
+        {deleteUserMutation.isError && (
+          <div className="border-t border-red-100 bg-red-50 px-4 py-3 text-center text-xs text-red-600">
+            Error al eliminar usuario: {deleteUserMutation.error?.message || 'No fue posible completar la operación'}
           </div>
         )}
       </div>
