@@ -51,7 +51,7 @@ export function renderLayout(content) {
     'AIFA';
   return `
     <div class="min-h-screen bg-slate-100">
-      <header class="border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+      <header class="relative z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
           <div class="flex items-center gap-4">
             <img src="./assets/AIFA_logo.png" alt="Logotipo AIFA" class="h-12 w-auto" />
@@ -94,7 +94,7 @@ export function renderLayout(content) {
               </button>
               <div
                 id="account-menu"
-                class="absolute right-0 z-30 mt-2 hidden w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+                class="absolute right-0 z-50 mt-2 hidden w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
                 role="menu"
                 aria-labelledby="account-menu-toggle"
               >

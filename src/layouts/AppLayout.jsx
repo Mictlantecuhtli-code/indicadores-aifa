@@ -306,7 +306,7 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-100">
-      <header className="relative z-20 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+      <header className="relative z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
           <div className="flex flex-1 items-center gap-4">
             <img src={logoUrl} alt="Logotipo AIFA" className="h-12 w-auto" />
@@ -366,7 +366,7 @@ export default function AppLayout() {
                   </button>
 
                   {isAccountMenuOpen && (
-                    <div className="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                    <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                       <div className="border-b border-slate-100 px-4 py-3 text-sm">
                         <p className="font-semibold text-slate-800">{profile.nombre_completo ?? profile.nombre}</p>
                         <p className="mt-1 break-all text-xs uppercase tracking-widest text-slate-400">
