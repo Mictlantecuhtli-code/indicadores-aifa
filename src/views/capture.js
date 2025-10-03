@@ -4,6 +4,8 @@ import {
   getIndicatorHistory,
   getIndicatorTargets,
   saveMeasurement,
+  updateMeasurement,
+  validateMeasurement,
   upsertTarget
 } from '../services/supabaseClient.js';
 import { renderLoading, renderError, showToast } from '../ui/feedback.js';
@@ -23,7 +25,31 @@ let selectedAreaId = null;
 let selectedIndicatorId = null;
 let currentYear = new Date().getFullYear();
 
-function buildHistoryTable(history) {
+function formatValidationStatus(status) {
+  if (!status) return 'Pendiente';
+  const normalized = status.toString().trim().toUpperCase();
+  switch (normalized) {
+    case 'VALIDADO':
+      return 'Validado';
+    case 'RECHAZADO':
+      return 'Rechazado';
+    default:
+      return 'Pendiente';
+  }
+}
+
+function getStatusBadgeClass(status) {
+  switch ((status ?? '').toString().toUpperCase()) {
+    case 'VALIDADO':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'RECHAZADO':
+      return 'bg-red-100 text-red-600 border-red-200';
+    default:
+      return 'bg-amber-100 text-amber-700 border-amber-200';
+  }
+}
+
+function buildHistoryTable(history, { showValidation = false } = {}) {
   if (!history.length) {
     return `
       <div class="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center text-sm text-slate-500">
@@ -49,17 +75,48 @@ function buildHistoryTable(history) {
             <th class="px-4 py-3 text-right font-semibold text-slate-500">Valor</th>
             <th class="px-4 py-3 text-left font-semibold text-slate-500">Escenario</th>
             <th class="px-4 py-3 text-right font-semibold text-slate-500">Capturado</th>
+            <th class="px-4 py-3 text-left font-semibold text-slate-500">Estatus</th>
+            ${showValidation ? '<th class="px-4 py-3 text-right font-semibold text-slate-500">Acciones</th>' : ''}
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           ${sortedHistory
             .map((item) => {
+              const status = (item.estatus_validacion ?? '').toString().toUpperCase();
+              const badgeClass = getStatusBadgeClass(status);
+              const statusLabel = formatValidationStatus(status);
+              const canValidate = showValidation && status !== 'VALIDADO';
               return `
                 <tr>
                   <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
                   <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
                   <td class="px-4 py-3 text-slate-500">${item.escenario ?? '—'}</td>
                   <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_captura ?? item.creado_en)}</td>
+                  <td class="px-4 py-3">
+                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass}">
+                      ${statusLabel}
+                    </span>
+                    ${item.validado_por && item.fecha_validacion
+                      ? `<p class="mt-1 text-[11px] text-slate-400">Validado el ${formatDate(item.fecha_validacion)}</p>`
+                      : ''}
+                  </td>
+                  ${showValidation
+                    ? `
+                      <td class="px-4 py-3 text-right">
+                        ${canValidate
+                          ? `<button
+                              type="button"
+                              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                              data-action="validate"
+                              data-measurement-id="${item.id}"
+                            >
+                              <i class="fa-solid fa-shield-check"></i>
+                              Validar
+                            </button>`
+                          : '<span class="text-xs text-slate-400">—</span>'}
+                      </td>
+                    `
+                    : ''}
                 </tr>
               `;
             })
@@ -334,21 +391,53 @@ async function loadIndicatorContent(container, indicatorId) {
       getIndicatorTargets(indicatorId, { year: currentYear })
     ]);
 
-    // Calcular el siguiente mes a capturar
+    // Preparar catálogo de mediciones por mes del año seleccionado
+    const currentYearMeasurements = (history ?? []).filter(item => item.anio === currentYear);
+    const measurementsByMonth = new Map(
+      currentYearMeasurements.map(item => [Number(item.mes), item])
+    );
+
+    const capturedMonths = new Set(currentYearMeasurements.map(item => Number(item.mes)));
+    const availableMonths = months.filter(month => !capturedMonths.has(month.value));
+
+    // Calcular el siguiente mes sugerido
     let nextMonth = new Date().getMonth() + 1; // Mes actual por defecto
-    
+
     if (history && history.length > 0) {
-      // Encontrar el último mes capturado
-      const lastCapture = history[0]; // Ya está ordenado descendente
-      if (lastCapture.anio === currentYear) {
-        // Si hay capturas del año actual, sugerir el mes siguiente
-        nextMonth = (lastCapture.mes % 12) + 1;
-        // Si ya completó el año, volver a enero
-        if (lastCapture.mes === 12) {
+      const lastCapture = history[0];
+      if (lastCapture.anio === currentYear && lastCapture.mes) {
+        nextMonth = (Number(lastCapture.mes) % 12) + 1;
+        if (Number(lastCapture.mes) === 12) {
           nextMonth = 1;
         }
       }
     }
+
+    const disableCaptureForm = !esSubdirector && availableMonths.length === 0;
+    const suggestedMonth = esSubdirector
+      ? nextMonth
+      : availableMonths.length > 0
+        ? availableMonths[0].value
+        : nextMonth;
+
+    const initialMeasurement = esSubdirector ? measurementsByMonth.get(suggestedMonth) : null;
+    const initialValue = initialMeasurement ? initialMeasurement.valor ?? '' : '';
+    const initialButtonLabel = initialMeasurement ? 'Actualizar medición' : 'Guardar medición';
+
+    const monthOptions = months
+      .map((month) => {
+        const measurement = measurementsByMonth.get(month.value);
+        const isCaptured = Boolean(measurement);
+        const disabledAttr = !esSubdirector && isCaptured ? 'disabled' : '';
+        const selectedAttr = month.value === suggestedMonth ? 'selected' : '';
+        const statusLabel = isCaptured ? ` — ${formatNumber(measurement.valor)} (${formatValidationStatus(measurement.estatus_validacion)})` : '';
+        return `
+          <option value="${month.value}" ${selectedAttr} ${disabledAttr}>
+            ${month.label}${statusLabel}
+          </option>
+        `;
+      })
+      .join('');
 
     // Construcción dinámica: solo 1 columna si NO es subdirector, 2 columnas si SÍ es
     const gridClass = esSubdirector ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
@@ -367,15 +456,20 @@ async function loadIndicatorContent(container, indicatorId) {
                 <p class="text-xs text-slate-500">${indicator.nombre}</p>
               </div>
             </div>
-            <form id="measurement-form" class="space-y-4">
+            <form
+              id="measurement-form"
+              class="space-y-4"
+              data-disable-capture="${disableCaptureForm ? 'true' : 'false'}"
+              data-editing-id="${initialMeasurement ? initialMeasurement.id : ''}"
+            >
               <label class="flex flex-col gap-1 text-sm text-slate-600">
                 Mes
-                <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                  ${months.map((month) => `
-                    <option value="${month.value}" ${month.value === nextMonth ? 'selected' : ''}>
-                      ${month.label}
-                    </option>
-                  `).join('')}
+                <select
+                  name="month"
+                  class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  ${disableCaptureForm ? 'disabled' : ''}
+                >
+                  ${monthOptions}
                 </select>
               </label>
               <label class="flex flex-col gap-1 text-sm text-slate-600">
@@ -387,18 +481,31 @@ async function loadIndicatorContent(container, indicatorId) {
                   required
                   class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   placeholder="Ingrese el valor"
+                  value="${initialValue}"
+                  ${disableCaptureForm && !esSubdirector ? 'disabled' : ''}
                 />
               </label>
-              <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              <button
+                type="submit"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                ${disableCaptureForm && !esSubdirector ? 'disabled' : ''}
+              >
                 <i class="fa-solid fa-floppy-disk"></i>
-                Guardar medición
+                <span id="measurement-submit-label">${initialButtonLabel}</span>
               </button>
+              ${disableCaptureForm
+                ? `<p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Todos los meses del ${currentYear} ya fueron capturados para este indicador. Contacte a su subdirección para realizar cambios.
+                  </p>`
+                : esSubdirector
+                  ? '<p class="text-[11px] text-slate-400">Seleccione un mes ya capturado para editarlo. Las actualizaciones quedarán registradas y deberán validarse nuevamente.</p>'
+                  : ''}
             </form>
           </div>
 
           <div class="space-y-3">
             <h3 class="text-sm font-semibold text-slate-600">Histórico de mediciones</h3>
-            <div id="history-table">${buildHistoryTable(history)}</div>
+            <div id="history-table">${buildHistoryTable(history, { showValidation: esSubdirector })}</div>
           </div>
         </div>
 
@@ -457,7 +564,7 @@ async function loadIndicatorContent(container, indicatorId) {
       </section>
     `;
 
-    initializeFormHandlers(indicatorId, esSubdirector);
+    initializeFormHandlers(indicatorId, esSubdirector, history, container);
   } catch (error) {
     console.error(error);
     container.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar el indicador</div>';
@@ -465,16 +572,72 @@ async function loadIndicatorContent(container, indicatorId) {
   }
 }
 
-function initializeFormHandlers(indicatorId, esSubdirector) {
+function initializeFormHandlers(indicatorId, esSubdirector, history, container) {
   const measurementForm = document.getElementById('measurement-form');
   const targetForm = document.getElementById('target-form');
   const historyTable = document.getElementById('history-table');
   const targetsTable = document.getElementById('targets-table');
+  const measurementSubmitLabel = document.getElementById('measurement-submit-label');
+
+  const measurementsByMonth = new Map(
+    (history ?? [])
+      .filter(item => item.anio === currentYear)
+      .map(item => [Number(item.mes), item])
+  );
 
   // Handler para formulario de mediciones
   if (measurementForm) {
+    const disableCapture = measurementForm.dataset.disableCapture === 'true';
+    const monthSelect = measurementForm.querySelector('select[name="month"]');
+    const valueInput = measurementForm.querySelector('input[name="value"]');
+    const submitButton = measurementForm.querySelector('button[type="submit"]');
+
+    if (disableCapture && !esSubdirector) {
+      measurementForm.querySelectorAll('input, select, button').forEach(element => {
+        element.disabled = true;
+      });
+    }
+
+    const syncFormWithMonth = () => {
+      if (!monthSelect || !valueInput || !submitButton) return;
+      const monthValue = Number(monthSelect.value);
+      const measurement = measurementsByMonth.get(monthValue);
+
+      if (esSubdirector && measurement) {
+        measurementForm.dataset.editingId = measurement.id ?? '';
+        valueInput.value = measurement.valor ?? '';
+        if (measurementSubmitLabel) {
+          measurementSubmitLabel.textContent = 'Actualizar medición';
+        }
+      } else {
+        measurementForm.dataset.editingId = '';
+        if (!disableCapture || esSubdirector) {
+          valueInput.value = '';
+        }
+        if (measurementSubmitLabel) {
+          measurementSubmitLabel.textContent = 'Guardar medición';
+        }
+      }
+    };
+
+    if (esSubdirector && monthSelect) {
+      monthSelect.addEventListener('change', syncFormWithMonth);
+      syncFormWithMonth();
+    } else if (monthSelect) {
+      monthSelect.addEventListener('change', () => {
+        measurementForm.dataset.editingId = '';
+        if (measurementSubmitLabel) {
+          measurementSubmitLabel.textContent = 'Guardar medición';
+        }
+      });
+    }
+
     measurementForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (disableCapture && !esSubdirector) {
+        showToast('Todos los meses del año seleccionado ya fueron capturados', { type: 'info' });
+        return;
+      }
       const submit = measurementForm.querySelector('button[type="submit"]');
       submit.disabled = true;
       submit.classList.add('opacity-70');
@@ -484,29 +647,41 @@ function initializeFormHandlers(indicatorId, esSubdirector) {
       const session = getSession();
       const userId = session?.user?.id;
 
-      const payload = {
-        indicador_id: indicatorId,
-        anio: currentYear,
-        mes: Number(formData.get('month')),
-        valor: Number(formData.get('value')),
-        capturado_por: userId
-        // escenario removido - la tabla mediciones no tiene esta columna
-      };
+      const editingId = measurementForm.dataset.editingId;
+      let shouldRestoreSubmit = true;
 
       try {
-        await saveMeasurement(payload);
-        showToast('Medición registrada correctamente');
-        measurementForm.reset();
-        
-        // Recargar histórico del año actual
-        const history = await getIndicatorHistory(indicatorId, { limit: 12, year: currentYear });
-        historyTable.innerHTML = buildHistoryTable(history);
+        if (editingId) {
+          await updateMeasurement(editingId, {
+            valor: Number(formData.get('value')),
+            editado_por: userId,
+            estatus_validacion: 'PENDIENTE'
+          });
+          showToast('Medición actualizada correctamente');
+        } else {
+          await saveMeasurement({
+            indicador_id: indicatorId,
+            anio: currentYear,
+            mes: Number(formData.get('month')),
+            valor: Number(formData.get('value')),
+            capturado_por: userId
+          });
+          showToast('Medición registrada correctamente');
+        }
+
+        shouldRestoreSubmit = false;
+        submit.disabled = false;
+        submit.classList.remove('opacity-70');
+        await loadIndicatorContent(container, indicatorId);
+        return;
       } catch (error) {
         console.error(error);
         showToast(error.message ?? 'No fue posible registrar la medición', { type: 'error' });
       } finally {
-        submit.disabled = false;
-        submit.classList.remove('opacity-70');
+        if (shouldRestoreSubmit) {
+          submit.disabled = false;
+          submit.classList.remove('opacity-70');
+        }
       }
     });
   }
@@ -543,6 +718,34 @@ function initializeFormHandlers(indicatorId, esSubdirector) {
       } finally {
         submit.disabled = false;
         submit.classList.remove('opacity-70');
+      }
+    });
+  }
+
+  if (historyTable && esSubdirector) {
+    historyTable.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action="validate"]');
+      if (!button) return;
+      const measurementId = button.dataset.measurementId;
+      if (!measurementId) return;
+
+      const originalContent = button.innerHTML;
+      button.disabled = true;
+      button.classList.add('opacity-70');
+      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+
+      try {
+        const session = getSession();
+        const userId = session?.user?.id ?? null;
+        await validateMeasurement(measurementId, { validado_por: userId });
+        showToast('Medición validada correctamente');
+        await loadIndicatorContent(container, indicatorId);
+      } catch (error) {
+        console.error(error);
+        showToast(error.message ?? 'No fue posible validar la medición', { type: 'error' });
+        button.disabled = false;
+        button.classList.remove('opacity-70');
+        button.innerHTML = originalContent;
       }
     });
   }

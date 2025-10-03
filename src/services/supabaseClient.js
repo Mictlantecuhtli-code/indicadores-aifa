@@ -1140,7 +1140,9 @@ export async function getAllUsers() {
   const { data: usuariosAreas, error: areasError } = await supabase
     .from('usuario_areas')
     .select(`
+      id,
       usuario_id,
+      area_id,
       rol,
       puede_capturar,
       puede_editar,
@@ -1175,25 +1177,135 @@ export async function getAllUsers() {
 /**
  * Crear nuevo usuario
  */
-export async function createUser({ email, password, nombre_completo, puesto, rol_principal, telefono }) {
-  // 1. Crear usuario en Supabase Auth (requiere permisos de admin)
-  // NOTA: Esto normalmente se hace desde una función del servidor (Edge Function)
-  // Por ahora solo creamos el perfil, el admin debe crear el usuario Auth manualmente
-  
-  const { data, error } = await supabase
-    .from('perfiles')
-    .insert({
-      email,
-      nombre_completo,
-      puesto,
-      rol_principal,
-      telefono,
-      estado: 'ACTIVO'
-    })
-    .select()
-    .single();
+function generateTemporaryPassword(length = 32) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789@$!%*?&-+=';
+  const array = new Uint8Array(length);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(array);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      array[i] = Math.floor(Math.random() * alphabet.length);
+    }
+  }
+  return Array.from(array, (value) => alphabet[value % alphabet.length]).join('');
+}
 
-  if (error) throw error;
+export async function createUser({ email, nombre_completo, puesto, rol_principal, telefono }) {
+  if (!email) {
+    throw new Error('El correo electrónico es obligatorio');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const fullName = nombre_completo?.trim() || null;
+
+  const {
+    data: sessionData
+  } = await supabase.auth.getSession();
+  const adminSession = sessionData?.session ?? null;
+
+  const temporaryPassword = generateTemporaryPassword(24);
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: temporaryPassword,
+    options: fullName
+      ? {
+          data: {
+            full_name: fullName
+          }
+        }
+      : undefined
+  });
+
+  const authUserId = signUpData?.user?.id ?? null;
+  const alreadyRegistered = Boolean(
+    signUpError && /already registered|user already exists/i.test(signUpError.message ?? '')
+  );
+
+  if (!authUserId && !alreadyRegistered) {
+    throw signUpError ?? new Error('No fue posible crear el usuario en Supabase Auth');
+  }
+
+  if (signUpError && !alreadyRegistered) {
+    throw signUpError;
+  }
+
+  if (adminSession?.access_token && adminSession?.refresh_token) {
+    await supabase.auth
+      .setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      })
+      .catch(async () => {
+        // Si la restauración falla intentamos cerrar sesión para no dejar la cuenta recién creada activa
+        await supabase.auth.signOut().catch(() => {});
+      });
+  } else {
+    await supabase.auth.signOut().catch(() => {
+      // Ignorar errores de cierre de sesión
+    });
+  }
+
+  const { data: existingProfileByEmail, error: lookupError } = await supabase
+    .from('perfiles')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw lookupError;
+  }
+
+  const profileId = authUserId ?? existingProfileByEmail?.id ?? null;
+
+  if (!profileId) {
+    throw new Error('No se pudo determinar el identificador del usuario registrado');
+  }
+
+  const payload = {
+    id: profileId,
+    email: normalizedEmail,
+    nombre_completo: fullName,
+    puesto,
+    rol_principal,
+    telefono,
+    estado: 'ACTIVO'
+  };
+
+  let data = null;
+
+  if (existingProfileByEmail) {
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('perfiles')
+      .update(payload)
+      .eq('id', existingProfileByEmail.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    data = updatedProfile;
+  } else {
+    const { data: createdProfile, error: createProfileError } = await supabase
+      .from('perfiles')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (createProfileError) {
+      throw createProfileError;
+    }
+
+    data = createdProfile;
+  }
+
+  await supabase.auth
+    .resetPasswordForEmail(normalizedEmail)
+    .catch(() => {
+      // Si no se puede enviar el correo de restablecimiento no bloqueamos el alta
+    });
+
   return data;
 }
 
