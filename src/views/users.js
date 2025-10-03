@@ -159,6 +159,10 @@ function buildCreateModal() {
               required
               class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
+            <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              La contraseña inicial se generará automáticamente tomando todo lo anterior al símbolo <span class="font-semibold">@</span>
+              del correo y agregando <span class="font-semibold">1544</span> (por ejemplo: <span class="font-mono">usuario1544</span>). Solicita que el usuario la cambie al iniciar sesión.
+            </p>
           </div>
 
           <div class="grid grid-cols-2 gap-4">

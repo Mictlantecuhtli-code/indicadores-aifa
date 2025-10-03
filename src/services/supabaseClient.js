@@ -1177,17 +1177,15 @@ export async function getAllUsers() {
 /**
  * Crear nuevo usuario
  */
-function generateTemporaryPassword(length = 32) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789@$!%*?&-+=';
-  const array = new Uint8Array(length);
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    crypto.getRandomValues(array);
-  } else {
-    for (let i = 0; i < length; i += 1) {
-      array[i] = Math.floor(Math.random() * alphabet.length);
-    }
+function buildDefaultPassword(email) {
+  if (!email) {
+    throw new Error('El correo electrónico es obligatorio');
   }
-  return Array.from(array, (value) => alphabet[value % alphabet.length]).join('');
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const [localPart = 'usuario'] = normalizedEmail.split('@');
+  const safeLocalPart = localPart.length ? localPart : 'usuario';
+  return `${safeLocalPart}1544`;
 }
 
 export async function createUser({ email, nombre_completo, puesto, rol_principal, telefono }) {
@@ -1203,7 +1201,7 @@ export async function createUser({ email, nombre_completo, puesto, rol_principal
   } = await supabase.auth.getSession();
   const adminSession = sessionData?.session ?? null;
 
-  const temporaryPassword = generateTemporaryPassword(24);
+  const temporaryPassword = buildDefaultPassword(normalizedEmail);
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email: normalizedEmail,
     password: temporaryPassword,
