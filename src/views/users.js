@@ -132,7 +132,7 @@ function buildCreateModal() {
           <div>
             <h3 class="text-lg font-semibold text-slate-800">Registrar nuevo usuario</h3>
             <p class="text-xs text-slate-500">
-              Al guardar enviaremos una invitación al correo capturado para que el usuario active su acceso.
+              Al guardar enviaremos un correo para que la persona establezca su contraseña y active su acceso.
             </p>
           </div>
           <button type="button" class="text-slate-400 hover:text-slate-600" data-modal-close>

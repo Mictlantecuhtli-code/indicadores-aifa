@@ -1177,6 +1177,19 @@ export async function getAllUsers() {
 /**
  * Crear nuevo usuario
  */
+function generateTemporaryPassword(length = 32) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789@$!%*?&-+=';
+  const array = new Uint8Array(length);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(array);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      array[i] = Math.floor(Math.random() * alphabet.length);
+    }
+  }
+  return Array.from(array, (value) => alphabet[value % alphabet.length]).join('');
+}
+
 export async function createUser({ email, nombre_completo, puesto, rol_principal, telefono }) {
   if (!email) {
     throw new Error('El correo electrónico es obligatorio');
@@ -1185,103 +1198,113 @@ export async function createUser({ email, nombre_completo, puesto, rol_principal
   const normalizedEmail = email.trim().toLowerCase();
   const fullName = nombre_completo?.trim() || null;
 
-  let authUserId = null;
-  let createdAuthUser = false;
+  const {
+    data: sessionData
+  } = await supabase.auth.getSession();
+  const adminSession = sessionData?.session ?? null;
 
-  // Verificar si ya existe en Supabase Auth
-  let matchedUser = null;
-  let page = 1;
-  const perPage = 200;
-
-  while (!matchedUser) {
-    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers({
-      page,
-      perPage
-    });
-
-    if (listError) {
-      throw listError;
-    }
-
-    matchedUser = existingUsers?.users?.find(
-      (user) => user.email?.toLowerCase() === normalizedEmail
-    ) ?? null;
-
-    const hasMore = (existingUsers?.users?.length ?? 0) === perPage;
-    if (matchedUser || !hasMore) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  if (matchedUser) {
-    authUserId = matchedUser.id;
-
-    // Actualizar el nombre si cambió
-    if (
-      fullName &&
-      (matchedUser.user_metadata?.full_name || '').trim() !== fullName
-    ) {
-      await supabase.auth.admin.updateUserById(authUserId, {
-        user_metadata: {
-          ...matchedUser.user_metadata,
-          full_name: fullName
+  const temporaryPassword = generateTemporaryPassword(24);
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: temporaryPassword,
+    options: fullName
+      ? {
+          data: {
+            full_name: fullName
+          }
         }
-      }).catch(() => {
-        // Ignorar errores de metadatos para no bloquear el flujo
+      : undefined
+  });
+
+  const authUserId = signUpData?.user?.id ?? null;
+  const alreadyRegistered = Boolean(
+    signUpError && /already registered|user already exists/i.test(signUpError.message ?? '')
+  );
+
+  if (!authUserId && !alreadyRegistered) {
+    throw signUpError ?? new Error('No fue posible crear el usuario en Supabase Auth');
+  }
+
+  if (signUpError && !alreadyRegistered) {
+    throw signUpError;
+  }
+
+  if (adminSession?.access_token && adminSession?.refresh_token) {
+    await supabase.auth
+      .setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      })
+      .catch(async () => {
+        // Si la restauración falla intentamos cerrar sesión para no dejar la cuenta recién creada activa
+        await supabase.auth.signOut().catch(() => {});
       });
-    }
   } else {
-    const { data: createdUser, error: createError } = await supabase.auth.admin.createUser({
-      email: normalizedEmail,
-      user_metadata: {
-        full_name: fullName
-      }
+    await supabase.auth.signOut().catch(() => {
+      // Ignorar errores de cierre de sesión
     });
-
-    if (createError) {
-      throw createError;
-    }
-
-    authUserId = createdUser?.user?.id ?? createdUser?.id ?? null;
-    createdAuthUser = Boolean(authUserId);
-
-    if (!authUserId) {
-      throw new Error('No fue posible obtener el identificador del usuario creado');
-    }
-
-    // Enviar invitación para que el usuario establezca su contraseña
-    await supabase.auth.admin.inviteUserByEmail(normalizedEmail).catch(() => {
-      // Ignorar errores de invitación para no bloquear el alta
-    });
-
   }
 
-  const { data, error } = await supabase
+  const { data: existingProfileByEmail, error: lookupError } = await supabase
     .from('perfiles')
-    .insert({
-      id: authUserId,
-      email: normalizedEmail,
-      nombre_completo: fullName,
-      puesto,
-      rol_principal,
-      telefono,
-      estado: 'ACTIVO'
-    })
-    .select()
-    .single();
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
 
-  if (error) {
-    if (createdAuthUser && authUserId) {
-      await supabase.auth.admin.deleteUser(authUserId).catch(() => {
-        // Si falla la eliminación del usuario en Auth, solo lo registramos en consola
-        console.warn('No se pudo revertir el usuario recién creado en Supabase Auth');
-      });
+  if (lookupError) {
+    throw lookupError;
+  }
+
+  const profileId = authUserId ?? existingProfileByEmail?.id ?? null;
+
+  if (!profileId) {
+    throw new Error('No se pudo determinar el identificador del usuario registrado');
+  }
+
+  const payload = {
+    id: profileId,
+    email: normalizedEmail,
+    nombre_completo: fullName,
+    puesto,
+    rol_principal,
+    telefono,
+    estado: 'ACTIVO'
+  };
+
+  let data = null;
+
+  if (existingProfileByEmail) {
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('perfiles')
+      .update(payload)
+      .eq('id', existingProfileByEmail.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
     }
 
-    throw error;
+    data = updatedProfile;
+  } else {
+    const { data: createdProfile, error: createProfileError } = await supabase
+      .from('perfiles')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (createProfileError) {
+      throw createProfileError;
+    }
+
+    data = createdProfile;
   }
+
+  await supabase.auth
+    .resetPasswordForEmail(normalizedEmail)
+    .catch(() => {
+      // Si no se puede enviar el correo de restablecimiento no bloqueamos el alta
+    });
 
   return data;
 }
