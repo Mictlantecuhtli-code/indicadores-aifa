@@ -1679,11 +1679,12 @@ function extractDirectionRoots(tree) {
   return directions;
 }
 
-function buildDirectionPanelContent(direction) {
+function buildDirectionPanelContent() {
   return `
-    <p class="text-sm text-slate-500">
-      Actualmente no se muestran subdirecciones para esta dirección.
-    </p>
+    <div class="space-y-3">
+      <p class="text-sm font-medium text-slate-700">Subdirecciones</p>
+      <ul class="space-y-2"></ul>
+    </div>
   `;
 }
 
