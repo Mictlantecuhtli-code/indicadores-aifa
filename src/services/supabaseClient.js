@@ -547,6 +547,8 @@ export async function validateMeasurement(id, { validado_por, observaciones = nu
     validado_por: validado_por ?? null,
     fecha_validacion: new Date().toISOString()
   };
+  payload = syncValidationFields(payload, 'VALIDADO');
+  payload = stripValidationSynonyms(payload);
   if (observaciones !== undefined) {
     payload.observaciones_validacion = observaciones;
   }
