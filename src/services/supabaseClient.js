@@ -27,31 +27,187 @@ function normalizeStatus(value) {
     : text;
 }
 
-function normalizeMeasurement(record) {
+const VALIDATION_STATES = ['PENDIENTE', 'VALIDADO', 'RECHAZADO'];
+
+function normalizeValidationStatus(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = value.toString().trim().toUpperCase();
+  if (!normalized) return null;
+  if (VALIDATION_STATES.includes(normalized)) return normalized;
+  if (normalized === 'APROBADO') return 'VALIDADO';
+  if (normalized === 'RECHAZADA') return 'RECHAZADO';
+  return normalized;
+}
+
+function syncValidationFields(record, fallbackStatus) {
   if (!record) return record;
-  const status =
+  const candidateStatus =
     record.estatus_validacion ??
     record.estado_validacion ??
     record.estatus ??
+    record.estado ??
     (typeof record.validado === 'boolean'
       ? record.validado
         ? 'VALIDADO'
         : 'PENDIENTE'
-      : null);
-
+      : null) ??
+    fallbackStatus ??
+    null;
+  const status = normalizeValidationStatus(candidateStatus);
+  if (!status) return record;
   return {
     ...record,
-    escenario: record.escenario ? record.escenario.toUpperCase() : null,
+    estatus_validacion: status,
+    estado_validacion: status,
+    estatus: status,
+    validado: status === 'VALIDADO'
+  };
+}
+
+function stripValidationSynonyms(record) {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const { estado: _estado, estatus: _estatus, status: _status, ...cleaned } = record;
+  return cleaned;
+}
+
+const MEASUREMENT_WRITABLE_COLUMNS = new Set([
+  'indicador_id',
+  'anio',
+  'mes',
+  'escenario',
+  'valor',
+  'capturado_por',
+  'editado_por',
+  'validado_por',
+  'fecha_captura',
+  'fecha_ultima_edicion',
+  'fecha_validacion',
+  'estatus_validacion',
+  'observaciones_validacion'
+]);
+
+function mergeMeasurementAliases(record) {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const merged = { ...record };
+
+  if (
+    merged.observaciones_validacion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'validacion_observaciones')
+  ) {
+    merged.observaciones_validacion = merged.validacion_observaciones;
+  }
+
+  if (
+    merged.fecha_captura === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'creado_en') &&
+    merged.creado_en !== undefined
+  ) {
+    merged.fecha_captura = merged.creado_en;
+  }
+
+  if (
+    merged.fecha_ultima_edicion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'fecha_actualizacion') &&
+    merged.fecha_actualizacion !== undefined
+  ) {
+    merged.fecha_ultima_edicion = merged.fecha_actualizacion;
+  }
+
+  if (
+    merged.fecha_ultima_edicion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'actualizado_en') &&
+    merged.actualizado_en !== undefined
+  ) {
+    merged.fecha_ultima_edicion = merged.actualizado_en;
+  }
+
+  if (
+    merged.fecha_validacion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'validado_en') &&
+    merged.validado_en !== undefined
+  ) {
+    merged.fecha_validacion = merged.validado_en;
+  }
+
+  if (
+    merged.capturado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'creado_por')
+  ) {
+    merged.capturado_por = merged.creado_por;
+  }
+
+  if (
+    merged.editado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'actualizado_por')
+  ) {
+    merged.editado_por = merged.actualizado_por;
+  }
+
+  if (
+    merged.validado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'subdirector_id')
+  ) {
+    merged.validado_por = merged.subdirector_id;
+  }
+
+  return merged;
+}
+
+function prepareMeasurementPayload(payload, fallbackStatus) {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  let sanitized = sanitizeScenario({ ...payload });
+  sanitized = mergeMeasurementAliases(sanitized);
+  sanitized = syncValidationFields(sanitized, fallbackStatus);
+  sanitized = stripValidationSynonyms(sanitized);
+
+  if (sanitized.estatus_validacion !== 'VALIDADO') {
+    sanitized = {
+      ...sanitized,
+      validado_por: null,
+      fecha_validacion: null
+    };
+  }
+
+  const cleaned = {};
+  for (const [key, value] of Object.entries(sanitized)) {
+    if (MEASUREMENT_WRITABLE_COLUMNS.has(key)) {
+      cleaned[key] = value;
+    }
+  }
+
+  return cleaned;
+}
+
+function normalizeMeasurement(record) {
+  if (!record) return record;
+  const normalizedRecord = syncValidationFields(record);
+  const status = normalizedRecord.estatus_validacion;
+
+  return {
+    ...normalizedRecord,
+    escenario: normalizedRecord.escenario ? normalizedRecord.escenario.toUpperCase() : null,
     estatus_validacion: typeof status === 'string' ? status.toUpperCase() : status ?? 'PENDIENTE',
-    fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
+    fecha_captura: normalizedRecord.fecha_captura ?? normalizedRecord.creado_en ?? null,
     fecha_actualizacion:
-      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null,
-    fecha_validacion: record.fecha_validacion ?? record.validado_en ?? null,
-    validado_por: record.validado_por ?? record.subdirector_id ?? null,
+      normalizedRecord.fecha_actualizacion ??
+      normalizedRecord.fecha_ultima_edicion ??
+      normalizedRecord.actualizado_en ??
+      null,
+    fecha_validacion: normalizedRecord.fecha_validacion ?? normalizedRecord.validado_en ?? null,
+    validado_por: normalizedRecord.validado_por ?? normalizedRecord.subdirector_id ?? null,
     observaciones_validacion:
-      record.observaciones_validacion ?? record.validacion_observaciones ?? null,
-    capturado_por: record.capturado_por ?? record.creado_por ?? null,
-    editado_por: record.editado_por ?? record.actualizado_por ?? null
+      normalizedRecord.observaciones_validacion ?? normalizedRecord.validacion_observaciones ?? null,
+    capturado_por: normalizedRecord.capturado_por ?? normalizedRecord.creado_por ?? null,
+    editado_por: normalizedRecord.editado_por ?? normalizedRecord.actualizado_por ?? null
   };
 }
 
@@ -366,23 +522,14 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 }
 
 export async function saveMeasurement(payload) {
-  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  if (sanitized && !('estatus_validacion' in sanitized)) {
-    sanitized.estatus_validacion = 'PENDIENTE';
-  }
-  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
-    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
-  }
+  const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload, 'PENDIENTE');
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
   if (error) throw error;
   return normalizeMeasurement(data);
 }
 
 export async function updateMeasurement(id, payload) {
-  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
-    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
-  }
+  const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload);
   const { data, error } = await supabase
     .from('mediciones')
     .update(sanitized)
@@ -395,7 +542,7 @@ export async function updateMeasurement(id, payload) {
 
 export async function validateMeasurement(id, { validado_por, observaciones = null } = {}) {
   if (!id) throw new Error('Se requiere un identificador de medición para validar.');
-  const payload = {
+  let payload = {
     estatus_validacion: 'VALIDADO',
     validado_por: validado_por ?? null,
     fecha_validacion: new Date().toISOString()

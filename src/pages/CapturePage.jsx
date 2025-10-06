@@ -159,9 +159,17 @@ export default function CapturePage() {
   const queryClient = useQueryClient();
   const indicatorsQuery = useQuery({ queryKey: ['indicators'], queryFn: getIndicators });
 
-  const roleLabel = (profile?.rol ?? profile?.puesto ?? '').toString().toLowerCase();
-  const isAdmin = roleLabel.includes('admin');
-  const isSubdirector = roleLabel.includes('subdirector');
+  const roleLabel = (
+    profile?.rol_principal ?? profile?.rol ?? profile?.puesto ?? ''
+  )
+    .toString()
+    .toLowerCase();
+  const normalizedRoleLabel =
+    typeof roleLabel.normalize === 'function'
+      ? roleLabel.normalize('nfd').replace(/[\u0300-\u036f]/g, '')
+      : roleLabel;
+  const isAdmin = normalizedRoleLabel.includes('admin');
+  const isSubdirector = /subdirector|director/.test(normalizedRoleLabel);
   const canValidate = isAdmin || isSubdirector;
   const canManageTargets = isAdmin || isSubdirector;
 

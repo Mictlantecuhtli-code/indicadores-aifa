@@ -1051,15 +1051,15 @@ function buildChartConfig(realData, type, scenario, chartType = 'line', showHist
 }
 
 // Función buildChartTypeToggle corregida
-// CAMBIO: Ahora también muestra el toggle para 'quarterly' y 'annual'
+// CAMBIO: Ahora también muestra el toggle para 'monthly'
 
 function buildChartTypeToggle(currentType, type) {
-  // Mostrar toggle para todos EXCEPTO monthly (que solo usa líneas)
-  // Entonces: quarterly, annual y scenario tendrán el toggle
-  if (type === 'monthly') {
+  const supportedTypes = new Set(['monthly', 'quarterly', 'annual', 'scenario']);
+
+  if (!supportedTypes.has(type)) {
     return '';
   }
-  
+
   return `
     <div class="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm" data-chart-toggle>
       <button
