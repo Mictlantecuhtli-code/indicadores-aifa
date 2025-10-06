@@ -72,7 +72,15 @@ function stripValidationSynonyms(record) {
     return record;
   }
 
-  const { estado: _estado, estatus: _estatus, status: _status, ...cleaned } = record;
+  // Eliminar cualquier variante que NO sea estatus_validacion
+  const { 
+    estado_validacion: _estado_validacion,  // ❌ Eliminar esto
+    estado: _estado, 
+    estatus: _estatus, 
+    status: _status, 
+    ...cleaned 
+  } = record;
+  
   return cleaned;
 }
 
@@ -485,33 +493,33 @@ export async function updateMeasurement(id, payload) {
 export async function validateMeasurement(id, { validado_por, observaciones = null } = {}) {
   if (!id) throw new Error('Se requiere un identificador de medición para validar.');
   
-  // Construir payload base con el estatus VALIDADO
-  let payload = {
-    estatus_validacion: 'VALIDADO',
-    validado_por: validado_por ?? null,
+  // Payload simple y directo - SOLO las columnas que existen en la BD
+  const payload = {
+    estatus_validacion: 'VALIDADO',  // ✅ Nombre correcto de columna
+    validado_por: validado_por,
     fecha_validacion: new Date().toISOString()
   };
   
-  // Sincronizar campos de validación
-  payload = syncValidationFields(payload, 'VALIDADO');
-  
-  // NO eliminar campos de sinónimos aquí porque pueden ser necesarios
-  // payload = stripValidationSynonyms(payload);
-  
-  // Agregar observaciones si existen
   if (observaciones !== undefined && observaciones !== null) {
     payload.observaciones_validacion = observaciones;
   }
   
-  // Actualizar directamente en la base de datos para asegurar que se guarde
+  console.log('📦 Payload limpio:', payload);
+  
+  // Actualizar directamente sin procesar
   const { data, error } = await supabase
     .from('mediciones')
-    .update(payload)
+    .update(payload)  // ✅ Sin syncValidationFields ni stripValidationSynonyms
     .eq('id', id)
     .select()
     .single();
-    
-  if (error) throw error;
+  
+  if (error) {
+    console.error('❌ Error:', error);
+    throw error;
+  }
+  
+  console.log('✅ Actualizado:', data);
   return normalizeMeasurement(data);
 }
 
