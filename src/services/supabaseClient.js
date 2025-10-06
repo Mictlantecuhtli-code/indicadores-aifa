@@ -167,9 +167,15 @@ function prepareMeasurementPayload(payload, fallbackStatus) {
   let sanitized = sanitizeScenario({ ...payload });
   sanitized = mergeMeasurementAliases(sanitized);
   sanitized = syncValidationFields(sanitized, fallbackStatus);
-  sanitized = stripValidationSynonyms(sanitized);
+  
+  // NO eliminar sinónimos si estamos validando explícitamente
+  const isExplicitValidation = sanitized.estatus_validacion === 'VALIDADO' && sanitized.validado_por;
+  if (!isExplicitValidation) {
+    sanitized = stripValidationSynonyms(sanitized);
+  }
 
-  if (sanitized.estatus_validacion !== 'VALIDADO') {
+  // Solo limpiar campos de validación si NO es una validación explícita
+  if (sanitized.estatus_validacion !== 'VALIDADO' && !isExplicitValidation) {
     sanitized = {
       ...sanitized,
       validado_por: null,
@@ -180,7 +186,8 @@ function prepareMeasurementPayload(payload, fallbackStatus) {
   const cleaned = {};
   for (const [key, value] of Object.entries(sanitized)) {
     if (MEASUREMENT_WRITABLE_COLUMNS.has(key)) {
-      cleaned[key] = value;
+      // Asegurar que los valores no sean undefined
+      cleaned[key] = value === undefined ? null : value;
     }
   }
 
