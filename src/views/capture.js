@@ -17,6 +17,8 @@ const months = Array.from({ length: 12 }).map((_, index) => ({
   label: monthName(index + 1)
 }));
 
+const TARGET_YEARS = Array.from({ length: 11 }).map((_, index) => 2022 + index);
+
 const SCENARIOS = ['BAJO', 'MEDIO', 'ALTO'];
 
 let currentAreas = [];
@@ -127,43 +129,55 @@ function buildHistoryTable(history, { showValidation = false } = {}) {
   `;
 }
 
-function buildTargetsTable(targets) {
-  if (!targets.length) {
-    return `
-      <div class="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center text-sm text-slate-500">
-        No hay metas registradas para este indicador.
-      </div>
-    `;
-  }
-  
-  return `
-    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left font-semibold text-slate-500">Periodo</th>
-            <th class="px-4 py-3 text-right font-semibold text-slate-500">Meta</th>
-            <th class="px-4 py-3 text-left font-semibold text-slate-500">Escenario</th>
-            <th class="px-4 py-3 text-right font-semibold text-slate-500">Actualizado</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          ${targets
-            .map((item) => {
-              return `
-                <tr>
-                  <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
-                  <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
-                  <td class="px-4 py-3 text-slate-500">${item.escenario ?? '—'}</td>
-                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_actualizacion ?? item.fecha_ultima_edicion)}</td>
-                </tr>
-              `;
-            })
-            .join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+function normalizeScenarioValue(value) {
+  return (value ?? '').toString().trim().toUpperCase();
+}
+
+function buildTargetRows(targets, scenario, unitLabel = '') {
+  const normalizedScenario = normalizeScenarioValue(scenario) || SCENARIOS[0];
+  const targetsByMonth = new Map(
+    (targets ?? [])
+      .filter(item => normalizeScenarioValue(item.escenario) === normalizedScenario)
+      .map(item => [Number(item.mes), item])
+  );
+
+  return months
+    .map((month) => {
+      const target = targetsByMonth.get(month.value);
+      const targetValue =
+        target && target.valor !== null && target.valor !== undefined ? target.valor : '';
+      const updatedAt = target?.fecha_actualizacion ?? target?.fecha_captura ?? null;
+      const updatedLabel = updatedAt ? `Actualizado el ${formatDate(updatedAt)}` : '—';
+
+      return `
+        <tr data-month="${month.value}">
+          <td class="px-4 py-3 text-sm font-medium text-slate-600">${month.label}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="number"
+                step="0.01"
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                data-month="${month.value}"
+                value="${targetValue !== '' ? targetValue : ''}"
+                placeholder="Captura la meta${unitLabel ? ` (${unitLabel})` : ''}"
+              />
+              <button
+                type="button"
+                class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                data-action="save-target"
+                data-month="${month.value}"
+              >
+                <i class="fa-solid fa-floppy-disk"></i>
+                Guardar
+              </button>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-right text-xs text-slate-400">${updatedLabel}</td>
+        </tr>
+      `;
+    })
+    .join('');
 }
 
 export async function renderCapture(container) {
@@ -266,7 +280,7 @@ export async function renderCapture(container) {
                 id="year-select"
                 type="number"
                 min="2022"
-                max="2100"
+                max="2032"
                 value="${currentYear}"
                 class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
@@ -448,6 +462,23 @@ async function loadIndicatorContent(container, indicatorId) {
     // Construcción dinámica: solo 1 columna si NO es subdirector, 2 columnas si SÍ es
     const gridClass = esSubdirector ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
 
+    const initialTargetYear = TARGET_YEARS.includes(currentYear)
+      ? currentYear
+      : TARGET_YEARS[0];
+    const firstScenarioWithTargets = (targets ?? []).find(item =>
+      SCENARIOS.includes(normalizeScenarioValue(item.escenario))
+    );
+    const initialTargetScenario = firstScenarioWithTargets
+      ? normalizeScenarioValue(firstScenarioWithTargets.escenario)
+      : SCENARIOS[0];
+    const targetYearOptions = TARGET_YEARS.map(year => `
+      <option value="${year}" ${year === initialTargetYear ? 'selected' : ''}>${year}</option>
+    `).join('');
+    const targetScenarioOptions = SCENARIOS.map(scenario => `
+      <option value="${scenario}" ${scenario === initialTargetScenario ? 'selected' : ''}>${scenario}</option>
+    `).join('');
+    const targetRowsHtml = buildTargetRows(targets, initialTargetScenario, indicator.unidad_medida);
+
     container.innerHTML = `
       <section class="grid gap-6 ${gridClass}">
         <!-- Formulario de medición -->
@@ -528,49 +559,44 @@ async function loadIndicatorContent(container, indicatorId) {
                 <p class="text-xs text-slate-500">${indicator.nombre}</p>
               </div>
             </div>
-            <form id="target-form" class="space-y-4">
+            <form id="target-form" class="space-y-4" data-default-scenario="${initialTargetScenario}">
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="flex flex-col gap-1 text-sm text-slate-600">
-                  Mes
-                  <select name="month" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-                    ${months.map((month) => `<option value="${month.value}">${month.label}</option>`).join('')}
+                  Año
+                  <select name="targetYear" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                    ${targetYearOptions}
                   </select>
                 </label>
                 <label class="flex flex-col gap-1 text-sm text-slate-600">
                   Escenario
                   <select name="scenario" class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-                    ${SCENARIOS.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    ${targetScenarioOptions}
                   </select>
                 </label>
               </div>
-              <label class="flex flex-col gap-1 text-sm text-slate-600">
-                Meta ${indicator.unidad_medida ? `(${indicator.unidad_medida})` : ''}
-                <input
-                  name="value"
-                  type="number"
-                  step="0.01"
-                  required
-                  class="rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  placeholder="Ingrese la meta"
-                />
-              </label>
-              <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                <i class="fa-solid fa-bullseye"></i>
-                Guardar meta
-              </button>
+              <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="px-4 py-3 text-left font-semibold text-slate-500">Mes</th>
+                      <th class="px-4 py-3 text-left font-semibold text-slate-500">Meta ${indicator.unidad_medida ? `(${indicator.unidad_medida})` : ''}</th>
+                      <th class="px-4 py-3 text-right font-semibold text-slate-500">Última actualización</th>
+                    </tr>
+                  </thead>
+                  <tbody id="target-rows" class="divide-y divide-slate-100">
+                    ${targetRowsHtml}
+                  </tbody>
+                </table>
+              </div>
+              <p class="text-[11px] text-slate-400">Captura y actualiza las metas mensuales para el escenario seleccionado.</p>
             </form>
-          </div>
-
-          <div class="space-y-3">
-            <h3 class="text-sm font-semibold text-slate-600">Metas registradas</h3>
-            <div id="targets-table">${buildTargetsTable(targets)}</div>
           </div>
         </div>
         ` : ''}
       </section>
     `;
 
-    initializeFormHandlers(indicatorId, esSubdirector, history, container);
+    initializeFormHandlers(indicatorId, esSubdirector, history, container, targets, indicator);
   } catch (error) {
     console.error(error);
     container.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar el indicador</div>';
@@ -578,12 +604,34 @@ async function loadIndicatorContent(container, indicatorId) {
   }
 }
 
-function initializeFormHandlers(indicatorId, esSubdirector, history, container) {
+function initializeFormHandlers(indicatorId, esSubdirector, history, container, initialTargets = [], indicator = null) {
   const measurementForm = document.getElementById('measurement-form');
   const targetForm = document.getElementById('target-form');
   const historyTable = document.getElementById('history-table');
-  const targetsTable = document.getElementById('targets-table');
   const measurementSubmitLabel = document.getElementById('measurement-submit-label');
+  const targetRows = targetForm?.querySelector('#target-rows');
+  const targetYearSelect = targetForm?.querySelector('select[name="targetYear"]');
+  const targetScenarioSelect = targetForm?.querySelector('select[name="scenario"]');
+  const indicatorUnit = indicator?.unidad_medida ?? '';
+
+  const targetsCache = new Map();
+  if (Array.isArray(initialTargets)) {
+    const initialYear = targetYearSelect ? Number(targetYearSelect.value) : currentYear;
+    targetsCache.set(initialYear, [...initialTargets]);
+  }
+
+  let selectedTargetYear = targetYearSelect ? Number(targetYearSelect.value) : currentYear;
+  let selectedScenario = targetScenarioSelect
+    ? normalizeScenarioValue(targetScenarioSelect.value || targetForm?.dataset?.defaultScenario)
+    : SCENARIOS[0];
+  if (!selectedScenario) {
+    selectedScenario = SCENARIOS[0];
+  }
+
+  const renderTargetRows = (targets = []) => {
+    if (!targetRows) return;
+    targetRows.innerHTML = buildTargetRows(targets, selectedScenario, indicatorUnit);
+  };
 
   const measurementsByMonth = new Map(
     (history ?? [])
@@ -694,36 +742,139 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container) 
 
   // Handler para formulario de metas (solo si es subdirector)
   if (targetForm && esSubdirector) {
-    targetForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const submit = targetForm.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      submit.classList.add('opacity-70');
+    const ensureTargetsForYear = async (year) => {
+      if (targetsCache.has(year)) {
+        return targetsCache.get(year);
+      }
 
-      const formData = new FormData(targetForm);
+      if (targetRows) {
+        targetRows.innerHTML = `
+          <tr>
+            <td colspan="3" class="px-4 py-6 text-center text-sm text-slate-500">
+              Cargando metas del ${year}...
+            </td>
+          </tr>
+        `;
+      }
+
+      try {
+        const fetchedTargets = await getIndicatorTargets(indicatorId, { year });
+        targetsCache.set(year, [...fetchedTargets]);
+        return fetchedTargets;
+      } catch (error) {
+        console.error(error);
+        showToast(error.message ?? 'No fue posible obtener las metas del año seleccionado', { type: 'error' });
+        if (targetRows) {
+          targetRows.innerHTML = `
+            <tr>
+              <td colspan="3" class="px-4 py-6 text-center text-sm text-red-500">
+                No fue posible cargar las metas del ${year}.
+              </td>
+            </tr>
+          `;
+        }
+        throw error;
+      }
+    };
+
+    if (targetScenarioSelect) {
+      targetScenarioSelect.value = selectedScenario;
+      targetScenarioSelect.addEventListener('change', () => {
+        selectedScenario = normalizeScenarioValue(targetScenarioSelect.value);
+        if (!selectedScenario) {
+          selectedScenario = SCENARIOS[0];
+        }
+        const yearTargets = targetsCache.get(selectedTargetYear) ?? [];
+        renderTargetRows(yearTargets);
+      });
+    }
+
+    if (targetYearSelect) {
+      targetYearSelect.addEventListener('change', async (event) => {
+        const parsedYear = Number(event.target.value);
+        if (!parsedYear) return;
+        selectedTargetYear = parsedYear;
+
+        try {
+          const yearTargets = await ensureTargetsForYear(selectedTargetYear);
+          renderTargetRows(yearTargets);
+        } catch (error) {
+          console.error(error);
+        }
+      });
+    }
+
+    targetForm.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action="save-target"]');
+      if (!button) return;
+
+      const month = Number(button.dataset.month);
+      if (!month) return;
+
+      const input = targetForm.querySelector(`input[data-month="${month}"]`);
+      if (!input) {
+        showToast('No se encontró el campo de captura para la meta seleccionada', { type: 'error' });
+        return;
+      }
+
+      const rawValue = input.value;
+      if (rawValue === '' || rawValue === null) {
+        showToast('Ingresa un valor para la meta antes de guardar', { type: 'warning' });
+        return;
+      }
+
+      const numericValue = Number(rawValue);
+      if (Number.isNaN(numericValue)) {
+        showToast('Ingresa un valor numérico válido para la meta', { type: 'warning' });
+        return;
+      }
+
+      const originalContent = button.innerHTML;
+      let shouldRestoreButton = true;
+      button.disabled = true;
+      button.classList.add('opacity-70');
+      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
 
       const payload = {
         indicador_id: indicatorId,
-        anio: currentYear,
-        mes: Number(formData.get('month')),
-        escenario: (formData.get('scenario') ?? '').toString().toUpperCase(),
-        valor: Number(formData.get('value'))
+        anio: selectedTargetYear,
+        mes: month,
+        escenario: selectedScenario,
+        valor: numericValue
       };
 
       try {
-        await upsertTarget(payload);
+        const updatedTarget = await upsertTarget(payload);
         showToast('Meta actualizada correctamente');
-        targetForm.reset();
-        
-        // Recargar metas
-        const targets = await getIndicatorTargets(indicatorId, { year: currentYear });
-        targetsTable.innerHTML = buildTargetsTable(targets);
+
+        const normalizedScenario = normalizeScenarioValue(updatedTarget.escenario);
+        let yearTargets = targetsCache.get(selectedTargetYear) ?? [];
+        const existingIndex = yearTargets.findIndex(
+          item => Number(item.mes) === month && normalizeScenarioValue(item.escenario) === normalizedScenario
+        );
+
+        if (existingIndex >= 0) {
+          yearTargets = [
+            ...yearTargets.slice(0, existingIndex),
+            updatedTarget,
+            ...yearTargets.slice(existingIndex + 1)
+          ];
+        } else {
+          yearTargets = [...yearTargets, updatedTarget];
+        }
+
+        targetsCache.set(selectedTargetYear, yearTargets);
+        renderTargetRows(yearTargets);
+        shouldRestoreButton = false;
       } catch (error) {
         console.error(error);
         showToast(error.message ?? 'No fue posible actualizar la meta', { type: 'error' });
       } finally {
-        submit.disabled = false;
-        submit.classList.remove('opacity-70');
+        if (shouldRestoreButton) {
+          button.disabled = false;
+          button.classList.remove('opacity-70');
+          button.innerHTML = originalContent;
+        }
       }
     });
   }
