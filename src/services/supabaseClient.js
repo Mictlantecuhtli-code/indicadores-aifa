@@ -60,9 +60,17 @@ function syncValidationFields(record, fallbackStatus) {
     estatus_validacion: status,
     estado_validacion: status,
     estatus: status,
-    estado: status,
     validado: status === 'VALIDADO'
   };
+}
+
+function stripValidationSynonyms(record) {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const { estado: _estado, estatus: _estatus, status: _status, ...cleaned } = record;
+  return cleaned;
 }
 
 function normalizeMeasurement(record) {
@@ -402,6 +410,7 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 export async function saveMeasurement(payload) {
   let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
   sanitized = syncValidationFields(sanitized, 'PENDIENTE');
+  sanitized = stripValidationSynonyms(sanitized);
   if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
     sanitized = {
       ...sanitized,
@@ -417,6 +426,7 @@ export async function saveMeasurement(payload) {
 export async function updateMeasurement(id, payload) {
   let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
   sanitized = syncValidationFields(sanitized);
+  sanitized = stripValidationSynonyms(sanitized);
   if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
     sanitized = {
       ...sanitized,
@@ -442,6 +452,7 @@ export async function validateMeasurement(id, { validado_por, observaciones = nu
     fecha_validacion: new Date().toISOString()
   };
   payload = syncValidationFields(payload, 'VALIDADO');
+  payload = stripValidationSynonyms(payload);
   if (observaciones !== undefined) {
     payload.observaciones_validacion = observaciones;
   }
