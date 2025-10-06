@@ -40,12 +40,13 @@ function normalizeValidationStatus(value) {
 }
 
 function syncValidationFields(record, fallbackStatus) {
-  if (!record) return record;
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
   const candidateStatus =
     record.estatus_validacion ??
-    record.estado_validacion ??
     record.estatus ??
-    record.estado ??
     (typeof record.validado === 'boolean'
       ? record.validado
         ? 'VALIDADO'
@@ -53,13 +54,15 @@ function syncValidationFields(record, fallbackStatus) {
       : null) ??
     fallbackStatus ??
     null;
+    
   const status = normalizeValidationStatus(candidateStatus);
   if (!status) return record;
+  
   return {
     ...record,
-    estatus_validacion: status,
-    estado_validacion: status,
-    estatus: status,
+    estatus_validacion: status,  // ✅ SOLO estatus_validacion
+    // ❌ ELIMINAR: estado_validacion: status,
+    // ❌ ELIMINAR: estatus: status,
     validado: status === 'VALIDADO'
   };
 }
