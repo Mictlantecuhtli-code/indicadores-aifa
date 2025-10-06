@@ -27,31 +27,73 @@ function normalizeStatus(value) {
     : text;
 }
 
-function normalizeMeasurement(record) {
+const VALIDATION_STATES = ['PENDIENTE', 'VALIDADO', 'RECHAZADO'];
+
+function normalizeValidationStatus(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = value.toString().trim().toUpperCase();
+  if (!normalized) return null;
+  if (VALIDATION_STATES.includes(normalized)) return normalized;
+  if (normalized === 'APROBADO') return 'VALIDADO';
+  if (normalized === 'RECHAZADA') return 'RECHAZADO';
+  return normalized;
+}
+
+function syncValidationFields(record, fallbackStatus) {
   if (!record) return record;
-  const status =
+  const candidateStatus =
     record.estatus_validacion ??
     record.estado_validacion ??
     record.estatus ??
+    record.estado ??
     (typeof record.validado === 'boolean'
       ? record.validado
         ? 'VALIDADO'
         : 'PENDIENTE'
-      : null);
-
+      : null) ??
+    fallbackStatus ??
+    null;
+  const status = normalizeValidationStatus(candidateStatus);
+  if (!status) return record;
   return {
     ...record,
-    escenario: record.escenario ? record.escenario.toUpperCase() : null,
+    estatus_validacion: status,
+    estado_validacion: status,
+    estatus: status,
+    validado: status === 'VALIDADO'
+  };
+}
+
+function stripValidationSynonyms(record) {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const { estado: _estado, estatus: _estatus, status: _status, ...cleaned } = record;
+  return cleaned;
+}
+
+function normalizeMeasurement(record) {
+  if (!record) return record;
+  const normalizedRecord = syncValidationFields(record);
+  const status = normalizedRecord.estatus_validacion;
+
+  return {
+    ...normalizedRecord,
+    escenario: normalizedRecord.escenario ? normalizedRecord.escenario.toUpperCase() : null,
     estatus_validacion: typeof status === 'string' ? status.toUpperCase() : status ?? 'PENDIENTE',
-    fecha_captura: record.fecha_captura ?? record.creado_en ?? null,
+    fecha_captura: normalizedRecord.fecha_captura ?? normalizedRecord.creado_en ?? null,
     fecha_actualizacion:
-      record.fecha_actualizacion ?? record.fecha_ultima_edicion ?? record.actualizado_en ?? null,
-    fecha_validacion: record.fecha_validacion ?? record.validado_en ?? null,
-    validado_por: record.validado_por ?? record.subdirector_id ?? null,
+      normalizedRecord.fecha_actualizacion ??
+      normalizedRecord.fecha_ultima_edicion ??
+      normalizedRecord.actualizado_en ??
+      null,
+    fecha_validacion: normalizedRecord.fecha_validacion ?? normalizedRecord.validado_en ?? null,
+    validado_por: normalizedRecord.validado_por ?? normalizedRecord.subdirector_id ?? null,
     observaciones_validacion:
-      record.observaciones_validacion ?? record.validacion_observaciones ?? null,
-    capturado_por: record.capturado_por ?? record.creado_por ?? null,
-    editado_por: record.editado_por ?? record.actualizado_por ?? null
+      normalizedRecord.observaciones_validacion ?? normalizedRecord.validacion_observaciones ?? null,
+    capturado_por: normalizedRecord.capturado_por ?? normalizedRecord.creado_por ?? null,
+    editado_por: normalizedRecord.editado_por ?? normalizedRecord.actualizado_por ?? null
   };
 }
 
@@ -366,12 +408,15 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 }
 
 export async function saveMeasurement(payload) {
-  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  if (sanitized && !('estatus_validacion' in sanitized)) {
-    sanitized.estatus_validacion = 'PENDIENTE';
-  }
-  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
-    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
+  let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
+  sanitized = syncValidationFields(sanitized, 'PENDIENTE');
+  sanitized = stripValidationSynonyms(sanitized);
+  if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
+    sanitized = {
+      ...sanitized,
+      validado_por: null,
+      fecha_validacion: null
+    };
   }
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
   if (error) throw error;
@@ -379,9 +424,15 @@ export async function saveMeasurement(payload) {
 }
 
 export async function updateMeasurement(id, payload) {
-  const sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  if (sanitized && typeof sanitized.estatus_validacion === 'string') {
-    sanitized.estatus_validacion = sanitized.estatus_validacion.toUpperCase();
+  let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
+  sanitized = syncValidationFields(sanitized);
+  sanitized = stripValidationSynonyms(sanitized);
+  if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
+    sanitized = {
+      ...sanitized,
+      validado_por: sanitized.validado_por ?? null,
+      fecha_validacion: sanitized.fecha_validacion ?? null
+    };
   }
   const { data, error } = await supabase
     .from('mediciones')
@@ -395,11 +446,13 @@ export async function updateMeasurement(id, payload) {
 
 export async function validateMeasurement(id, { validado_por, observaciones = null } = {}) {
   if (!id) throw new Error('Se requiere un identificador de medición para validar.');
-  const payload = {
+  let payload = {
     estatus_validacion: 'VALIDADO',
     validado_por: validado_por ?? null,
     fecha_validacion: new Date().toISOString()
   };
+  payload = syncValidationFields(payload, 'VALIDADO');
+  payload = stripValidationSynonyms(payload);
   if (observaciones !== undefined) {
     payload.observaciones_validacion = observaciones;
   }
