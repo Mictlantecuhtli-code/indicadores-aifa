@@ -988,52 +988,68 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
       updateHistorySelectionState();
     });
 
-    if (historyValidateButton) {
-      historyValidateButton.addEventListener('click', async () => {
-        const selectedCheckboxes = collectSelectedMeasurements();
-        if (!selectedCheckboxes.length) return;
-
-        const originalContent = historyValidateButton.innerHTML;
-        historyValidateButton.disabled = true;
-        historyValidateButton.classList.add('opacity-70');
-        historyValidateButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
-
-        try {
-          const session = getSession();
-          const userId = session?.user?.id ?? null;
-
-          const failedValidations = [];
-          for (const checkbox of selectedCheckboxes) {
-            const measurementId = checkbox.dataset.measurementId;
-            if (!measurementId) continue;
-            try {
-              await validateMeasurement(measurementId, { validado_por: userId });
-            } catch (validationError) {
-              console.error(validationError);
-              failedValidations.push({ measurementId, error: validationError });
-            }
-          }
-
-          if (failedValidations.length) {
-            showToast('Algunas mediciones no pudieron validarse', { type: 'error' });
-            historyValidateButton.disabled = false;
-            historyValidateButton.classList.remove('opacity-70');
-            historyValidateButton.innerHTML = originalContent;
-            updateHistorySelectionState();
-            return;
-          }
-
-          showToast('Mediciones validadas correctamente');
-          await loadIndicatorContent(container, indicatorId);
-        } catch (error) {
-          console.error(error);
-          showToast(error.message ?? 'No fue posible validar las mediciones seleccionadas', { type: 'error' });
-          historyValidateButton.disabled = false;
-          historyValidateButton.classList.remove('opacity-70');
-          historyValidateButton.innerHTML = originalContent;
-          updateHistorySelectionState();
-        }
-      });
+if (historyValidateButton) {
+  historyValidateButton.addEventListener('click', async () => {
+    const selectedCheckboxes = collectSelectedMeasurements();
+    if (!selectedCheckboxes.length) {
+      showToast('Seleccione al menos una medición para validar', { type: 'warning' });
+      return;
     }
+
+    const originalContent = historyValidateButton.innerHTML;
+    historyValidateButton.disabled = true;
+    historyValidateButton.classList.add('opacity-70');
+    historyValidateButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+
+    try {
+      const session = getSession();
+      const userId = session?.user?.id ?? null;
+
+      if (!userId) {
+        throw new Error('No se pudo identificar el usuario para la validación');
+      }
+
+      // Usar Promise.allSettled para procesar todas las validaciones
+      const validationPromises = selectedCheckboxes.map(checkbox => {
+        const measurementId = checkbox.dataset.measurementId;
+        if (!measurementId) {
+          return Promise.reject(new Error('ID de medición no encontrado'));
+        }
+        return validateMeasurement(measurementId, { validado_por: userId });
+      });
+
+      const results = await Promise.allSettled(validationPromises);
+
+      // Contar éxitos y fallos
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      // Mostrar resultado apropiado
+      if (failed > 0 && succeeded === 0) {
+        showToast('No se pudo validar ninguna medición. Intente nuevamente.', { type: 'error' });
+        console.error('Errores de validación:', results.filter(r => r.status === 'rejected'));
+      } else if (failed > 0) {
+        showToast(`Se validaron ${succeeded} mediciones. ${failed} fallaron.`, { type: 'warning' });
+        console.error('Algunas validaciones fallaron:', results.filter(r => r.status === 'rejected'));
+      } else {
+        showToast(`${succeeded} medición(es) validada(s) correctamente`, { type: 'success' });
+      }
+
+      // Esperar un momento y recargar el contenido
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await loadIndicatorContent(container, indicatorId);
+      
+    } catch (error) {
+      console.error('Error en el proceso de validación:', error);
+      showToast(error.message ?? 'No fue posible validar las mediciones seleccionadas', { type: 'error' });
+    } finally {
+      // Restaurar el botón siempre
+      historyValidateButton.disabled = false;
+      historyValidateButton.classList.remove('opacity-70');
+      historyValidateButton.innerHTML = originalContent;
+      updateHistorySelectionState();
+    }
+  });
+}
   }
 }
