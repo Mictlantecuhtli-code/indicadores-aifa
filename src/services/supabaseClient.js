@@ -72,7 +72,15 @@ function stripValidationSynonyms(record) {
     return record;
   }
 
-  const { estado: _estado, estatus: _estatus, status: _status, ...cleaned } = record;
+  // Eliminar cualquier variante que NO sea estatus_validacion
+  const { 
+    estado_validacion: _estado_validacion,  // ❌ Eliminar esto
+    estado: _estado, 
+    estatus: _estatus, 
+    status: _status, 
+    ...cleaned 
+  } = record;
+  
   return cleaned;
 }
 
