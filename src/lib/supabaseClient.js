@@ -474,17 +474,35 @@ export async function updateMeasurement(id, payload) {
 
 export async function validateMeasurement(id, { validado_por, observaciones = null } = {}) {
   if (!id) throw new Error('Se requiere un identificador de medición para validar.');
+  
+  // Construir payload base con el estatus VALIDADO
   let payload = {
     estatus_validacion: 'VALIDADO',
     validado_por: validado_por ?? null,
     fecha_validacion: new Date().toISOString()
   };
+  
+  // Sincronizar campos de validación
   payload = syncValidationFields(payload, 'VALIDADO');
-  payload = stripValidationSynonyms(payload);
-  if (observaciones !== undefined) {
+  
+  // NO eliminar campos de sinónimos aquí porque pueden ser necesarios
+  // payload = stripValidationSynonyms(payload);
+  
+  // Agregar observaciones si existen
+  if (observaciones !== undefined && observaciones !== null) {
     payload.observaciones_validacion = observaciones;
   }
-  return updateMeasurement(id, payload);
+  
+  // Actualizar directamente en la base de datos para asegurar que se guarde
+  const { data, error } = await supabase
+    .from('mediciones')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return normalizeMeasurement(data);
 }
 
 export async function upsertTarget(payload) {
