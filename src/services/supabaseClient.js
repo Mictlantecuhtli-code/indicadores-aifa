@@ -73,6 +73,120 @@ function stripValidationSynonyms(record) {
   return cleaned;
 }
 
+const MEASUREMENT_WRITABLE_COLUMNS = new Set([
+  'indicador_id',
+  'anio',
+  'mes',
+  'escenario',
+  'valor',
+  'capturado_por',
+  'editado_por',
+  'validado_por',
+  'fecha_captura',
+  'fecha_ultima_edicion',
+  'fecha_validacion',
+  'estatus_validacion',
+  'observaciones_validacion'
+]);
+
+function mergeMeasurementAliases(record) {
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+
+  const merged = { ...record };
+
+  if (
+    merged.observaciones_validacion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'validacion_observaciones')
+  ) {
+    merged.observaciones_validacion = merged.validacion_observaciones;
+  }
+
+  if (
+    merged.fecha_captura === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'creado_en') &&
+    merged.creado_en !== undefined
+  ) {
+    merged.fecha_captura = merged.creado_en;
+  }
+
+  if (
+    merged.fecha_ultima_edicion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'fecha_actualizacion') &&
+    merged.fecha_actualizacion !== undefined
+  ) {
+    merged.fecha_ultima_edicion = merged.fecha_actualizacion;
+  }
+
+  if (
+    merged.fecha_ultima_edicion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'actualizado_en') &&
+    merged.actualizado_en !== undefined
+  ) {
+    merged.fecha_ultima_edicion = merged.actualizado_en;
+  }
+
+  if (
+    merged.fecha_validacion === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'validado_en') &&
+    merged.validado_en !== undefined
+  ) {
+    merged.fecha_validacion = merged.validado_en;
+  }
+
+  if (
+    merged.capturado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'creado_por')
+  ) {
+    merged.capturado_por = merged.creado_por;
+  }
+
+  if (
+    merged.editado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'actualizado_por')
+  ) {
+    merged.editado_por = merged.actualizado_por;
+  }
+
+  if (
+    merged.validado_por === undefined &&
+    Object.prototype.hasOwnProperty.call(merged, 'subdirector_id')
+  ) {
+    merged.validado_por = merged.subdirector_id;
+  }
+
+  return merged;
+}
+
+function prepareMeasurementPayload(payload, fallbackStatus) {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  let sanitized = sanitizeScenario({ ...payload });
+  sanitized = mergeMeasurementAliases(sanitized);
+  sanitized = syncValidationFields(sanitized, fallbackStatus);
+  sanitized = stripValidationSynonyms(sanitized);
+
+  if (sanitized.estatus_validacion !== 'VALIDADO') {
+    sanitized = {
+      ...sanitized,
+      validado_por: null,
+      fecha_validacion: null
+    };
+  }
+
+  const cleaned = {};
+  for (const [key, value] of Object.entries(sanitized)) {
+    if (MEASUREMENT_WRITABLE_COLUMNS.has(key)) {
+      cleaned[key] = value;
+    }
+  }
+
+  return cleaned;
+}
+
 function normalizeMeasurement(record) {
   if (!record) return record;
   const normalizedRecord = syncValidationFields(record);
@@ -408,32 +522,14 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
 }
 
 export async function saveMeasurement(payload) {
-  let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  sanitized = syncValidationFields(sanitized, 'PENDIENTE');
-  sanitized = stripValidationSynonyms(sanitized);
-  if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
-    sanitized = {
-      ...sanitized,
-      validado_por: null,
-      fecha_validacion: null
-    };
-  }
+  const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload, 'PENDIENTE');
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
   if (error) throw error;
   return normalizeMeasurement(data);
 }
 
 export async function updateMeasurement(id, payload) {
-  let sanitized = sanitizeScenario(payload ? { ...payload } : payload);
-  sanitized = syncValidationFields(sanitized);
-  sanitized = stripValidationSynonyms(sanitized);
-  if (sanitized && sanitized.estatus_validacion !== 'VALIDADO') {
-    sanitized = {
-      ...sanitized,
-      validado_por: sanitized.validado_por ?? null,
-      fecha_validacion: sanitized.fecha_validacion ?? null
-    };
-  }
+  const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload);
   const { data, error } = await supabase
     .from('mediciones')
     .update(sanitized)
