@@ -376,8 +376,14 @@ async function loadIndicatorContent(container, indicatorId) {
 
   try {
     const session = getSession();
-    const userRole = session?.perfil?.rol_principal || session?.perfil?.rol || 'usuario';
-    const esSubdirector = userRole?.toLowerCase().includes('subdirector');
+    const rawRole =
+      session?.perfil?.rol_principal || session?.perfil?.rol || session?.perfil?.puesto || 'usuario';
+    const lowerCaseRole = rawRole.toString().toLowerCase();
+    const normalizedRole =
+      typeof lowerCaseRole.normalize === 'function'
+        ? lowerCaseRole.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        : lowerCaseRole;
+    const esSubdirector = /subdirector|director|admin/.test(normalizedRole);
     
     const indicator = currentIndicators.find(ind => ind.id === indicatorId);
     
