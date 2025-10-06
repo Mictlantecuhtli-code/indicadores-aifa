@@ -391,7 +391,7 @@ function showEmptyState(container) {
   `;
 }
 
-async function loadIndicatorContent(container, indicatorId) {
+async function loadIndicatorContent(container, indicatorId, forceReload = false) {
   container.innerHTML = '<div class="text-center py-8 text-slate-500">Cargando datos del indicador...</div>';
 
   try {
@@ -412,10 +412,27 @@ async function loadIndicatorContent(container, indicatorId) {
       return;
     }
 
+    // CAMBIO IMPORTANTE: Agregar nocache cuando forceReload es true
+    // y aumentar el límite para ver más histórico
     const [history, targets] = await Promise.all([
-      getIndicatorHistory(indicatorId, { limit: 12, year: currentYear }),
-      getIndicatorTargets(indicatorId, { year: currentYear })
+      getIndicatorHistory(indicatorId, { 
+        limit: 24, 
+        year: currentYear,
+        nocache: forceReload  // Forzar recarga desde servidor
+      }),
+      getIndicatorTargets(indicatorId, { 
+        year: currentYear,
+        nocache: forceReload  // Forzar recarga desde servidor
+      })
     ]);
+
+    // Log para debugging (opcional, puedes comentarlo después)
+    if (forceReload) {
+      console.log('🔄 Datos recargados desde servidor:', {
+        historyCount: history?.length || 0,
+        targetsCount: targets?.length || 0
+      });
+    }
 
     // Preparar catálogo de mediciones por mes del año seleccionado
     const currentYearMeasurements = (history ?? []).filter(item => item.anio === currentYear);
@@ -615,7 +632,7 @@ async function loadIndicatorContent(container, indicatorId) {
 
     initializeFormHandlers(indicatorId, esSubdirector, history, container, targets, indicator);
   } catch (error) {
-    console.error(error);
+    console.error('Error al cargar indicador:', error);
     container.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar el indicador</div>';
     showToast('Error al cargar el indicador', { type: 'error' });
   }
