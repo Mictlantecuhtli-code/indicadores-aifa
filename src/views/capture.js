@@ -69,62 +69,74 @@ function buildHistoryTable(history, { showValidation = false } = {}) {
   });
 
   return `
-    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left font-semibold text-slate-500">Periodo</th>
-            <th class="px-4 py-3 text-right font-semibold text-slate-500">Valor</th>
-            <th class="px-4 py-3 text-left font-semibold text-slate-500">Escenario</th>
-            <th class="px-4 py-3 text-right font-semibold text-slate-500">Capturado</th>
-            <th class="px-4 py-3 text-left font-semibold text-slate-500">Estatus</th>
-            ${showValidation ? '<th class="px-4 py-3 text-right font-semibold text-slate-500">Acciones</th>' : ''}
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          ${sortedHistory
-            .map((item) => {
-              const status = (item.estatus_validacion ?? '').toString().toUpperCase();
-              const badgeClass = getStatusBadgeClass(status);
-              const statusLabel = formatValidationStatus(status);
-              const canValidate = showValidation && status !== 'VALIDADO';
-              return `
-                <tr>
-                  <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
-                  <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
-                  <td class="px-4 py-3 text-slate-500">${item.escenario ?? '—'}</td>
-                  <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_captura ?? item.creado_en)}</td>
-                  <td class="px-4 py-3">
-                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass}">
-                      ${statusLabel}
-                    </span>
-                    ${item.validado_por && item.fecha_validacion
-                      ? `<p class="mt-1 text-[11px] text-slate-400">Validado el ${formatDate(item.fecha_validacion)}</p>`
+    <div class="space-y-4">
+      <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="px-4 py-3 text-left font-semibold text-slate-500">Periodo</th>
+              <th class="px-4 py-3 text-right font-semibold text-slate-500">Valor</th>
+              <th class="px-4 py-3 text-right font-semibold text-slate-500">Capturado</th>
+              <th class="px-4 py-3 text-left font-semibold text-slate-500">Estatus</th>
+              ${showValidation ? '<th class="px-4 py-3 text-center font-semibold text-slate-500">Acciones</th>' : ''}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            ${sortedHistory
+              .map((item) => {
+                const status = (item.estatus_validacion ?? '').toString().toUpperCase();
+                const badgeClass = getStatusBadgeClass(status);
+                const statusLabel = formatValidationStatus(status);
+                const canValidate = showValidation && status !== 'VALIDADO';
+                return `
+                  <tr>
+                    <td class="px-4 py-3 text-slate-600">${monthName(item.mes)} ${item.anio}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-800">${formatNumber(item.valor)}</td>
+                    <td class="px-4 py-3 text-right text-slate-400 text-xs">${formatDate(item.fecha_captura ?? item.creado_en)}</td>
+                    <td class="px-4 py-3">
+                      <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass}">
+                        ${statusLabel}
+                      </span>
+                      ${item.validado_por && item.fecha_validacion
+                        ? `<p class="mt-1 text-[11px] text-slate-400">Validado el ${formatDate(item.fecha_validacion)}</p>`
+                        : ''}
+                    </td>
+                    ${showValidation
+                      ? `
+                        <td class="px-4 py-3 text-center">
+                          ${canValidate
+                            ? `<input
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                data-action="select-measurement"
+                                data-measurement-id="${item.id}"
+                              />`
+                            : '<span class="text-xs text-slate-400">—</span>'}
+                        </td>
+                      `
                       : ''}
-                  </td>
-                  ${showValidation
-                    ? `
-                      <td class="px-4 py-3 text-right">
-                        ${canValidate
-                          ? `<button
-                              type="button"
-                              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                              data-action="validate"
-                              data-measurement-id="${item.id}"
-                            >
-                              <i class="fa-solid fa-shield-check"></i>
-                              Validar
-                            </button>`
-                          : '<span class="text-xs text-slate-400">—</span>'}
-                      </td>
-                    `
-                    : ''}
-                </tr>
-              `;
-            })
-            .join('')}
-        </tbody>
-      </table>
+                  </tr>
+                `;
+              })
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+      ${showValidation
+        ? `
+          <div class="flex justify-end">
+            <button
+              type="button"
+              id="validate-selected"
+              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled
+            >
+              <i class="fa-solid fa-shield-check"></i>
+              Validar seleccionadas
+            </button>
+          </div>
+        `
+        : ''}
     </div>
   `;
 }
@@ -619,6 +631,7 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
   const targetScenarioSelect = targetForm?.querySelector('select[name="scenario"]');
   const targetSubmit = targetForm?.querySelector('#target-submit');
   const indicatorUnit = indicator?.unidad_medida ?? '';
+  const historyValidateButton = historyTable?.querySelector('#validate-selected');
 
   const targetsCache = new Map();
   if (Array.isArray(initialTargets)) {
@@ -682,6 +695,19 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
     attachTargetInputListeners();
     updateTargetSubmitState();
   };
+
+  const collectSelectedMeasurements = () =>
+    Array.from(
+      historyTable?.querySelectorAll('input[data-action="select-measurement"]:checked') ?? []
+    );
+
+  const updateHistorySelectionState = () => {
+    if (!historyValidateButton) return;
+    const hasSelection = collectSelectedMeasurements().length > 0;
+    historyValidateButton.disabled = !hasSelection;
+  };
+
+  updateHistorySelectionState();
 
   const measurementsByMonth = new Map(
     (history ?? [])
@@ -956,30 +982,58 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
   }
 
   if (historyTable && esSubdirector) {
-    historyTable.addEventListener('click', async (event) => {
-      const button = event.target.closest('button[data-action="validate"]');
-      if (!button) return;
-      const measurementId = button.dataset.measurementId;
-      if (!measurementId) return;
-
-      const originalContent = button.innerHTML;
-      button.disabled = true;
-      button.classList.add('opacity-70');
-      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
-
-      try {
-        const session = getSession();
-        const userId = session?.user?.id ?? null;
-        await validateMeasurement(measurementId, { validado_por: userId });
-        showToast('Medición validada correctamente');
-        await loadIndicatorContent(container, indicatorId);
-      } catch (error) {
-        console.error(error);
-        showToast(error.message ?? 'No fue posible validar la medición', { type: 'error' });
-        button.disabled = false;
-        button.classList.remove('opacity-70');
-        button.innerHTML = originalContent;
-      }
+    historyTable.addEventListener('change', (event) => {
+      const checkbox = event.target.closest('input[data-action="select-measurement"]');
+      if (!checkbox) return;
+      updateHistorySelectionState();
     });
+
+    if (historyValidateButton) {
+      historyValidateButton.addEventListener('click', async () => {
+        const selectedCheckboxes = collectSelectedMeasurements();
+        if (!selectedCheckboxes.length) return;
+
+        const originalContent = historyValidateButton.innerHTML;
+        historyValidateButton.disabled = true;
+        historyValidateButton.classList.add('opacity-70');
+        historyValidateButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+
+        try {
+          const session = getSession();
+          const userId = session?.user?.id ?? null;
+
+          const failedValidations = [];
+          for (const checkbox of selectedCheckboxes) {
+            const measurementId = checkbox.dataset.measurementId;
+            if (!measurementId) continue;
+            try {
+              await validateMeasurement(measurementId, { validado_por: userId });
+            } catch (validationError) {
+              console.error(validationError);
+              failedValidations.push({ measurementId, error: validationError });
+            }
+          }
+
+          if (failedValidations.length) {
+            showToast('Algunas mediciones no pudieron validarse', { type: 'error' });
+            historyValidateButton.disabled = false;
+            historyValidateButton.classList.remove('opacity-70');
+            historyValidateButton.innerHTML = originalContent;
+            updateHistorySelectionState();
+            return;
+          }
+
+          showToast('Mediciones validadas correctamente');
+          await loadIndicatorContent(container, indicatorId);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message ?? 'No fue posible validar las mediciones seleccionadas', { type: 'error' });
+          historyValidateButton.disabled = false;
+          historyValidateButton.classList.remove('opacity-70');
+          historyValidateButton.innerHTML = originalContent;
+          updateHistorySelectionState();
+        }
+      });
+    }
   }
 }
