@@ -819,7 +819,7 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
         shouldRestoreSubmit = false;
         submit.disabled = false;
         submit.classList.remove('opacity-70');
-        await loadIndicatorContent(container, indicatorId);
+        await loadIndicatorContent(container, indicatorId, true);
         return;
       } catch (error) {
         console.error(error);
@@ -1008,6 +1008,8 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
 if (historyValidateButton) {
   historyValidateButton.addEventListener('click', async () => {
     const selectedCheckboxes = collectSelectedMeasurements();
+    console.log('📋 Mediciones seleccionadas:', selectedCheckboxes.length);
+    
     if (!selectedCheckboxes.length) {
       showToast('Seleccione al menos una medición para validar', { type: 'warning' });
       return;
@@ -1020,15 +1022,21 @@ if (historyValidateButton) {
 
     try {
       const session = getSession();
-      const userId = session?.user?.id ?? null;
+      const profile = session?.perfil ?? session?.profile ?? null;
+      
+      // ✅ CAMBIO CRÍTICO: Usar profile.id en lugar de user.id
+      const userId = profile?.id ?? null;
 
       if (!userId) {
-        throw new Error('No se pudo identificar el usuario para la validación');
+        throw new Error('No se pudo identificar el perfil del usuario para la validación');
       }
 
-      // Usar Promise.allSettled para procesar todas las validaciones
+      console.log('👤 Usuario validador (perfil ID):', userId);
+      console.log('👤 Rol:', profile?.rol_principal);
+
       const validationPromises = selectedCheckboxes.map(checkbox => {
         const measurementId = checkbox.dataset.measurementId;
+        console.log('🔄 Validando medición:', measurementId);
         if (!measurementId) {
           return Promise.reject(new Error('ID de medición no encontrado'));
         }
@@ -1036,31 +1044,31 @@ if (historyValidateButton) {
       });
 
       const results = await Promise.allSettled(validationPromises);
+      console.log('✅ Resultados de validación:', results);
 
-      // Contar éxitos y fallos
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
 
-      // Mostrar resultado apropiado
       if (failed > 0 && succeeded === 0) {
-        showToast('No se pudo validar ninguna medición. Intente nuevamente.', { type: 'error' });
-        console.error('Errores de validación:', results.filter(r => r.status === 'rejected'));
+        showToast('No se pudo validar ninguna medición. Revise la consola para más detalles.', { type: 'error' });
+        console.error('❌ Errores de validación:', results.filter(r => r.status === 'rejected'));
       } else if (failed > 0) {
         showToast(`Se validaron ${succeeded} mediciones. ${failed} fallaron.`, { type: 'warning' });
-        console.error('Algunas validaciones fallaron:', results.filter(r => r.status === 'rejected'));
+        console.error('⚠️ Algunas validaciones fallaron:', results.filter(r => r.status === 'rejected'));
       } else {
         showToast(`${succeeded} medición(es) validada(s) correctamente`, { type: 'success' });
+        console.log('✨ Todas las validaciones completadas exitosamente');
       }
 
-      // Esperar un momento y recargar el contenido
+      console.log('🔄 Recargando contenido del indicador...');
       await new Promise(resolve => setTimeout(resolve, 500));
-      await loadIndicatorContent(container, indicatorId);
+      await loadIndicatorContent(container, indicatorId, true);
+      console.log('✅ Contenido recargado');
       
     } catch (error) {
-      console.error('Error en el proceso de validación:', error);
+      console.error('💥 Error en el proceso de validación:', error);
       showToast(error.message ?? 'No fue posible validar las mediciones seleccionadas', { type: 'error' });
     } finally {
-      // Restaurar el botón siempre
       historyValidateButton.disabled = false;
       historyValidateButton.classList.remove('opacity-70');
       historyValidateButton.innerHTML = originalContent;
