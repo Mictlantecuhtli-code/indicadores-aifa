@@ -17,13 +17,6 @@ const OPTION_BLUEPRINTS = [
       `Trimestral del año en curso vs. el año anterior`
   },
   {
-    id: 'annual-yoy',
-    type: 'annual',
-    scenario: null,
-    buildLabel: entity =>
-      `Anual en curso vs. el año anterior`
-  },
-  {
     id: 'scenario-low',
     type: 'scenario',
     scenario: 'BAJO',
@@ -1686,54 +1679,11 @@ function extractDirectionRoots(tree) {
   return directions;
 }
 
-function buildSubdirectionItemMarkup(child) {
-  if (!child) return '';
-  const label = child?.nombre?.trim?.()
-    ? child.nombre.trim()
-    : child?.clave?.trim?.() || '—';
-
-  const dataAttributes = [];
-  if (child.id != null) {
-    dataAttributes.push(`data-subdirection-id="${escapeHtml(String(child.id))}"`);
-  }
-  if (child.clave) {
-    dataAttributes.push(`data-subdirection-clave="${escapeHtml(child.clave)}"`);
-  }
-
-  return `
-    <li>
-      <button
-        type="button"
-        class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
-        ${dataAttributes.length ? dataAttributes.join(' ') : ''}
-      >
-        <span class="mt-0.5 text-slate-500">
-          <i class="fa-solid fa-diagram-project h-4 w-4"></i>
-        </span>
-        <span>${escapeHtml(label)}</span>
-      </button>
-    </li>
-  `;
-}
-
-function buildDirectionPanelContent(direction) {
-  const children = Array.isArray(direction?.children) ? direction.children : [];
-  if (!children.length) {
-    return `
-      <p class="text-sm text-slate-500">
-        No hay subdirecciones registradas para esta dirección.
-      </p>
-    `;
-  }
-
-  const itemsMarkup = children.map(buildSubdirectionItemMarkup).join('');
-
+function buildDirectionPanelContent() {
   return `
     <div class="space-y-3">
       <p class="text-sm font-medium text-slate-700">Subdirecciones</p>
-      <ul class="space-y-2">
-        ${itemsMarkup}
-      </ul>
+      <ul class="space-y-2"></ul>
     </div>
   `;
 }
