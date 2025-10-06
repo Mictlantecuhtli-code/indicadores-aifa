@@ -148,6 +148,7 @@ function buildTargetRows(targets, scenario, unitLabel = '') {
         target && target.valor !== null && target.valor !== undefined ? target.valor : '';
       const updatedAt = target?.fecha_actualizacion ?? target?.fecha_captura ?? null;
       const updatedLabel = updatedAt ? `Actualizado el ${formatDate(updatedAt)}` : '—';
+      const normalizedValue = targetValue !== '' ? targetValue : '';
 
       return `
         <tr data-month="${month.value}">
@@ -159,18 +160,11 @@ function buildTargetRows(targets, scenario, unitLabel = '') {
                 step="0.01"
                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 data-month="${month.value}"
-                value="${targetValue !== '' ? targetValue : ''}"
+                data-original-value="${normalizedValue}"
+                data-target-id="${target?.id ?? ''}"
+                value="${normalizedValue}"
                 placeholder="Captura la meta${unitLabel ? ` (${unitLabel})` : ''}"
               />
-              <button
-                type="button"
-                class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-                data-action="save-target"
-                data-month="${month.value}"
-              >
-                <i class="fa-solid fa-floppy-disk"></i>
-                Guardar
-              </button>
             </div>
           </td>
           <td class="px-4 py-3 text-right text-xs text-slate-400">${updatedLabel}</td>
@@ -588,7 +582,18 @@ async function loadIndicatorContent(container, indicatorId) {
                   </tbody>
                 </table>
               </div>
-              <p class="text-[11px] text-slate-400">Captura y actualiza las metas mensuales para el escenario seleccionado.</p>
+              <div class="flex justify-end">
+                <button
+                  type="submit"
+                  id="target-submit"
+                  class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled
+                >
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  Actualizar metas
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400">Se guardarán únicamente los meses con cambios para el escenario seleccionado.</p>
             </form>
           </div>
         </div>
@@ -612,6 +617,7 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
   const targetRows = targetForm?.querySelector('#target-rows');
   const targetYearSelect = targetForm?.querySelector('select[name="targetYear"]');
   const targetScenarioSelect = targetForm?.querySelector('select[name="scenario"]');
+  const targetSubmit = targetForm?.querySelector('#target-submit');
   const indicatorUnit = indicator?.unidad_medida ?? '';
 
   const targetsCache = new Map();
@@ -628,9 +634,53 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
     selectedScenario = SCENARIOS[0];
   }
 
+  const parseTargetValue = (value) => {
+    const trimmed = (value ?? '').toString().trim();
+    if (trimmed === '') return null;
+    const numeric = Number(trimmed);
+    return Number.isNaN(numeric) ? NaN : numeric;
+  };
+
+  const collectTargetInputs = () =>
+    Array.from(targetForm?.querySelectorAll('input[data-month]') ?? []);
+
+  const hasTargetChanges = () => {
+    const inputs = collectTargetInputs();
+    return inputs.some((input) => {
+      const currentValue = parseTargetValue(input.value);
+      const originalValue = parseTargetValue(input.dataset.originalValue ?? '');
+
+      if (Number.isNaN(currentValue)) {
+        return true;
+      }
+
+      if (currentValue === null && originalValue === null) {
+        return false;
+      }
+
+      return currentValue !== originalValue;
+    });
+  };
+
+  const updateTargetSubmitState = () => {
+    if (!targetSubmit) return;
+    const hasChanges = hasTargetChanges();
+    targetSubmit.disabled = !hasChanges;
+    targetSubmit.classList.toggle('opacity-70', !hasChanges);
+  };
+
+  const attachTargetInputListeners = () => {
+    const inputs = collectTargetInputs();
+    inputs.forEach((input) => {
+      input.addEventListener('input', updateTargetSubmitState);
+    });
+  };
+
   const renderTargetRows = (targets = []) => {
     if (!targetRows) return;
     targetRows.innerHTML = buildTargetRows(targets, selectedScenario, indicatorUnit);
+    attachTargetInputListeners();
+    updateTargetSubmitState();
   };
 
   const measurementsByMonth = new Map(
@@ -804,76 +854,102 @@ function initializeFormHandlers(indicatorId, esSubdirector, history, container, 
       });
     }
 
-    targetForm.addEventListener('click', async (event) => {
-      const button = event.target.closest('button[data-action="save-target"]');
-      if (!button) return;
+    renderTargetRows(targetsCache.get(selectedTargetYear) ?? []);
 
-      const month = Number(button.dataset.month);
-      if (!month) return;
+    targetForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
 
-      const input = targetForm.querySelector(`input[data-month="${month}"]`);
-      if (!input) {
-        showToast('No se encontró el campo de captura para la meta seleccionada', { type: 'error' });
+      const inputs = collectTargetInputs();
+      const changes = inputs
+        .map((input) => {
+          const month = Number(input.dataset.month);
+          const rawValue = (input.value ?? '').toString();
+          const parsedValue = parseTargetValue(rawValue);
+          const originalValue = parseTargetValue(input.dataset.originalValue ?? '');
+          const hasChange =
+            Number.isNaN(parsedValue) || parsedValue !== originalValue;
+
+          return {
+            month,
+            rawValue,
+            value: parsedValue,
+            originalValue,
+            hasChange
+          };
+        })
+        .filter(item => item.month && item.hasChange);
+
+      if (!changes.length) {
+        showToast('No hay cambios por guardar', { type: 'info' });
+        updateTargetSubmitState();
         return;
       }
 
-      const rawValue = input.value;
-      if (rawValue === '' || rawValue === null) {
-        showToast('Ingresa un valor para la meta antes de guardar', { type: 'warning' });
-        return;
+      for (const change of changes) {
+        const trimmed = change.rawValue.toString().trim();
+        if (trimmed === '') {
+          showToast(`Ingresa un valor para la meta de ${monthName(change.month)}`, { type: 'warning' });
+          return;
+        }
+
+        if (Number.isNaN(change.value)) {
+          showToast(`Ingresa un valor numérico válido para la meta de ${monthName(change.month)}`, { type: 'warning' });
+          return;
+        }
       }
 
-      const numericValue = Number(rawValue);
-      if (Number.isNaN(numericValue)) {
-        showToast('Ingresa un valor numérico válido para la meta', { type: 'warning' });
-        return;
+      const originalContent = targetSubmit ? targetSubmit.innerHTML : '';
+      if (targetSubmit) {
+        targetSubmit.disabled = true;
+        targetSubmit.classList.add('opacity-70');
+        targetSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
       }
 
-      const originalContent = button.innerHTML;
-      let shouldRestoreButton = true;
-      button.disabled = true;
-      button.classList.add('opacity-70');
-      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
-
-      const payload = {
-        indicador_id: indicatorId,
-        anio: selectedTargetYear,
-        mes: month,
-        escenario: selectedScenario,
-        valor: numericValue
-      };
+      let yearTargets = targetsCache.get(selectedTargetYear) ?? [];
 
       try {
-        const updatedTarget = await upsertTarget(payload);
-        showToast('Meta actualizada correctamente');
+        for (const change of changes) {
+          const payload = {
+            indicador_id: indicatorId,
+            anio: selectedTargetYear,
+            mes: change.month,
+            escenario: selectedScenario,
+            valor: change.value
+          };
 
-        const normalizedScenario = normalizeScenarioValue(updatedTarget.escenario);
-        let yearTargets = targetsCache.get(selectedTargetYear) ?? [];
-        const existingIndex = yearTargets.findIndex(
-          item => Number(item.mes) === month && normalizeScenarioValue(item.escenario) === normalizedScenario
-        );
+          const updatedTarget = await upsertTarget(payload);
 
-        if (existingIndex >= 0) {
-          yearTargets = [
-            ...yearTargets.slice(0, existingIndex),
-            updatedTarget,
-            ...yearTargets.slice(existingIndex + 1)
-          ];
-        } else {
-          yearTargets = [...yearTargets, updatedTarget];
+          const normalizedScenario = normalizeScenarioValue(updatedTarget.escenario);
+          const monthValue = Number(change.month);
+          const existingIndex = yearTargets.findIndex(
+            item =>
+              Number(item.mes) === monthValue &&
+              normalizeScenarioValue(item.escenario) === normalizedScenario
+          );
+
+          if (existingIndex >= 0) {
+            yearTargets = [
+              ...yearTargets.slice(0, existingIndex),
+              updatedTarget,
+              ...yearTargets.slice(existingIndex + 1)
+            ];
+          } else {
+            yearTargets = [...yearTargets, updatedTarget];
+          }
         }
 
         targetsCache.set(selectedTargetYear, yearTargets);
         renderTargetRows(yearTargets);
-        shouldRestoreButton = false;
+        showToast('Metas actualizadas correctamente');
       } catch (error) {
         console.error(error);
-        showToast(error.message ?? 'No fue posible actualizar la meta', { type: 'error' });
+        showToast(error.message ?? 'No fue posible actualizar las metas', { type: 'error' });
       } finally {
-        if (shouldRestoreButton) {
-          button.disabled = false;
-          button.classList.remove('opacity-70');
-          button.innerHTML = originalContent;
+        if (targetSubmit) {
+          targetSubmit.disabled = false;
+          targetSubmit.classList.remove('opacity-70');
+          targetSubmit.innerHTML = originalContent;
+          updateTargetSubmitState();
         }
       }
     });
