@@ -1679,10 +1679,23 @@ function extractDirectionRoots(tree) {
   return directions;
 }
 
-function buildDirectionPanelContent() {
+function getDirectionChildrenLabel(direction) {
+  const name = direction?.nombre?.toLowerCase?.() ?? '';
+  const key = direction?.clave?.toLowerCase?.() ?? '';
+
+  if (name.includes('sms') || key === 'sms') {
+    return 'Gerencias';
+  }
+
+  return 'Subdirecciones';
+}
+
+function buildDirectionPanelContent(direction) {
+  const label = getDirectionChildrenLabel(direction);
+
   return `
     <div class="space-y-3">
-      <p class="text-sm font-medium text-slate-700">Subdirecciones</p>
+      <p class="text-sm font-medium text-slate-700">${escapeHtml(label)}</p>
       <ul class="space-y-2"></ul>
     </div>
   `;
