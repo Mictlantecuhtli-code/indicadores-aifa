@@ -91,7 +91,108 @@ const GROUP_DEFINITIONS = {
   }
 };
 
-const ACCORDION_SECTIONS = [
+const DIRECT_INDICATOR_PREFIX = 'indicator:';
+const SMS_GROUP_PREFIX = 'sms-';
+const SMS_SECTION_ID = 'sms';
+const SMS_SECTION_ICON_CLASS = 'fa-solid fa-shield-halved';
+
+let cachedIndicators = null;
+
+function registerGroupDefinition(definition) {
+  if (!definition || !definition.id) {
+    return;
+  }
+
+  GROUP_DEFINITIONS[definition.id] = definition;
+}
+
+function removeGroupDefinitionsByPrefix(prefix) {
+  if (!prefix) return;
+
+  Object.keys(GROUP_DEFINITIONS).forEach(key => {
+    if (key.startsWith(prefix)) {
+      delete GROUP_DEFINITIONS[key];
+    }
+  });
+}
+
+function normalizeMatchText(text) {
+  return (text || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const SMS_KEYWORDS = [
+  'sms',
+  'seguridad operacional',
+  'sistema de gestion de seguridad',
+  'safety management system'
+];
+
+function isSmsIndicator(indicator) {
+  if (!indicator) return false;
+
+  const parts = [
+    indicator.nombre,
+    indicator.descripcion,
+    indicator.area_nombre,
+    indicator.area_clave,
+    indicator.direccion_nombre,
+    indicator.direccion_clave
+  ];
+
+  const normalized = normalizeMatchText(parts.filter(Boolean).join(' '));
+  if (!normalized) return false;
+
+  return SMS_KEYWORDS.some(keyword => normalized.includes(keyword));
+}
+
+function getVisualizationOrder(value) {
+  const order = Number(value);
+  return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
+}
+
+function buildSmsGroupDefinitions(indicators = []) {
+  const smsIndicators = indicators.filter(isSmsIndicator);
+
+  smsIndicators.sort((a, b) => {
+    const orderDiff = getVisualizationOrder(a?.orden_visualizacion) - getVisualizationOrder(b?.orden_visualizacion);
+    if (orderDiff !== 0) return orderDiff;
+
+    const nameA = a?.nombre ?? '';
+    const nameB = b?.nombre ?? '';
+    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+  });
+
+  return smsIndicators.map(indicator => {
+    const id = `${SMS_GROUP_PREFIX}${indicator.id}`;
+
+    return {
+      id,
+      title: indicator?.nombre ?? 'Indicador SMS',
+      subtitle: indicator?.area_nombre ?? null,
+      entity: indicator?.nombre ?? 'SMS',
+      dataKey: `${DIRECT_INDICATOR_PREFIX}${indicator.id}`,
+      iconClass: SMS_SECTION_ICON_CLASS,
+      indicatorId: indicator.id
+    };
+  });
+}
+
+function registerSmsGroupDefinitions(indicators = []) {
+  removeGroupDefinitionsByPrefix(SMS_GROUP_PREFIX);
+
+  const definitions = buildSmsGroupDefinitions(indicators);
+  definitions.forEach(registerGroupDefinition);
+
+  return definitions.map(definition => definition.id);
+}
+
+const BASE_ACCORDION_SECTIONS = [
   {
     id: 'operativos',
     type: 'indicators',
@@ -182,12 +283,22 @@ async function getIndicatorRealData(indicatorId) {
   if (!indicatorId) return null;
   
   try {
+    const indicatorPromise = (async () => {
+      if (cachedIndicators === null) {
+        const fetchedIndicators = await getIndicators();
+        cachedIndicators = Array.isArray(fetchedIndicators) ? fetchedIndicators : [];
+      }
+
+      const indicators = Array.isArray(cachedIndicators) ? cachedIndicators : [];
+      return indicators.find(i => i.id === indicatorId);
+    })();
+
     const [history, targets, indicator] = await Promise.all([
       getIndicatorHistory(indicatorId, { limit: 120 }),
       getIndicatorTargets(indicatorId),
-      getIndicators().then(indicators => indicators.find(i => i.id === indicatorId))
+      indicatorPromise
     ]);
-    
+
     return {
       indicator,
       history: history || [],
@@ -252,25 +363,22 @@ function aggregateQuarterlyData(history = [], year, maxQuarter = 4) {
 }
 
 function findIndicatorByDataKey(indicators, dataKey) {
+  if (typeof dataKey === 'string' && dataKey.startsWith(DIRECT_INDICATOR_PREFIX)) {
+    const indicatorId = dataKey.slice(DIRECT_INDICATOR_PREFIX.length);
+    if (!indicatorId) return null;
+    return (indicators || []).find(indicator => indicator?.id === indicatorId) ?? null;
+  }
+
   const config = INDICATOR_MAPPING[dataKey];
   if (!config) {
     console.warn(`No hay configuración de mapeo para: ${dataKey}`);
     return null;
   }
-  
-  const normalize = (text) => {
-    return (text || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-  
+
   const scored = indicators.map(ind => {
-    const normalizedName = normalize(ind.nombre);
-    const normalizedDesc = normalize(ind.descripcion);
-    const normalizedArea = normalize(ind.area_nombre);
+    const normalizedName = normalizeMatchText(ind.nombre);
+    const normalizedDesc = normalizeMatchText(ind.descripcion);
+    const normalizedArea = normalizeMatchText(ind.area_nombre);
     const searchText = `${normalizedName} ${normalizedDesc} ${normalizedArea}`;
     
     let score = 0;
@@ -1228,7 +1336,12 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
   document.body.classList.add('overflow-hidden');
 
   try {
-    const indicators = await getIndicators();
+    if (cachedIndicators === null) {
+      const fetchedIndicators = await getIndicators();
+      cachedIndicators = Array.isArray(fetchedIndicators) ? fetchedIndicators : [];
+    }
+
+    const indicators = Array.isArray(cachedIndicators) ? cachedIndicators : [];
     const foundIndicator = findIndicatorByDataKey(indicators, dataKey);
 
     if (!foundIndicator) {
@@ -1434,7 +1547,10 @@ function buildGroupMarkup(groupId, rootId) {
           <span class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
             <i class="${definition.iconClass} h-5 w-5"></i>
           </span>
-          <span class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</span>
+          <span class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</span>
+            ${definition.subtitle ? `<span class="text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</span>` : ''}
+          </span>
         </span>
         <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-group-chevron></i>
       </button>
@@ -1458,8 +1574,43 @@ function buildIndicatorSectionContent(section) {
   `;
 }
 
-function buildSectionsMarkup() {
-  return ACCORDION_SECTIONS.map(section => {
+function composeAccordionSections({ smsGroupIds } = {}) {
+  const baseSections = BASE_ACCORDION_SECTIONS.map(section => ({
+    ...section,
+    groupIds: Array.isArray(section.groupIds) ? [...section.groupIds] : []
+  }));
+
+  const operationsSection = baseSections.find(section => section.id === 'operativos') ?? null;
+  const fboSection = baseSections.find(section => section.id === 'fbo') ?? null;
+  const remainingSections = baseSections.filter(section => !['operativos', 'fbo'].includes(section.id));
+
+  const sections = [];
+
+  if (operationsSection) {
+    sections.push(operationsSection);
+  }
+
+  if (Array.isArray(smsGroupIds) && smsGroupIds.length) {
+    sections.push({
+      id: SMS_SECTION_ID,
+      type: 'indicators',
+      title: 'Indicadores SMS',
+      iconClass: SMS_SECTION_ICON_CLASS,
+      groupIds: [...smsGroupIds]
+    });
+  }
+
+  if (fboSection) {
+    sections.push(fboSection);
+  }
+
+  sections.push(...remainingSections);
+
+  return sections;
+}
+
+function buildSectionsMarkup(sections) {
+  return sections.map(section => {
     const isInitiallyOpen = section.id === DEFAULT_ACCORDION_ID;
     const content = buildIndicatorSectionContent(section);
 
@@ -1496,7 +1647,7 @@ function buildSectionsMarkup() {
   }).join('');
 }
 
-function buildDashboardMarkup() {
+function buildDashboardMarkup(sections = composeAccordionSections()) {
   return `
     <div class="space-y-6">
       <header class="space-y-2">
@@ -1506,7 +1657,7 @@ function buildDashboardMarkup() {
         </p>
       </header>
       <div class="space-y-5" data-accordion-root data-accordion-default="${DEFAULT_ACCORDION_ID}">
-        ${buildSectionsMarkup()}
+        ${buildSectionsMarkup(sections)}
         <div class="space-y-5" data-direction-sections></div>
       </div>
     </div>
@@ -1631,13 +1782,20 @@ function getDirectionPriority(node) {
 
   const words = normalized.split(/\s+/);
   const isSms = words.includes('sms');
+  const normalizedKey = normalizeMatchText(node?.clave);
   const isOperational =
     normalized.includes('indicadores operacionales') ||
     normalized.includes('indicadores operativos') ||
     normalized.includes('indicadores de operacion');
+  const isFbo =
+    normalized.includes('indicadores fbo') ||
+    normalized.includes('aviacion general') ||
+    normalized.includes('fbo') ||
+    normalizedKey === 'fbo';
 
   if (isOperational) return 0;
   if (isSms) return 1;
+  if (isFbo) return 2;
   return 100;
 }
 
@@ -1796,15 +1954,28 @@ async function renderDirections(container) {
 export async function renderDashboard(container) {
   if (!container) return;
 
-  container.innerHTML = buildDashboardMarkup();
+  renderLoading(container, 'Cargando panel de directivos...');
 
-  initGroupControls(container);
-  initOptionModals(container);
+  try {
+    const indicators = await getIndicators();
+    cachedIndicators = Array.isArray(indicators) ? indicators : [];
 
-  const directionsContainer = container.querySelector('[data-direction-sections]');
-  if (directionsContainer) {
-    await renderDirections(directionsContainer);
+    const smsGroupIds = registerSmsGroupDefinitions(cachedIndicators);
+    const sections = composeAccordionSections({ smsGroupIds });
+
+    container.innerHTML = buildDashboardMarkup(sections);
+
+    initGroupControls(container);
+    initOptionModals(container);
+
+    const directionsContainer = container.querySelector('[data-direction-sections]');
+    if (directionsContainer) {
+      await renderDirections(directionsContainer);
+    }
+
+    initAccordionControls(container);
+  } catch (error) {
+    console.error('Error al cargar el panel de directivos:', error);
+    renderError(container, error);
   }
-
-  initAccordionControls(container);
 }
