@@ -1616,6 +1616,31 @@ function initOptionModals(container) {
   });
 }
 
+function normalizeDirectionName(value) {
+  return (value ?? '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function getDirectionPriority(node) {
+  const normalized = normalizeDirectionName(node?.nombre);
+  if (!normalized) return 100;
+
+  const words = normalized.split(/\s+/);
+  const isSms = words.includes('sms');
+  const isOperational =
+    normalized.includes('indicadores operacionales') ||
+    normalized.includes('indicadores operativos') ||
+    normalized.includes('indicadores de operacion');
+
+  if (isOperational) return 0;
+  if (isSms) return 1;
+  return 100;
+}
+
 function buildAreaTree(areas) {
   if (!Array.isArray(areas)) return [];
 
@@ -1634,15 +1659,23 @@ function buildAreaTree(areas) {
     }
   });
 
-  const sortTree = list => {
+  const sortTree = (list, level = 0) => {
     list.sort((a, b) => {
+      if (level === 0) {
+        const priorityDiff = getDirectionPriority(a) - getDirectionPriority(b);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+      }
+
       const nameA = a?.nombre ?? '';
       const nameB = b?.nombre ?? '';
       return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
     });
+
     list.forEach(child => {
       if (Array.isArray(child.children) && child.children.length) {
-        sortTree(child.children);
+        sortTree(child.children, level + 1);
       }
     });
   };
