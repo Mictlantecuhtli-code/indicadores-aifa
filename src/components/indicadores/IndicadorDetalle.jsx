@@ -13,7 +13,12 @@ function resolveObservacion(item) {
   );
 }
 
-export default function IndicadorDetalle({ registros = [], year, unidadMedida }) {
+export default function IndicadorDetalle({
+  registros = [],
+  year,
+  unidadMedida,
+  percentageScale = 'auto'
+}) {
   const rows = registros.map(entry => ({
     key: `${entry.anio}-${entry.mes ?? 0}`,
     periodo: formatMonth(entry.anio, entry.mes ?? 1),
@@ -50,7 +55,8 @@ export default function IndicadorDetalle({ registros = [], year, unidadMedida })
                   {row.valor != null
                     ? formatValueByUnit(row.valor, unidadMedida, {
                         numberDecimals: 2,
-                        percentageDecimals: 3
+                        percentageDecimals: 3,
+                        percentageScale
                       })
                     : '—'}
                 </td>

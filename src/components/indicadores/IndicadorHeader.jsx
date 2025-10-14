@@ -28,7 +28,7 @@ export default function IndicadorHeader({
                 ? formatValueByUnit(metaAnual, unidadMedida, {
                     numberDecimals: 1,
                     percentageDecimals: 3,
-                    percentageScale: 'auto'
+                    percentageScale: 'percentage'
                   })
                 : '—'}
             </p>

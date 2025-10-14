@@ -373,13 +373,20 @@ async function getIndicatorRealData(indicatorId) {
 
 function getLastLoadedMonth(history = []) {
   if (!history.length) return null;
-  
+
   const sorted = [...history].sort((a, b) => {
     if (a.anio !== b.anio) return b.anio - a.anio;
     return b.mes - a.mes;
   });
-  
+
   return sorted[0] ? { year: sorted[0].anio, month: sorted[0].mes } : null;
+}
+
+function isCapturedPeriod(year, month, lastLoaded) {
+  if (!lastLoaded) return false;
+  if (year < lastLoaded.year) return true;
+  if (year === lastLoaded.year && month <= lastLoaded.month) return true;
+  return false;
 }
 
 function filterCompleteQuarters(history = [], currentYear) {
@@ -600,11 +607,42 @@ function formatSignedNumber(value) {
   return formatted;
 }
 
-function formatUnitValue(value, unit, { numberDigits = 0, percentageDigits = 3 } = {}) {
+function normalizeUnit(unit) {
+  return (unit ?? '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+}
+
+function shouldFormatAsInteger(unit) {
+  const normalized = normalizeUnit(unit);
+
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.includes('pasajero') || normalized.includes('operacion');
+}
+
+function resolveNumberDigitsByUnit(unit) {
+  return shouldFormatAsInteger(unit) ? 0 : 2;
+}
+
+function formatUnitValue(
+  value,
+  unit,
+  { numberDigits, percentageDigits = 3, percentageScale } = {}
+) {
+  const resolvedNumberDigits =
+    typeof numberDigits === 'number' ? numberDigits : resolveNumberDigitsByUnit(unit);
+  const resolvedPercentageScale = percentageScale ?? 'auto';
+
   return formatValueByUnit(value, unit, {
-    numberDecimals: numberDigits,
+    numberDecimals: resolvedNumberDigits,
     percentageDecimals: percentageDigits,
-    percentageScale: 'auto'
+    percentageScale: resolvedPercentageScale
   });
 }
 
@@ -625,23 +663,27 @@ function findLatestIndex(values = []) {
   return values.length - 1;
 }
 
-function getTrendColorClasses(value) {
-  if (value > 0) {
+function getTrendColorClasses(value, { invert = false } = {}) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric) || numeric === 0) {
     return {
-      text: 'text-emerald-600',
-      badge: 'bg-emerald-50 text-emerald-600'
+      text: 'text-slate-600',
+      badge: 'bg-slate-100 text-slate-600'
     };
   }
-  if (value < 0) {
-    return {
-      text: 'text-rose-600',
-      badge: 'bg-rose-50 text-rose-600'
-    };
+
+  const shouldTreatPositiveAsGood = !invert;
+
+  if (numeric > 0) {
+    return shouldTreatPositiveAsGood
+      ? { text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-600' }
+      : { text: 'text-rose-600', badge: 'bg-rose-50 text-rose-600' };
   }
-  return {
-    text: 'text-slate-600',
-    badge: 'bg-slate-100 text-slate-600'
-  };
+
+  return shouldTreatPositiveAsGood
+    ? { text: 'text-rose-600', badge: 'bg-rose-50 text-rose-600' }
+    : { text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-600' };
 }
 
 function escapeHtml(value) {
@@ -740,11 +782,13 @@ function buildSummary(realData, type, scenario) {
       title: `Comparativo trimestral (Q${latest?.quarter || 1} ${currentYear})`,
       currentLabel: `${currentYear}`,
       comparisonLabel: `${currentYear - 1}`,
-      currentValue: latest?.value || null,
-      comparisonValue: previousLatest?.value || null,
+      currentValue: latest?.value ?? null,
+      comparisonValue: previousLatest?.value ?? null,
       diff: latest && previousLatest ? latest.value - previousLatest.value : null,
-      pct: latest && previousLatest && previousLatest.value ? 
-        (latest.value - previousLatest.value) / previousLatest.value : null
+      pct:
+        latest && previousLatest && previousLatest.value
+          ? (latest.value - previousLatest.value) / previousLatest.value
+          : null
     };
   }
 
@@ -804,11 +848,17 @@ function buildTableRows(realData, type, scenario) {
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatUnit = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
-  const formatSignedUnit = value => formatSignedUnitValue(value, unit, {
-    numberDigits: 0,
-    percentageDigits: 3
-  });
+  const isSms = isSmsIndicator(realData?.indicator);
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSms ? 'percentage' : 'auto';
+  const formatUnit = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
+  const formatSignedUnit = value =>
+    formatSignedUnitValue(value, unit, {
+      numberDigits,
+      percentageDigits: 3,
+      percentageScale
+    });
 
   if (!lastLoaded) {
     return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
@@ -824,13 +874,14 @@ function buildTableRows(realData, type, scenario) {
     previousData.forEach(item => {
       previousMap.set(item.mes, Number(item.valor) || 0);
     });
-    
+
     rows = currentData.map(item => {
       const current = Number(item.valor) || 0;
-      const comparison = previousMap.get(item.mes) || null;
-      const diff = comparison !== null ? current - comparison : null;
-      const pct = diff !== null && comparison ? diff / comparison : null;
-      
+      const hasComparison = previousMap.has(item.mes);
+      const comparison = hasComparison ? previousMap.get(item.mes) : null;
+      const diff = comparison != null ? current - comparison : null;
+      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
       return {
         label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
         current,
@@ -854,13 +905,14 @@ function buildTableRows(realData, type, scenario) {
     previousQuarters.forEach(q => {
       previousMap.set(q.quarter, q.value);
     });
-    
+
     rows = currentQuarters.map(q => {
       const current = q.value;
-      const comparison = previousMap.get(q.quarter) || null;
-      const diff = comparison !== null ? current - comparison : null;
-      const pct = diff !== null && comparison ? diff / comparison : null;
-      
+      const hasComparison = previousMap.has(q.quarter);
+      const comparison = hasComparison ? previousMap.get(q.quarter) : null;
+      const diff = comparison != null ? current - comparison : null;
+      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
       return {
         label: `Trimestre ${q.quarter}`,
         current,
@@ -899,10 +951,11 @@ function buildTableRows(realData, type, scenario) {
 
     rows = currentData.map(item => {
       const current = Number(item.valor) || 0;
-      const comparison = targetMap.get(item.mes) || null;
-      const diff = comparison !== null ? current - comparison : null;
-      const pct = diff !== null && comparison ? diff / comparison : null;
-      
+      const hasComparison = targetMap.has(item.mes);
+      const comparison = hasComparison ? targetMap.get(item.mes) : null;
+      const diff = comparison != null ? current - comparison : null;
+      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
       return {
         label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
         current,
@@ -925,9 +978,13 @@ function buildTableRows(realData, type, scenario) {
         <td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>
         <td class="px-4 py-2 text-right text-sm font-semibold ${
           row.diff > 0
-            ? 'text-emerald-600'
+            ? isSms
+              ? 'text-rose-600'
+              : 'text-emerald-600'
             : row.diff < 0
-            ? 'text-rose-600'
+            ? isSms
+              ? 'text-emerald-600'
+              : 'text-rose-600'
             : 'text-slate-500'
         }">${formatSignedUnit(row.diff)}</td>
         <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
@@ -964,13 +1021,14 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   if (!realData || !realData.history.length) {
     return null;
   }
-  
+
   const currentYear = CURRENT_YEAR;
-  
+  const lastLoaded = getLastLoadedMonth(realData.history);
+
   // CAMBIO: Determinar cuántos años mostrar
   const yearsToShow = showHistorical ? 4 : 2;
   const startYear = currentYear - (yearsToShow - 1);
-  
+
   // CAMBIO: Generar datasets dinámicamente para los años solicitados
   const datasets = [];
   const colors = ['#2563eb', '#10b981', '#f97316', '#8b5cf6']; // 4 colores distintos
@@ -979,13 +1037,21 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
     const year = startYear + i;
     const yearData = getDataByYear(realData.history, year);
     const yearValues = Array(12).fill(null);
-    
+
     yearData.forEach(item => {
       if (item.mes >= 1 && item.mes <= 12) {
-        yearValues[item.mes - 1] = Number(item.valor) || null;
+        const numericValue = Number(item.valor);
+        if (!Number.isFinite(numericValue)) {
+          yearValues[item.mes - 1] = null;
+          return;
+        }
+
+        const includeZero =
+          numericValue !== 0 || !lastLoaded || isCapturedPeriod(year, item.mes, lastLoaded);
+        yearValues[item.mes - 1] = includeZero ? numericValue : null;
       }
     });
-    
+
     datasets.push({
       label: `${year}`,
       data: yearValues,
@@ -997,7 +1063,10 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   }
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1101,7 +1170,10 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   }
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1145,6 +1217,7 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
   }
 
   const currentYear = CURRENT_YEAR;
+  const lastLoaded = getLastLoadedMonth(realData.history);
   const currentData = getDataByYear(realData.history, currentYear);
 
   const realValues = Array(12).fill(null);
@@ -1152,14 +1225,25 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
 
   currentData.forEach(item => {
     if (item.mes >= 1 && item.mes <= 12) {
-      realValues[item.mes - 1] = Number(item.valor) || null;
+      const numericValue = Number(item.valor);
+      if (!Number.isFinite(numericValue)) {
+        realValues[item.mes - 1] = null;
+        return;
+      }
+
+      const includeZero =
+        numericValue !== 0 || !lastLoaded || isCapturedPeriod(currentYear, item.mes, lastLoaded);
+      realValues[item.mes - 1] = includeZero ? numericValue : null;
     }
   });
 
   const label = SCENARIO_LABELS[scenario] || 'Meta';
 
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1240,7 +1324,10 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
   });
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1366,15 +1453,27 @@ function closeIndicatorModal() {
 function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' }) {
   const summary = buildSummary(realData, type, scenario);
   const rowsMarkup = buildTableRows(realData, type, scenario);
-  const trendClasses = getTrendColorClasses(summary.diff ?? 0);
+  const isSms = isSmsIndicator(realData?.indicator);
+  const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
   const chartToggle = buildChartTypeToggle(chartType, type);
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatUnit = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
-  const formatSignedUnit = value => formatSignedUnitValue(value, unit, {
-    numberDigits: 0,
-    percentageDigits: 3
-  });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSms ? 'percentage' : 'auto';
+  const formatUnit = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
+  const formatSignedUnit = value =>
+    formatSignedUnitValue(value, unit, {
+      numberDigits,
+      percentageDigits: 3,
+      percentageScale
+    });
+  const formattedDiff = formatSignedUnit(summary.diff);
+  const formattedPct = formatPercentage(summary.pct);
+  const variationValueMarkup = isSms
+    ? `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedDiff}</p>`
+    : `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedPct}</p>`;
+  const variationDetailMarkup = isSms ? '' : `<p class="mt-1 text-sm text-slate-600">(${formattedDiff})</p>`;
 
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
@@ -1422,8 +1521,8 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
               <!-- CAMBIO 1: Porcentaje arriba y diferencia numérica abajo -->
             <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p class="text-xs uppercase tracking-widest text-slate-400">Variación</p>
-              <p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formatPercentage(summary.pct)}</p>
-              <p class="mt-1 text-sm text-slate-600">(${formatSignedUnit(summary.diff)})</p>
+              ${variationValueMarkup}
+              ${variationDetailMarkup}
             </article>
             </div>
           </section>
@@ -1687,9 +1786,16 @@ function buildGroupMarkup(groupId, rootId) {
   const definition = GROUP_DEFINITIONS[groupId];
   if (!definition) return '';
 
-  const blueprints = Array.isArray(definition.optionBlueprints)
+  const baseBlueprints = Array.isArray(definition.optionBlueprints)
     ? definition.optionBlueprints
     : OPTION_BLUEPRINTS;
+  const isSmsGroup = typeof definition.id === 'string' && definition.id.startsWith(SMS_GROUP_PREFIX);
+  let blueprints = baseBlueprints;
+
+  if (isSmsGroup) {
+    const smsFiltered = baseBlueprints.filter(blueprint => blueprint.id === 'sms-monthly-yoy');
+    blueprints = smsFiltered.length ? smsFiltered : baseBlueprints.slice(0, 1);
+  }
 
   const options = blueprints.map(blueprint => ({
     id: `${definition.id}-${blueprint.id}`,
