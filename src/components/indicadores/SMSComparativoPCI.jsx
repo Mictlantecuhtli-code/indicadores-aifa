@@ -117,7 +117,11 @@ function ComparativeTooltip({ active, payload, label, unidadMedidaA, unidadMedid
           const unit = item.dataKey === 'pistaA' ? unidadMedidaA : unidadMedidaB;
           const formattedValue =
             item.value != null
-              ? formatValueByUnit(item.value, unit, { numberDecimals: 2, percentageDecimals: 3 })
+              ? formatValueByUnit(item.value, unit, {
+                  numberDecimals: 2,
+                  percentageDecimals: 3,
+                  percentageScale: 'percentage'
+                })
               : 'Sin dato';
 
           return (
@@ -224,7 +228,8 @@ export default function SMSComparativoPCI({ indicadorA, indicadorB, meta = 70 })
   const axisUnit = unidadMedidaA ?? unidadMedidaB;
   const formattedMeta = formatValueByUnit(meta, axisUnit, {
     numberDecimals: 0,
-    percentageDecimals: 3
+    percentageDecimals: 3,
+    percentageScale: 'percentage'
   });
   const referenceLabel = formattedMeta !== '—' ? `Meta ${formattedMeta}` : 'Meta';
 
@@ -273,7 +278,8 @@ export default function SMSComparativoPCI({ indicadorA, indicadorB, meta = 70 })
                     {promedioA != null
                       ? formatValueByUnit(promedioA, unidadMedidaA, {
                           numberDecimals: 2,
-                          percentageDecimals: 3
+                          percentageDecimals: 3,
+                          percentageScale: 'percentage'
                         })
                       : 'Sin dato'}
                   </p>
@@ -289,7 +295,8 @@ export default function SMSComparativoPCI({ indicadorA, indicadorB, meta = 70 })
                     {promedioB != null
                       ? formatValueByUnit(promedioB, unidadMedidaB, {
                           numberDecimals: 2,
-                          percentageDecimals: 3
+                          percentageDecimals: 3,
+                          percentageScale: 'percentage'
                         })
                       : 'Sin dato'}
                   </p>
@@ -316,7 +323,8 @@ export default function SMSComparativoPCI({ indicadorA, indicadorB, meta = 70 })
                     tickFormatter={value =>
                       formatValueByUnit(value, axisUnit, {
                         numberDecimals: 0,
-                        percentageDecimals: 3
+                        percentageDecimals: 3,
+                        percentageScale: 'percentage'
                       })}
                     width={70}
                   />
