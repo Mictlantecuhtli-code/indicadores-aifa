@@ -663,23 +663,27 @@ function findLatestIndex(values = []) {
   return values.length - 1;
 }
 
-function getTrendColorClasses(value) {
-  if (value > 0) {
+function getTrendColorClasses(value, { invert = false } = {}) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric) || numeric === 0) {
     return {
-      text: 'text-emerald-600',
-      badge: 'bg-emerald-50 text-emerald-600'
+      text: 'text-slate-600',
+      badge: 'bg-slate-100 text-slate-600'
     };
   }
-  if (value < 0) {
-    return {
-      text: 'text-rose-600',
-      badge: 'bg-rose-50 text-rose-600'
-    };
+
+  const shouldTreatPositiveAsGood = !invert;
+
+  if (numeric > 0) {
+    return shouldTreatPositiveAsGood
+      ? { text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-600' }
+      : { text: 'text-rose-600', badge: 'bg-rose-50 text-rose-600' };
   }
-  return {
-    text: 'text-slate-600',
-    badge: 'bg-slate-100 text-slate-600'
-  };
+
+  return shouldTreatPositiveAsGood
+    ? { text: 'text-rose-600', badge: 'bg-rose-50 text-rose-600' }
+    : { text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-600' };
 }
 
 function escapeHtml(value) {
@@ -844,8 +848,9 @@ function buildTableRows(realData, type, scenario) {
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
   const unit = realData?.indicator?.unidad_medida ?? null;
+  const isSms = isSmsIndicator(realData?.indicator);
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const percentageScale = isSms ? 'percentage' : 'auto';
   const formatUnit = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
@@ -973,9 +978,13 @@ function buildTableRows(realData, type, scenario) {
         <td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>
         <td class="px-4 py-2 text-right text-sm font-semibold ${
           row.diff > 0
-            ? 'text-emerald-600'
+            ? isSms
+              ? 'text-rose-600'
+              : 'text-emerald-600'
             : row.diff < 0
-            ? 'text-rose-600'
+            ? isSms
+              ? 'text-emerald-600'
+              : 'text-rose-600'
             : 'text-slate-500'
         }">${formatSignedUnit(row.diff)}</td>
         <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
@@ -1444,13 +1453,13 @@ function closeIndicatorModal() {
 function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' }) {
   const summary = buildSummary(realData, type, scenario);
   const rowsMarkup = buildTableRows(realData, type, scenario);
-  const trendClasses = getTrendColorClasses(summary.diff ?? 0);
+  const isSms = isSmsIndicator(realData?.indicator);
+  const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
   const chartToggle = buildChartTypeToggle(chartType, type);
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
-  const isSms = isSmsIndicator(realData?.indicator);
+  const percentageScale = isSms ? 'percentage' : 'auto';
   const formatUnit = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
