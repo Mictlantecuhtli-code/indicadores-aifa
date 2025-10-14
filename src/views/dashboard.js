@@ -600,11 +600,42 @@ function formatSignedNumber(value) {
   return formatted;
 }
 
-function formatUnitValue(value, unit, { numberDigits = 0, percentageDigits = 3 } = {}) {
+function normalizeUnit(unit) {
+  return (unit ?? '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+}
+
+function shouldFormatAsInteger(unit) {
+  const normalized = normalizeUnit(unit);
+
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.includes('pasajero') || normalized.includes('operacion');
+}
+
+function resolveNumberDigitsByUnit(unit) {
+  return shouldFormatAsInteger(unit) ? 0 : 2;
+}
+
+function formatUnitValue(
+  value,
+  unit,
+  { numberDigits, percentageDigits = 3, percentageScale } = {}
+) {
+  const resolvedNumberDigits =
+    typeof numberDigits === 'number' ? numberDigits : resolveNumberDigitsByUnit(unit);
+  const resolvedPercentageScale = percentageScale ?? 'auto';
+
   return formatValueByUnit(value, unit, {
-    numberDecimals: numberDigits,
+    numberDecimals: resolvedNumberDigits,
     percentageDecimals: percentageDigits,
-    percentageScale: 'auto'
+    percentageScale: resolvedPercentageScale
   });
 }
 
@@ -804,11 +835,16 @@ function buildTableRows(realData, type, scenario) {
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatUnit = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
-  const formatSignedUnit = value => formatSignedUnitValue(value, unit, {
-    numberDigits: 0,
-    percentageDigits: 3
-  });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatUnit = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
+  const formatSignedUnit = value =>
+    formatSignedUnitValue(value, unit, {
+      numberDigits,
+      percentageDigits: 3,
+      percentageScale
+    });
 
   if (!lastLoaded) {
     return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
@@ -997,7 +1033,10 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   }
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1101,7 +1140,10 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   }
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1159,7 +1201,10 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
   const label = SCENARIO_LABELS[scenario] || 'Meta';
 
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1240,7 +1285,10 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
   });
   
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatTick = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1370,11 +1418,16 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
   const chartToggle = buildChartTypeToggle(chartType, type);
   const unit = realData?.indicator?.unidad_medida ?? null;
-  const formatUnit = value => formatUnitValue(value, unit, { numberDigits: 0, percentageDigits: 3 });
-  const formatSignedUnit = value => formatSignedUnitValue(value, unit, {
-    numberDigits: 0,
-    percentageDigits: 3
-  });
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatUnit = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
+  const formatSignedUnit = value =>
+    formatSignedUnitValue(value, unit, {
+      numberDigits,
+      percentageDigits: 3,
+      percentageScale
+    });
 
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
