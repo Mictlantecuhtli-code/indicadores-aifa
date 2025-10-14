@@ -623,14 +623,19 @@ function resolveNumberDigitsByUnit(unit) {
   return shouldFormatAsInteger(unit) ? 0 : 2;
 }
 
-function formatUnitValue(value, unit, { numberDigits, percentageDigits = 3 } = {}) {
+function formatUnitValue(
+  value,
+  unit,
+  { numberDigits, percentageDigits = 3, percentageScale } = {}
+) {
   const resolvedNumberDigits =
     typeof numberDigits === 'number' ? numberDigits : resolveNumberDigitsByUnit(unit);
+  const resolvedPercentageScale = percentageScale ?? 'auto';
 
   return formatValueByUnit(value, unit, {
     numberDecimals: resolvedNumberDigits,
     percentageDecimals: percentageDigits,
-    percentageScale: 'auto'
+    percentageScale: resolvedPercentageScale
   });
 }
 
@@ -831,12 +836,14 @@ function buildTableRows(realData, type, scenario) {
   const lastLoaded = getLastLoadedMonth(history);
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatUnit = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
     formatSignedUnitValue(value, unit, {
       numberDigits,
-      percentageDigits: 3
+      percentageDigits: 3,
+      percentageScale
     });
 
   if (!lastLoaded) {
@@ -1027,8 +1034,9 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatTick = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1133,8 +1141,9 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatTick = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1193,8 +1202,9 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
 
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatTick = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1276,8 +1286,9 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
   
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatTick = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
   const config = {
     type: chartType,
@@ -1408,12 +1419,14 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
   const chartToggle = buildChartTypeToggle(chartType, type);
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatUnit = value =>
-    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3 });
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
     formatSignedUnitValue(value, unit, {
       numberDigits,
-      percentageDigits: 3
+      percentageDigits: 3,
+      percentageScale
     });
 
   return `

@@ -142,7 +142,11 @@ function SMSChartTooltip({ active, payload, label, unidadMedida }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{datum?.fullLabel ?? label}</p>
       <p className="mt-1 text-lg font-bold text-aifa-blue">
         {value != null
-          ? formatValueByUnit(value, unidadMedida, { numberDecimals: 2, percentageDecimals: 3 })
+          ? formatValueByUnit(value, unidadMedida, {
+              numberDecimals: 2,
+              percentageDecimals: 3,
+              percentageScale: 'percentage'
+            })
           : 'Sin dato'}
       </p>
       {observations ? (
@@ -263,7 +267,8 @@ export default function SMSIndicatorCard({ indicator }) {
                   {latestRecord?.valor != null
                     ? formatValueByUnit(latestRecord.valor, unidadMedida, {
                         numberDecimals: 2,
-                        percentageDecimals: 3
+                        percentageDecimals: 3,
+                        percentageScale: 'percentage'
                       })
                     : 'Sin dato'}
                 </p>
@@ -280,7 +285,8 @@ export default function SMSIndicatorCard({ indicator }) {
                   {metaAnual != null && latestRecord?.valor != null
                     ? `${formatValueByUnit(latestRecord.valor - metaAnual, unidadMedida, {
                         numberDecimals: 2,
-                        percentageDecimals: 3
+                        percentageDecimals: 3,
+                        percentageScale: 'percentage'
                       })} vs meta`
                     : 'Sin referencia'}
                 </p>
@@ -312,7 +318,8 @@ export default function SMSIndicatorCard({ indicator }) {
                       tickFormatter={value =>
                         formatValueByUnit(value, unidadMedida, {
                           numberDecimals: 0,
-                          percentageDecimals: 3
+                          percentageDecimals: 3,
+                          percentageScale: 'percentage'
                         })}
                       width={70}
                     />
@@ -341,7 +348,12 @@ export default function SMSIndicatorCard({ indicator }) {
               </div>
             </div>
 
-            <IndicadorDetalle registros={detalleRegistros} year={latestYear} unidadMedida={unidadMedida} />
+            <IndicadorDetalle
+              registros={detalleRegistros}
+              year={latestYear}
+              unidadMedida={unidadMedida}
+              percentageScale="percentage"
+            />
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
