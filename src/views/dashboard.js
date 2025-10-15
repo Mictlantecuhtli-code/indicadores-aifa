@@ -843,23 +843,32 @@ function buildSummary(realData, type, scenario) {
 function buildTableContent(realData, type, scenario, showHistorical = false) {
   const currentYear = CURRENT_YEAR;
   const historicalYears = showHistorical
-    ? Array.from({ length: 4 }, (_, index) => currentYear - index).filter(year => year > 0)
+    ? Array.from({ length: 4 }, (_, index) => currentYear - (3 - index)).filter(year => year > 0)
     : [];
-  const totalColumns = 1 + (showHistorical && historicalYears.length ? historicalYears.length : 1) + 3;
+  const hasHistoricalYears = showHistorical && historicalYears.length > 0;
+  const totalColumns =
+    1 +
+    (hasHistoricalYears ? historicalYears.length : 1) +
+    (hasHistoricalYears ? 0 : 1) +
+    2;
 
   let headerCells = ['<th class="px-4 py-2 text-left">Periodo</th>'];
 
-  if (showHistorical && historicalYears.length) {
+  if (hasHistoricalYears) {
     headerCells = headerCells.concat(
-      historicalYears.map((year, index) =>
-        `<th class="px-4 py-2 text-right ${index === 0 ? 'text-slate-700' : 'text-slate-500'}">${year}</th>`
+      historicalYears.map((year, index, array) =>
+        `<th class="px-4 py-2 text-right ${
+          index === array.length - 1 ? 'text-slate-700' : 'text-slate-500'
+        }">${year}</th>`
       )
     );
   } else {
     headerCells.push('<th class="px-4 py-2 text-right">Real</th>');
   }
 
-  headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
+  if (!hasHistoricalYears) {
+    headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
+  }
   headerCells.push('<th class="px-4 py-2 text-right">Variación</th>');
   headerCells.push('<th class="px-4 py-2 text-right">% Variación</th>');
 
@@ -1068,15 +1077,17 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
     .map(row => {
       const historicalCells = showHistorical
         ? row.historicalValues
-            .map((value, index) =>
+            .map((value, index, array) =>
               `<td class="px-4 py-2 text-right text-sm ${
-                index === 0 ? 'font-semibold text-slate-800' : 'text-slate-500'
+                index === array.length - 1 ? 'font-semibold text-slate-800' : 'text-slate-500'
               }">${formatUnit(value)}</td>`
             )
             .join('')
         : `<td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatUnit(row.current)}</td>`;
 
-      const comparisonCell = `<td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>`;
+      const comparisonCell = !showHistorical
+        ? `<td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>`
+        : '';
 
       return `
         <tr class="border-b border-slate-100">
