@@ -77,6 +77,94 @@ const SMS_OPTION_BLUEPRINTS = [
   }
 ];
 
+const SMS_OBJECTIVE_BLUEPRINTS = [
+  {
+    id: 'objective-1',
+    title: 'Objetivo 1',
+    description:
+      'Mantener la tasa de impactos con fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
+    iconClass: 'fa-solid fa-bullseye',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-01'],
+        keywords: ['impactos', 'fauna'],
+        fallbackTitle: 'Impactos de fauna'
+      },
+      {
+        codes: ['SMS-02'],
+        keywords: ['capturas', 'fauna'],
+        fallbackTitle: 'Capturas por especie'
+      }
+    ]
+  },
+  {
+    id: 'objective-2',
+    title: 'Objetivo 2',
+    description:
+      'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+    iconClass: 'fa-solid fa-lightbulb',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-03'],
+        keywords: ['confiabilidad', 'disponibilidad', 'pista'],
+        fallbackTitle: 'Índice de confiabilidad y disponibilidad de pista'
+      },
+      {
+        codes: ['SMS-04'],
+        keywords: ['luces', 'operativas', 'pista'],
+        fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
+      }
+    ]
+  },
+  {
+    id: 'objective-3',
+    title: 'Objetivo 3',
+    description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
+    iconClass: 'fa-solid fa-road',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-05A'],
+        keywords: ['pci', '04c'],
+        fallbackTitle: 'Índice de condición de pavimento (PCI) pista 04C–22C'
+      },
+      {
+        codes: ['SMS-05B'],
+        keywords: ['pci', '04l'],
+        fallbackTitle: 'Índice de condición de pavimento (PCI) pista 04L–22R'
+      },
+      {
+        codes: ['SMS-07'],
+        keywords: ['mantenimiento', 'pavimento'],
+        fallbackTitle: 'Porcentaje de mantenimiento realizado'
+      },
+      {
+        codes: ['SMS-06'],
+        keywords: ['disponibilidad', 'pistas'],
+        fallbackTitle: 'Índice de disponibilidad'
+      }
+    ]
+  },
+  {
+    id: 'objective-4',
+    title: 'Objetivo 4',
+    description:
+      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA.',
+    iconClass: 'fa-solid fa-user-graduate',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-08'],
+        keywords: ['capacitaciones', 'sms'],
+        fallbackTitle: 'Capacitaciones SMS'
+      },
+      {
+        codes: ['SMS-09'],
+        keywords: ['supervisiones', 'seguridad'],
+        fallbackTitle: 'Supervisiones en materia de seguridad operacional'
+      }
+    ]
+  }
+];
+
 const OPTION_ICON_CLASSES = {
   monthly: 'fa-solid fa-chart-line',
   quarterly: 'fa-solid fa-chart-column',
@@ -212,6 +300,100 @@ function getVisualizationOrder(value) {
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
+function buildIndicatorSearchText(indicator) {
+  const parts = [
+    indicator?.clave,
+    indicator?.nombre,
+    indicator?.descripcion,
+    indicator?.area_nombre,
+    indicator?.area_clave,
+    indicator?.direccion_nombre,
+    indicator?.direccion_clave
+  ];
+
+  return normalizeMatchText(parts.filter(Boolean).join(' '));
+}
+
+function matchesIndicatorCode(indicator, code) {
+  if (!indicator || !code) return false;
+  const normalizedCode = code.toString().trim().toUpperCase();
+  if (!normalizedCode) return false;
+
+  const indicatorCode = (indicator?.clave ?? '').toString().trim().toUpperCase();
+  return indicatorCode === normalizedCode;
+}
+
+function findSmsIndicatorMatch(indicators, matcher, usedIndicatorIds) {
+  if (!Array.isArray(indicators) || !matcher) return null;
+
+  const codes = [];
+  if (Array.isArray(matcher.codes)) {
+    codes.push(...matcher.codes);
+  }
+  if (matcher.code) {
+    codes.push(matcher.code);
+  }
+
+  for (const code of codes) {
+    const candidate = indicators.find(
+      indicator => !usedIndicatorIds.has(indicator.id) && matchesIndicatorCode(indicator, code)
+    );
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const keywords = Array.isArray(matcher.keywords)
+    ? matcher.keywords.map(keyword => normalizeMatchText(keyword)).filter(Boolean)
+    : [];
+
+  if (!keywords.length) return null;
+
+  return (
+    indicators.find(indicator => {
+      if (usedIndicatorIds.has(indicator.id)) return false;
+      const text = buildIndicatorSearchText(indicator);
+      if (!text) return false;
+      return keywords.every(keyword => text.includes(keyword));
+    }) ?? null
+  );
+}
+
+function createSmsIndicatorDefinition(indicator, matcher = {}) {
+  if (!indicator) return null;
+
+  const title = indicator?.nombre ?? matcher.fallbackTitle ?? 'Indicador SMS';
+  const subtitle = indicator?.area_nombre ?? matcher.fallbackSubtitle ?? null;
+
+  return {
+    id: `${SMS_GROUP_PREFIX}${indicator.id}`,
+    title,
+    subtitle,
+    entity: title,
+    dataKey: `${DIRECT_INDICATOR_PREFIX}${indicator.id}`,
+    iconClass: SMS_SECTION_ICON_CLASS,
+    indicatorId: indicator.id,
+    optionBlueprints: SMS_OPTION_BLUEPRINTS
+  };
+}
+
+function createSmsPlaceholderDefinition(objectiveId, matcher = {}, index = 0) {
+  const title = matcher.fallbackTitle ?? 'Indicador SMS';
+  const subtitle = matcher.fallbackSubtitle ?? 'Indicador no configurado';
+
+  return {
+    id: `${SMS_GROUP_PREFIX}${objectiveId}-placeholder-${index}`,
+    title,
+    subtitle,
+    entity: title,
+    dataKey: null,
+    iconClass: 'fa-solid fa-circle-info',
+    indicatorId: null,
+    optionBlueprints: [],
+    isPlaceholder: true
+  };
+}
+
 function buildSmsGroupDefinitions(indicators = []) {
   const smsIndicators = indicators.filter(isSmsIndicator);
 
@@ -224,20 +406,51 @@ function buildSmsGroupDefinitions(indicators = []) {
     return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
   });
 
-  return smsIndicators.map(indicator => {
-    const id = `${SMS_GROUP_PREFIX}${indicator.id}`;
+  const usedIndicatorIds = new Set();
+  const objectiveDefinitions = [];
 
-    return {
-      id,
-      title: indicator?.nombre ?? 'Indicador SMS',
-      subtitle: indicator?.area_nombre ?? null,
-      entity: indicator?.nombre ?? 'SMS',
-      dataKey: `${DIRECT_INDICATOR_PREFIX}${indicator.id}`,
-      iconClass: SMS_SECTION_ICON_CLASS,
-      indicatorId: indicator.id,
-      optionBlueprints: SMS_OPTION_BLUEPRINTS
-    };
+  SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
+    const childGroups = [];
+    let placeholderIndex = 1;
+
+    objective.indicatorMatchers.forEach(matcher => {
+      const matchedIndicator = findSmsIndicatorMatch(smsIndicators, matcher, usedIndicatorIds);
+
+      if (matchedIndicator) {
+        usedIndicatorIds.add(matchedIndicator.id);
+        const definition = createSmsIndicatorDefinition(matchedIndicator, matcher);
+        if (definition) {
+          childGroups.push(definition);
+        }
+      } else if (matcher?.fallbackTitle) {
+        childGroups.push(createSmsPlaceholderDefinition(objective.id, matcher, placeholderIndex++));
+      }
+    });
+
+    if (childGroups.length) {
+      objectiveDefinitions.push({
+        id: `${SMS_GROUP_PREFIX}${objective.id}`,
+        title: objective.title,
+        subtitle: objective.description ?? null,
+        entity: objective.title,
+        iconClass: objective.iconClass ?? SMS_SECTION_ICON_CLASS,
+        optionBlueprints: [],
+        childGroups,
+        type: 'sms-objective'
+      });
+    }
   });
+
+  smsIndicators.forEach(indicator => {
+    if (!usedIndicatorIds.has(indicator.id)) {
+      const definition = createSmsIndicatorDefinition(indicator);
+      if (definition) {
+        objectiveDefinitions.push(definition);
+      }
+    }
+  });
+
+  return objectiveDefinitions;
 }
 
 function registerSmsGroupDefinitions(indicators = []) {
@@ -1920,21 +2133,116 @@ function buildOptionMarkup(option) {
   `;
 }
 
+function resolveOptionBlueprints(definition) {
+  const baseBlueprints = Array.isArray(definition?.optionBlueprints)
+    ? definition.optionBlueprints
+    : OPTION_BLUEPRINTS;
+
+  if (!Array.isArray(baseBlueprints) || !baseBlueprints.length) {
+    return [];
+  }
+
+  const isSmsGroup = typeof definition?.id === 'string' && definition.id.startsWith(SMS_GROUP_PREFIX);
+  if (isSmsGroup) {
+    const smsFiltered = baseBlueprints.filter(blueprint => blueprint.id === 'sms-monthly-yoy');
+    return smsFiltered.length ? smsFiltered : baseBlueprints.slice(0, 1);
+  }
+
+  return baseBlueprints;
+}
+
+function buildSmsIndicatorItem(definition) {
+  if (!definition) return '';
+
+  if (definition.isPlaceholder) {
+    return `
+      <li class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
+        <div class="flex items-start gap-3">
+          <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+            <i class="${definition.iconClass} h-4 w-4"></i>
+          </span>
+          <div>
+            <p class="font-semibold text-slate-600">${escapeHtml(definition.title)}</p>
+            ${definition.subtitle ? `<p class="mt-1 text-xs font-medium text-slate-400">${escapeHtml(definition.subtitle)}</p>` : ''}
+            <p class="mt-2 text-xs font-medium text-slate-400">Indicador no disponible.</p>
+          </div>
+        </div>
+      </li>
+    `;
+  }
+
+  const blueprints = resolveOptionBlueprints(definition);
+  const options = definition.dataKey
+    ? blueprints.map(blueprint => ({
+        id: `${definition.id}-${blueprint.id}`,
+        label: blueprint.buildLabel(definition.entity),
+        type: blueprint.type,
+        scenario: blueprint.scenario,
+        dataKey: definition.dataKey
+      }))
+    : [];
+
+  return `
+    <li class="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <div class="flex items-start gap-3">
+        <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+          <i class="${definition.iconClass} h-4 w-4"></i>
+        </span>
+        <div>
+          <p class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</p>
+          ${definition.subtitle ? `<p class="mt-0.5 text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</p>` : ''}
+        </div>
+      </div>
+      ${options.length ? `<ul class="mt-3 space-y-2">${options.map(buildOptionMarkup).join('')}</ul>` : ''}
+    </li>
+  `;
+}
+
+function buildSmsObjectiveGroupMarkup(definition, rootId) {
+  const childGroups = Array.isArray(definition.childGroups) ? definition.childGroups : [];
+  if (!childGroups.length) return '';
+
+  const childMarkup = childGroups.map(buildSmsIndicatorItem).join('');
+
+  return `
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        data-group-button
+        data-group-root="${rootId}"
+        data-group-id="${definition.id}"
+        aria-expanded="false"
+      >
+        <span class="flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <i class="${definition.iconClass ?? SMS_SECTION_ICON_CLASS} h-5 w-5"></i>
+          </span>
+          <span class="flex flex-col">
+            <span class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</span>
+            ${definition.subtitle ? `<span class="text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</span>` : ''}
+          </span>
+        </span>
+        <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-group-chevron></i>
+      </button>
+      <div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-group-panel="${definition.id}" hidden>
+        <ul class="space-y-3">
+          ${childMarkup}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 function buildGroupMarkup(groupId, rootId) {
   const definition = GROUP_DEFINITIONS[groupId];
   if (!definition) return '';
 
-  const baseBlueprints = Array.isArray(definition.optionBlueprints)
-    ? definition.optionBlueprints
-    : OPTION_BLUEPRINTS;
-  const isSmsGroup = typeof definition.id === 'string' && definition.id.startsWith(SMS_GROUP_PREFIX);
-  let blueprints = baseBlueprints;
-
-  if (isSmsGroup) {
-    const smsFiltered = baseBlueprints.filter(blueprint => blueprint.id === 'sms-monthly-yoy');
-    blueprints = smsFiltered.length ? smsFiltered : baseBlueprints.slice(0, 1);
+  if (Array.isArray(definition.childGroups) && definition.childGroups.length) {
+    return buildSmsObjectiveGroupMarkup(definition, rootId);
   }
 
+  const blueprints = resolveOptionBlueprints(definition);
   const options = blueprints.map(blueprint => ({
     id: `${definition.id}-${blueprint.id}`,
     label: blueprint.buildLabel(definition.entity),
