@@ -1115,18 +1115,6 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
             : 'text-rose-600'
           : 'text-slate-500';
 
-      const variationDetails = showHistorical
-        ? `<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
-            currentYear - 1
-          } &rarr; ${currentYear}</div>`
-        : '';
-
-      const percentageDetails = showHistorical
-        ? `<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
-            currentYear - 1
-          } &rarr; ${currentYear}</div>`
-        : '';
-
       return `
         <tr class="border-b border-slate-100">
           <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
@@ -1134,11 +1122,9 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
           ${comparisonCell}
           <td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}">
             <div>${formatSignedUnit(row.diff)}</div>
-            ${variationDetails}
           </td>
           <td class="px-4 py-2 text-right text-sm text-slate-600">
             <div>${formatPercentage(row.pct)}</div>
-            ${percentageDetails}
           </td>
         </tr>
       `;
