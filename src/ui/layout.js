@@ -21,6 +21,12 @@ const NAV_ITEMS = [
     roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
   },
   {
+    id: 'airport-technical',
+    label: 'Información Técnica',
+    icon: 'fa-plane',
+    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN']
+  },
+  {
     id: 'indicators',
     label: 'Consulta de Indicadores',
     icon: 'fa-table',

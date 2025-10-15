@@ -1678,3 +1678,324 @@ export async function getIndicatorsByUserAreas(userId, userRole) {
     throw error;
   }
 }
+
+function sanitizeOrder(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function sanitizeTrim(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+export async function getAirportGeneralInfo() {
+  const { data, error } = await supabase
+    .from('aeropuerto_informacion_general')
+    .select('*')
+    .order('categoria', { ascending: true })
+    .order('orden', { ascending: true, nullsFirst: true })
+    .order('etiqueta', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function upsertAirportGeneralInfo(payload) {
+  const sanitized = {
+    ...payload,
+    categoria: sanitizeTrim(payload?.categoria)?.toUpperCase() ?? 'GENERAL',
+    etiqueta: sanitizeTrim(payload?.etiqueta) ?? 'Sin etiqueta',
+    valor: sanitizeTrim(payload?.valor),
+    unidad: sanitizeTrim(payload?.unidad),
+    descripcion: sanitizeTrim(payload?.descripcion),
+    orden: sanitizeOrder(payload?.orden)
+  };
+
+  const { data, error } = await supabase
+    .from('aeropuerto_informacion_general')
+    .upsert(sanitized, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAirportGeneralInfo(id) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('aeropuerto_informacion_general')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getAirportCapacityMetrics() {
+  const { data, error } = await supabase
+    .from('aeropuerto_metricas_capacidad')
+    .select('*')
+    .order('categoria', { ascending: true })
+    .order('orden', { ascending: true, nullsFirst: true })
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function upsertAirportCapacityMetric(payload) {
+  const sanitized = {
+    ...payload,
+    categoria: sanitizeTrim(payload?.categoria)?.toUpperCase() ?? 'GENERAL',
+    nombre: sanitizeTrim(payload?.nombre) ?? 'Sin nombre',
+    valor: sanitizeTrim(payload?.valor),
+    unidad: sanitizeTrim(payload?.unidad),
+    periodo: sanitizeTrim(payload?.periodo),
+    descripcion: sanitizeTrim(payload?.descripcion),
+    orden: sanitizeOrder(payload?.orden)
+  };
+
+  const { data, error } = await supabase
+    .from('aeropuerto_metricas_capacidad')
+    .upsert(sanitized, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAirportCapacityMetric(id) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('aeropuerto_metricas_capacidad')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getAirportRoutes() {
+  const { data, error } = await supabase
+    .from('aeropuerto_rutas_aereas')
+    .select('*')
+    .order('orden', { ascending: true, nullsFirst: true })
+    .order('destino', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function upsertAirportRoute(payload) {
+  const sanitized = {
+    ...payload,
+    origen: sanitizeTrim(payload?.origen) ?? 'AIFA',
+    destino: sanitizeTrim(payload?.destino) ?? 'Sin destino',
+    descripcion: sanitizeTrim(payload?.descripcion),
+    frecuencia: sanitizeTrim(payload?.frecuencia),
+    distancia_km: (() => {
+      if (payload?.distancia_km === '' || payload?.distancia_km === null || payload?.distancia_km === undefined) {
+        return null;
+      }
+      const value = Number(payload?.distancia_km);
+      return Number.isFinite(value) ? value : null;
+    })(),
+    tiempo_minutos: (() => {
+      if (payload?.tiempo_minutos === '' || payload?.tiempo_minutos === null || payload?.tiempo_minutos === undefined) {
+        return null;
+      }
+      const value = Number(payload?.tiempo_minutos);
+      return Number.isFinite(value) ? value : null;
+    })(),
+    tipo_operacion: sanitizeTrim(payload?.tipo_operacion),
+    notas: sanitizeTrim(payload?.notas),
+    habilitada: (() => {
+      if (typeof payload?.habilitada === 'boolean') {
+        return payload.habilitada;
+      }
+      const text = String(payload?.habilitada ?? '').toLowerCase();
+      if (!text) return true;
+      return ['1', 'true', 'si', 'sí', 'on'].includes(text);
+    })(),
+    orden: sanitizeOrder(payload?.orden)
+  };
+
+  const { data, error } = await supabase
+    .from('aeropuerto_rutas_aereas')
+    .upsert(sanitized, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAirportRoute(id) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('aeropuerto_rutas_aereas')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getAirportRouteAirlines(rutaId) {
+  let query = supabase
+    .from('aeropuerto_ruta_aerolineas')
+    .select('*')
+    .order('aerolinea', { ascending: true });
+
+  if (rutaId) {
+    query = query.eq('ruta_id', rutaId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function upsertAirportRouteAirline(payload) {
+  const sanitized = {
+    ...payload,
+    ruta_id: payload?.ruta_id,
+    aerolinea: sanitizeTrim(payload?.aerolinea) ?? 'Sin aerolínea',
+    frecuencia: sanitizeTrim(payload?.frecuencia),
+    observaciones: sanitizeTrim(payload?.observaciones)
+  };
+
+  const { data, error } = await supabase
+    .from('aeropuerto_ruta_aerolineas')
+    .upsert(sanitized, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAirportRouteAirline(id) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('aeropuerto_ruta_aerolineas')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getAirportNavigationAids() {
+  const { data, error } = await supabase
+    .from('aeropuerto_ayudas_navegacion')
+    .select('*')
+    .order('orden', { ascending: true, nullsFirst: true })
+    .order('codigo', { ascending: true, nullsFirst: true })
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function upsertAirportNavigationAid(payload) {
+  const sanitized = {
+    ...payload,
+    codigo: sanitizeTrim(payload?.codigo),
+    nombre: sanitizeTrim(payload?.nombre) ?? 'Sin nombre',
+    tipo: sanitizeTrim(payload?.tipo),
+    ubicacion: sanitizeTrim(payload?.ubicacion),
+    caracteristicas: sanitizeTrim(payload?.caracteristicas),
+    observaciones: sanitizeTrim(payload?.observaciones),
+    orden: sanitizeOrder(payload?.orden)
+  };
+
+  const { data, error } = await supabase
+    .from('aeropuerto_ayudas_navegacion')
+    .upsert(sanitized, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAirportNavigationAid(id) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('aeropuerto_ayudas_navegacion')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getAirportTechnicalData() {
+  const [general, metrics, routes, airlines, aids] = await Promise.all([
+    getAirportGeneralInfo(),
+    getAirportCapacityMetrics(),
+    getAirportRoutes(),
+    getAirportRouteAirlines(),
+    getAirportNavigationAids()
+  ]);
+
+  const airlinesByRoute = Array.isArray(airlines)
+    ? airlines.reduce((acc, airline) => {
+        const routeId = airline.ruta_id;
+        if (!routeId) return acc;
+        if (!acc[routeId]) acc[routeId] = [];
+        acc[routeId].push(airline);
+        return acc;
+      }, {})
+    : {};
+
+  const routesWithAirlines = Array.isArray(routes)
+    ? routes.map(route => ({
+        ...route,
+        aerolineas: airlinesByRoute[route.id] ?? []
+      }))
+    : [];
+
+  return {
+    informacionGeneral: general ?? [],
+    metricasCapacidad: metrics ?? [],
+    rutasAereas: routesWithAirlines,
+    ayudasNavegacion: aids ?? []
+  };
+}

@@ -1,8 +1,8 @@
 const ROUTES_BY_ROLE = {
-  DIRECTOR: ['dashboard', 'visualizacion'],
-  SUBDIRECTOR: ['dashboard', 'visualizacion', 'indicators', 'capture'],
+  DIRECTOR: ['dashboard', 'visualizacion', 'airport-technical'],
+  SUBDIRECTOR: ['dashboard', 'visualizacion', 'airport-technical', 'indicators', 'capture'],
   CAPTURISTA: ['visualizacion', 'capture'],
-  ADMIN: ['dashboard', 'visualizacion', 'indicators', 'capture', 'users']
+  ADMIN: ['dashboard', 'visualizacion', 'airport-technical', 'indicators', 'capture', 'users']
 };
 
 export function getRoutesForRole(role) {
