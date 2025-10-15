@@ -12,6 +12,49 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 
+const tableDetectionCache = new Map();
+
+async function detectFirstExistingTable(relations, { select = 'id', limit = 1 } = {}) {
+  if (!Array.isArray(relations) || !relations.length) return null;
+
+  const cacheKey = relations.join('|');
+  if (tableDetectionCache.has(cacheKey)) {
+    return tableDetectionCache.get(cacheKey);
+  }
+
+  for (const relation of relations) {
+    try {
+      const { error } = await supabase.from(relation).select(select).limit(limit);
+      if (!error) {
+        tableDetectionCache.set(cacheKey, relation);
+        return relation;
+      }
+
+      if (!isRelationNotFound(error)) {
+        throw error;
+      }
+    } catch (error) {
+      if (!isRelationNotFound(error)) {
+        throw error;
+      }
+    }
+  }
+
+  tableDetectionCache.set(cacheKey, null);
+  return null;
+}
+
+async function ensureTableAvailable(relations) {
+  const table = await detectFirstExistingTable(relations);
+  if (table) return table;
+
+  throw new Error(
+    `No se encontró una tabla disponible. Verifica que exista alguna de las siguientes tablas en la base de datos: ${relations.join(
+      ', '
+    )}`
+  );
+}
+
 function isRelationNotFound(error) {
   return error?.code === '42P01' || /relation .+ does not exist/i.test(error?.message ?? '');
 }
@@ -1632,7 +1675,7 @@ export async function getUserCaptureAreas(userId, userRole) {
 
 export async function getIndicatorsByUserAreas(userId, userRole) {
   console.log('getIndicatorsByUserAreas llamada con:', { userId, userRole });
-  
+
   try {
     // Si es administrador, devolver todos los indicadores
     const esAdmin = userRole?.toLowerCase().includes('admin');
@@ -1677,4 +1720,390 @@ export async function getIndicatorsByUserAreas(userId, userRole) {
     console.error('Error en getIndicatorsByUserAreas:', error);
     throw error;
   }
+}
+
+const AIRPORT_SECTION_RELATIONS = [
+  'airport_technical_sections',
+  'aifa_airport_sections',
+  'aeropuerto_secciones_tecnicas',
+  'ficha_aeropuerto_secciones'
+];
+
+const AIRPORT_ROUTES_RELATIONS = [
+  'airport_routes',
+  'aifa_airport_routes',
+  'aeropuerto_rutas_aereas',
+  'ficha_aeropuerto_rutas'
+];
+
+function slugifyKey(value) {
+  if (!value) return null;
+  return value
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+    .trim() || null;
+}
+
+function generateLocalId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeSectionContentItem(item, index = 0) {
+  if (!item || typeof item !== 'object') {
+    return {
+      id: generateLocalId(),
+      label: '',
+      value: item ?? '',
+      type: 'text',
+      display_order: index
+    };
+  }
+
+  const rawType = item.type ?? item.tipo ?? 'text';
+  const normalizedType = typeof rawType === 'string' && rawType.toLowerCase() === 'image' ? 'image' : 'text';
+
+  return {
+    id: item.id ?? generateLocalId(),
+    label: item.label ?? item.etiqueta ?? item.titulo ?? '',
+    value: item.value ?? item.valor ?? item.texto ?? '',
+    type: normalizedType,
+    display_order:
+      typeof item.display_order === 'number'
+        ? item.display_order
+        : typeof item.orden === 'number'
+        ? item.orden
+        : index
+  };
+}
+
+function parseSectionContent(content) {
+  if (Array.isArray(content)) {
+    return content.map((item, index) => normalizeSectionContentItem(item, index));
+  }
+
+  if (content && typeof content === 'object') {
+    return Object.entries(content).map(([label, value], index) =>
+      normalizeSectionContentItem({ label, value }, index)
+    );
+  }
+
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) || (parsed && typeof parsed === 'object')) {
+        return parseSectionContent(parsed);
+      }
+    } catch (error) {
+      // Ignorar error y continuar
+    }
+  }
+
+  if (content == null || content === '') {
+    return [];
+  }
+
+  return [normalizeSectionContentItem(content, 0)];
+}
+
+function normalizeAirportSectionRecord(record) {
+  if (!record || typeof record !== 'object') return null;
+
+  const title = record.title ?? record.titulo ?? record.nombre ?? '';
+  const sectionKey =
+    record.section_key ??
+    record.sectionKey ??
+    record.clave ??
+    record.identificador ??
+    slugifyKey(title) ??
+    generateLocalId();
+
+  return {
+    id: record.id ?? null,
+    section_key: sectionKey,
+    title,
+    description: record.description ?? record.descripcion ?? '',
+    content: parseSectionContent(record.content ?? record.datos ?? record.items ?? []),
+    display_order:
+      typeof record.display_order === 'number'
+        ? record.display_order
+        : typeof record.orden === 'number'
+        ? record.orden
+        : null,
+    updated_at: record.updated_at ?? record.actualizado_en ?? record.modificado_en ?? null
+  };
+}
+
+function parseNullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeRouteAirlines(value) {
+  if (!value) return [];
+
+  let entries = value;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      entries = Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      entries = [];
+    }
+  }
+
+  if (!Array.isArray(entries)) return [];
+
+  return entries
+    .map((item, index) => {
+      if (item && typeof item === 'object') {
+        return {
+          id: item.id ?? generateLocalId(),
+          nombre: item.nombre ?? item.aerolinea ?? item.name ?? '',
+          frecuencia: item.frecuencia ?? item.frecuencia_semanal ?? item.frequency ?? '',
+          notas: item.notas ?? item.observaciones ?? item.notes ?? '',
+          display_order:
+            typeof item.display_order === 'number'
+              ? item.display_order
+              : typeof item.orden === 'number'
+              ? item.orden
+              : index
+        };
+      }
+
+      return {
+        id: generateLocalId(),
+        nombre: item?.toString() ?? '',
+        frecuencia: '',
+        notas: '',
+        display_order: index
+      };
+    })
+    .filter(entry => entry.nombre || entry.frecuencia || entry.notas);
+}
+
+function normalizeAirportRouteRecord(record) {
+  if (!record || typeof record !== 'object') return null;
+
+  return {
+    id: record.id ?? null,
+    route_code: record.route_code ?? record.codigo ?? record.clave ?? '',
+    nombre: record.nombre ?? record.titulo ?? record.route_name ?? '',
+    destino: record.destino ?? record.ciudad_destino ?? '',
+    pais: record.pais ?? record.pais_destino ?? '',
+    tipo_vuelo: record.tipo_vuelo ?? record.tipo ?? '',
+    distancia_km: parseNullableNumber(record.distancia_km ?? record.distancia ?? record.distancia_kilometros),
+    tiempo_estimado: record.tiempo_estimado ?? record.tiempo ?? record.duracion ?? '',
+    frecuencia_base: record.frecuencia_base ?? record.frecuencia ?? '',
+    descripcion: record.descripcion ?? record.description ?? record.detalle ?? '',
+    notas: record.notas ?? record.observaciones ?? '',
+    display_order:
+      typeof record.display_order === 'number'
+        ? record.display_order
+        : typeof record.orden === 'number'
+        ? record.orden
+        : null,
+    airlines: normalizeRouteAirlines(record.airlines ?? record.aerolineas ?? record.frecuencias ?? [])
+  };
+}
+
+function sanitizeContentForStorage(content) {
+  if (!Array.isArray(content)) return [];
+
+  return content.map((item, index) => ({
+    id: item.id ?? generateLocalId(),
+    label: item.label ?? '',
+    value: item.value ?? '',
+    type: item.type === 'image' ? 'image' : 'text',
+    display_order: typeof item.display_order === 'number' ? item.display_order : index
+  }));
+}
+
+function sanitizeAirlinesForStorage(airlines) {
+  if (!Array.isArray(airlines)) return [];
+
+  return airlines
+    .map((item, index) => ({
+      id: item.id ?? generateLocalId(),
+      nombre: item.nombre ?? '',
+      frecuencia: item.frecuencia ?? '',
+      notas: item.notas ?? '',
+      display_order: typeof item.display_order === 'number' ? item.display_order : index
+    }))
+    .filter(item => item.nombre || item.frecuencia || item.notas);
+}
+
+export async function getAirportTechnicalSections() {
+  try {
+    const table = await detectFirstExistingTable(AIRPORT_SECTION_RELATIONS);
+    if (!table) {
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order('display_order', { ascending: true })
+      .order('title', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(normalizeAirportSectionRecord).filter(Boolean);
+  } catch (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+
+    console.error('Error al obtener las secciones técnicas del aeropuerto:', error);
+    throw error;
+  }
+}
+
+export async function saveAirportSection(sectionKey, payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('No hay datos para guardar en la sección.');
+  }
+
+  const normalizedKey = slugifyKey(sectionKey ?? payload.section_key ?? payload.title);
+  if (!normalizedKey) {
+    throw new Error('La sección debe tener un identificador.');
+  }
+
+  const table = await ensureTableAvailable(AIRPORT_SECTION_RELATIONS);
+
+  const record = {
+    section_key: normalizedKey,
+    title: payload.title ?? '',
+    description: payload.description ?? '',
+    content: sanitizeContentForStorage(payload.content ?? []),
+    display_order:
+      payload.display_order !== undefined && payload.display_order !== null && payload.display_order !== ''
+        ? Number(payload.display_order)
+        : null
+  };
+
+  const hasId = payload.id != null;
+  const query = hasId
+    ? supabase.from(table).update(record).eq('id', payload.id)
+    : supabase.from(table).upsert(record, { onConflict: 'section_key' });
+
+  const { data, error } = await query.select().single();
+
+  if (error) {
+    console.error('Error al guardar la sección técnica del aeropuerto:', error);
+    throw error;
+  }
+
+  return normalizeAirportSectionRecord({ ...data, id: data?.id ?? payload.id });
+}
+
+export async function getAirportRoutes() {
+  try {
+    const table = await detectFirstExistingTable(AIRPORT_ROUTES_RELATIONS);
+    if (!table) {
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order('display_order', { ascending: true })
+      .order('nombre', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map(normalizeAirportRouteRecord).filter(Boolean);
+  } catch (error) {
+    if (isRelationNotFound(error)) {
+      return [];
+    }
+
+    console.error('Error al obtener las rutas aéreas del aeropuerto:', error);
+    throw error;
+  }
+}
+
+export async function saveAirportRoute(route) {
+  if (!route || typeof route !== 'object') {
+    throw new Error('No hay datos para guardar la ruta aérea.');
+  }
+
+  const table = await ensureTableAvailable(AIRPORT_ROUTES_RELATIONS);
+
+  const record = {
+    route_code: route.route_code ?? route.codigo ?? null,
+    nombre: route.nombre ?? '',
+    destino: route.destino ?? '',
+    pais: route.pais ?? null,
+    tipo_vuelo: route.tipo_vuelo ?? null,
+    distancia_km: route.distancia_km != null && route.distancia_km !== '' ? Number(route.distancia_km) : null,
+    tiempo_estimado: route.tiempo_estimado ?? null,
+    frecuencia_base: route.frecuencia_base ?? null,
+    descripcion: route.descripcion ?? null,
+    notas: route.notas ?? null,
+    airlines: sanitizeAirlinesForStorage(route.airlines ?? []),
+    display_order:
+      route.display_order !== undefined && route.display_order !== null && route.display_order !== ''
+        ? Number(route.display_order)
+        : null
+  };
+
+  const hasId = route.id != null;
+  const query = hasId
+    ? supabase.from(table).update(record).eq('id', route.id)
+    : supabase.from(table).insert(record);
+
+  const { data, error } = await query.select().single();
+
+  if (error) {
+    console.error('Error al guardar la ruta aérea del aeropuerto:', error);
+    throw error;
+  }
+
+  return normalizeAirportRouteRecord({ ...data, id: data?.id ?? route.id });
+}
+
+export async function deleteAirportRoute(routeId) {
+  if (!routeId) {
+    throw new Error('No se proporcionó el identificador de la ruta aérea.');
+  }
+
+  const table = await ensureTableAvailable(AIRPORT_ROUTES_RELATIONS);
+  const { error } = await supabase.from(table).delete().eq('id', routeId);
+
+  if (error) {
+    console.error('Error al eliminar la ruta aérea del aeropuerto:', error);
+    throw error;
+  }
+}
+
+export async function saveRouteAirlines(routeId, airlines) {
+  if (!routeId) {
+    throw new Error('No se proporcionó el identificador de la ruta aérea.');
+  }
+
+  const table = await ensureTableAvailable(AIRPORT_ROUTES_RELATIONS);
+  const { data, error } = await supabase
+    .from(table)
+    .update({ airlines: sanitizeAirlinesForStorage(airlines) })
+    .eq('id', routeId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error al actualizar las aerolíneas de la ruta:', error);
+    throw error;
+  }
+
+  return normalizeAirportRouteRecord(data);
 }
