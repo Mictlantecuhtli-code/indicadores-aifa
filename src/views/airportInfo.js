@@ -566,8 +566,8 @@ function buildSectionModal(section) {
       ];
 
   return `
-    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 px-4 py-6" data-modal-overlay>
-      <div class="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 z-[2000] flex min-h-full items-center justify-center overflow-y-auto bg-slate-900/60 px-4 py-6" data-modal-overlay>
+      <div class="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">${section.id ? 'Editar sección' : 'Nueva sección'}</h3>
@@ -665,8 +665,8 @@ function buildSectionModal(section) {
 
 function buildRouteModal(route) {
   return `
-    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 px-4 py-6" data-modal-overlay>
-      <div class="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 z-[2000] flex min-h-full items-center justify-center overflow-y-auto bg-slate-900/60 px-4 py-6" data-modal-overlay>
+      <div class="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">${route.id ? 'Editar ruta aérea' : 'Registrar nueva ruta'}</h3>
@@ -902,8 +902,8 @@ function buildAirlinesModal(route, editable) {
       : '<li class="rounded-xl border border-dashed border-slate-300 bg-slate-50/40 p-6 text-sm text-slate-500">Sin aerolíneas registradas.</li>';
 
     return `
-      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 px-4 py-6" data-modal-overlay>
-        <div class="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
+      <div class="fixed inset-0 z-[2000] flex min-h-full items-center justify-center overflow-y-auto bg-slate-900/60 px-4 py-6" data-modal-overlay>
+        <div class="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
           <div class="mb-4 flex items-start justify-between gap-4">
             <div>
               <h3 class="text-lg font-semibold text-slate-800">Aerolíneas asignadas</h3>
@@ -929,8 +929,8 @@ function buildAirlinesModal(route, editable) {
   }
 
   return `
-    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/60 px-4 py-6" data-modal-overlay>
-      <div class="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 z-[2000] flex min-h-full items-center justify-center overflow-y-auto bg-slate-900/60 px-4 py-6" data-modal-overlay>
+      <div class="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">Administrar aerolíneas y frecuencias</h3>
