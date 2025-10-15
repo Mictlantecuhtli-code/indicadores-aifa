@@ -842,15 +842,12 @@ function buildSummary(realData, type, scenario) {
 
 function buildTableContent(realData, type, scenario, showHistorical = false) {
   const currentYear = CURRENT_YEAR;
+  const indicator = realData?.indicator ?? null;
+  const isSms = isSmsIndicator(indicator);
   const historicalYears = showHistorical
     ? Array.from({ length: 4 }, (_, index) => currentYear - (3 - index)).filter(year => year > 0)
     : [];
   const hasHistoricalYears = showHistorical && historicalYears.length > 0;
-  const totalColumns =
-    1 +
-    (hasHistoricalYears ? historicalYears.length : 1) +
-    (hasHistoricalYears ? 0 : 1) +
-    2;
 
   let headerCells = ['<th class="px-4 py-2 text-left">Periodo</th>'];
 
@@ -881,11 +878,16 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
       ? `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
       : '<th class="px-4 py-2 text-right">Variación</th>'
   );
-  headerCells.push(
-    hasHistoricalYears
-      ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
-      : '<th class="px-4 py-2 text-right">% Variación</th>'
-  );
+
+  if (!isSms) {
+    headerCells.push(
+      hasHistoricalYears
+        ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
+        : '<th class="px-4 py-2 text-right">% Variación</th>'
+    );
+  }
+
+  const totalColumns = headerCells.length;
 
   const headerMarkup = `<tr>${headerCells.join('')}</tr>`;
 
@@ -898,8 +900,7 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
 
   const { history } = realData;
   const lastLoaded = getLastLoadedMonth(history);
-  const unit = realData?.indicator?.unidad_medida ?? null;
-  const isSms = isSmsIndicator(realData?.indicator);
+  const unit = indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
   const percentageScale = isSms ? 'percentage' : 'auto';
   const formatUnit = value =>
@@ -1115,6 +1116,12 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
             : 'text-rose-600'
           : 'text-slate-500';
 
+      const pctCell = isSms
+        ? ''
+        : `<td class="px-4 py-2 text-right text-sm text-slate-600">
+            <div>${formatPercentage(row.pct)}</div>
+          </td>`;
+
       return `
         <tr class="border-b border-slate-100">
           <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
@@ -1123,9 +1130,7 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
           <td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}">
             <div>${formatSignedUnit(row.diff)}</div>
           </td>
-          <td class="px-4 py-2 text-right text-sm text-slate-600">
-            <div>${formatPercentage(row.pct)}</div>
-          </td>
+          ${pctCell}
         </tr>
       `;
     })
