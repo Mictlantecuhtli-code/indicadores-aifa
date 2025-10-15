@@ -471,6 +471,32 @@ export async function getIndicatorTargets(indicadorId, { year } = {}) {
   return (data ?? []).map(normalizeTarget);
 }
 
+export async function getCapturasFaunaResumen({ year } = {}) {
+  const relations = ['v_capturas_especie'];
+
+  for (const relation of relations) {
+    let query = supabase.from(relation).select('*');
+
+    if (year) {
+      query = query.eq('anio', year);
+    }
+
+    const { data, error } = await query
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true });
+
+    if (!error) {
+      return data ?? [];
+    }
+
+    if (!isRelationNotFound(error)) {
+      throw error;
+    }
+  }
+
+  return [];
+}
+
 export async function saveMeasurement(payload) {
   const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload, 'PENDIENTE');
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();

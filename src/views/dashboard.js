@@ -93,7 +93,7 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
       {
         codes: ['SMS-02'],
         keywords: ['capturas', 'fauna'],
-        fallbackTitle: 'Capturas por especie'
+        fallbackTitle: 'Captura de fauna'
       }
     ]
   },
