@@ -900,9 +900,25 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
     const currentData = getDataByYear(history, currentYear);
     const previousData = getDataByYear(history, currentYear - 1);
 
+    const toNumeric = value => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+
+    const currentMap = new Map();
+    currentData.forEach(item => {
+      const numeric = toNumeric(item.valor);
+      if (numeric != null) {
+        currentMap.set(item.mes, numeric);
+      }
+    });
+
     const previousMap = new Map();
     previousData.forEach(item => {
-      previousMap.set(item.mes, Number(item.valor) || 0);
+      const numeric = toNumeric(item.valor);
+      if (numeric != null) {
+        previousMap.set(item.mes, numeric);
+      }
     });
 
     const historicalMaps = new Map();
@@ -910,27 +926,34 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
       const yearData = getDataByYear(history, year);
       const monthMap = new Map();
       yearData.forEach(item => {
-        monthMap.set(item.mes, Number(item.valor) || 0);
+        const numeric = toNumeric(item.valor);
+        if (numeric != null) {
+          monthMap.set(item.mes, numeric);
+        }
       });
       historicalMaps.set(year, monthMap);
     });
 
-    rows = currentData.map(item => {
-      const current = Number(item.valor) || 0;
-      const hasComparison = previousMap.has(item.mes);
-      const comparison = hasComparison ? previousMap.get(item.mes) : null;
-      const diff = comparison != null ? current - comparison : null;
+    const monthsToRender = showHistorical
+      ? Array.from({ length: 12 }, (_, index) => index + 1)
+      : Array.from(new Set(currentData.map(item => item.mes))).sort((a, b) => a - b);
+
+    rows = monthsToRender.map(monthNumber => {
+      const current = currentMap.has(monthNumber) ? currentMap.get(monthNumber) : null;
+      const hasComparison = previousMap.has(monthNumber);
+      const comparison = hasComparison ? previousMap.get(monthNumber) : null;
+      const diff = current != null && comparison != null ? current - comparison : null;
       const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
 
       const historicalValues = showHistorical
         ? historicalYears.map(year => {
             const map = historicalMaps.get(year);
-            return map?.has(item.mes) ? map.get(item.mes) : null;
+            return map?.has(monthNumber) ? map.get(monthNumber) : null;
           })
         : [];
 
       return {
-        label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
+        label: MONTHS[monthNumber - 1]?.label || `Mes ${monthNumber}`,
         current,
         comparison,
         diff,
