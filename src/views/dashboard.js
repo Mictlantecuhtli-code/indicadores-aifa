@@ -839,13 +839,64 @@ function buildSummary(realData, type, scenario) {
   };
 }
 
-function buildTableRows(realData, type, scenario) {
+
+function buildTableContent(realData, type, scenario, showHistorical = false) {
+  const currentYear = CURRENT_YEAR;
+  const historicalYears = showHistorical
+    ? Array.from({ length: 4 }, (_, index) => currentYear - (3 - index)).filter(year => year > 0)
+    : [];
+  const hasHistoricalYears = showHistorical && historicalYears.length > 0;
+  const totalColumns =
+    1 +
+    (hasHistoricalYears ? historicalYears.length : 1) +
+    (hasHistoricalYears ? 0 : 1) +
+    2;
+
+  let headerCells = ['<th class="px-4 py-2 text-left">Periodo</th>'];
+
+  if (hasHistoricalYears) {
+    headerCells = headerCells.concat(
+      historicalYears.map((year, index, array) =>
+        `<th class="px-4 py-2 text-right ${
+          index === array.length - 1 ? 'text-slate-700' : 'text-slate-500'
+        }">${year}</th>`
+      )
+    );
+  } else {
+    headerCells.push('<th class="px-4 py-2 text-right">Real</th>');
+  }
+
+  if (!hasHistoricalYears) {
+    headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
+  }
+
+  const variationNote = hasHistoricalYears
+    ? `<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
+        currentYear - 1
+      } &rarr; ${currentYear}</div>`
+    : '';
+
+  headerCells.push(
+    hasHistoricalYears
+      ? `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
+      : '<th class="px-4 py-2 text-right">Variación</th>'
+  );
+  headerCells.push(
+    hasHistoricalYears
+      ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
+      : '<th class="px-4 py-2 text-right">% Variación</th>'
+  );
+
+  const headerMarkup = `<tr>${headerCells.join('')}</tr>`;
+
   if (!realData || !realData.history.length) {
-    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
+    return {
+      headerMarkup,
+      bodyMarkup: `<tr><td colspan="${totalColumns}" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>`
+    };
   }
 
   const { history } = realData;
-  const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
   const unit = realData?.indicator?.unidad_medida ?? null;
   const isSms = isSmsIndicator(realData?.indicator);
@@ -861,7 +912,10 @@ function buildTableRows(realData, type, scenario) {
     });
 
   if (!lastLoaded) {
-    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
+    return {
+      headerMarkup,
+      bodyMarkup: `<tr><td colspan="${totalColumns}" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>`
+    };
   }
 
   let rows = [];
@@ -869,41 +923,93 @@ function buildTableRows(realData, type, scenario) {
   if (type === 'monthly') {
     const currentData = getDataByYear(history, currentYear);
     const previousData = getDataByYear(history, currentYear - 1);
-    
-    const previousMap = new Map();
-    previousData.forEach(item => {
-      previousMap.set(item.mes, Number(item.valor) || 0);
+
+    const toNumeric = value => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+
+    const currentMap = new Map();
+    currentData.forEach(item => {
+      const numeric = toNumeric(item.valor);
+      if (numeric != null) {
+        currentMap.set(item.mes, numeric);
+      }
     });
 
-    rows = currentData.map(item => {
-      const current = Number(item.valor) || 0;
-      const hasComparison = previousMap.has(item.mes);
-      const comparison = hasComparison ? previousMap.get(item.mes) : null;
-      const diff = comparison != null ? current - comparison : null;
+    const previousMap = new Map();
+    previousData.forEach(item => {
+      const numeric = toNumeric(item.valor);
+      if (numeric != null) {
+        previousMap.set(item.mes, numeric);
+      }
+    });
+
+    const historicalMaps = new Map();
+    historicalYears.forEach(year => {
+      const yearData = getDataByYear(history, year);
+      const monthMap = new Map();
+      yearData.forEach(item => {
+        const numeric = toNumeric(item.valor);
+        if (numeric != null) {
+          monthMap.set(item.mes, numeric);
+        }
+      });
+      historicalMaps.set(year, monthMap);
+    });
+
+    const monthsToRender = showHistorical
+      ? Array.from({ length: 12 }, (_, index) => index + 1)
+      : Array.from(new Set(currentData.map(item => item.mes))).sort((a, b) => a - b);
+
+    rows = monthsToRender.map(monthNumber => {
+      const current = currentMap.has(monthNumber) ? currentMap.get(monthNumber) : null;
+      const hasComparison = previousMap.has(monthNumber);
+      const comparison = hasComparison ? previousMap.get(monthNumber) : null;
+      const diff = current != null && comparison != null ? current - comparison : null;
       const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
 
+      const historicalValues = showHistorical
+        ? historicalYears.map(year => {
+            const map = historicalMaps.get(year);
+            return map?.has(monthNumber) ? map.get(monthNumber) : null;
+          })
+        : [];
+
       return {
-        label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
+        label: MONTHS[monthNumber - 1]?.label || `Mes ${monthNumber}`,
         current,
         comparison,
         diff,
-        pct
+        pct,
+        historicalValues
       };
     });
-  } 
-  else if (type === 'quarterly') {
+  } else if (type === 'quarterly') {
     const completeQuarters = filterCompleteQuarters(history, currentYear);
-    
+
     if (completeQuarters === 0) {
-      return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay trimestres completos disponibles</td></tr>';
+      return {
+        headerMarkup,
+        bodyMarkup: `<tr><td colspan="${totalColumns}" class="px-4 py-6 text-center text-slate-400">No hay trimestres completos disponibles</td></tr>`
+      };
     }
-    
+
     const currentQuarters = aggregateQuarterlyData(history, currentYear, completeQuarters);
     const previousQuarters = aggregateQuarterlyData(history, currentYear - 1, completeQuarters);
-    
     const previousMap = new Map();
     previousQuarters.forEach(q => {
       previousMap.set(q.quarter, q.value);
+    });
+
+    const historicalMaps = new Map();
+    historicalYears.forEach(year => {
+      const quarters = aggregateQuarterlyData(history, year, 4);
+      const map = new Map();
+      quarters.forEach(q => {
+        map.set(q.quarter, q.value);
+      });
+      historicalMaps.set(year, map);
     });
 
     rows = currentQuarters.map(q => {
@@ -913,18 +1019,27 @@ function buildTableRows(realData, type, scenario) {
       const diff = comparison != null ? current - comparison : null;
       const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
 
+      const historicalValues = showHistorical
+        ? historicalYears.map(year => {
+            const map = historicalMaps.get(year);
+            return map?.has(q.quarter) ? map.get(q.quarter) : null;
+          })
+        : [];
+
       return {
         label: `Trimestre ${q.quarter}`,
         current,
         comparison,
         diff,
-        pct
+        pct,
+        historicalValues
       };
     });
-  } 
-  else if (type === 'annual') {
-    const years = Array.from(new Set(history.map(item => item.anio))).sort((a, b) => b - a).slice(0, 5);
-    
+  } else if (type === 'annual') {
+    const years = Array.from(new Set(history.map(item => item.anio)))
+      .sort((a, b) => b - a)
+      .slice(0, 5);
+
     rows = years.map((year, index) => {
       const yearData = getDataByYear(history, year);
       const current = sum(yearData.map(item => item.valor));
@@ -933,18 +1048,17 @@ function buildTableRows(realData, type, scenario) {
       const comparison = previousYearData.length ? sum(previousYearData.map(item => item.valor)) : null;
       const diff = comparison !== null ? current - comparison : null;
       const pct = diff !== null && comparison ? diff / comparison : null;
-      
+
       return {
         label: `${year}`,
         current,
         comparison,
         diff,
-        pct
+        pct,
+        historicalValues: showHistorical ? historicalYears.map(() => null) : []
       };
     });
-  } 
-  else {
-    // Para escenarios
+  } else {
     const currentData = getDataByYear(history, currentYear);
 
     const { map: targetMap } = buildScenarioTargetValues(realData.targets, scenario, currentYear);
@@ -961,37 +1075,65 @@ function buildTableRows(realData, type, scenario) {
         current,
         comparison,
         diff,
-        pct
+        pct,
+        historicalValues: showHistorical ? historicalYears.map(() => null) : []
       };
     });
   }
 
   if (!rows.length) {
-    return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles para este periodo</td></tr>';
+    return {
+      headerMarkup,
+      bodyMarkup: `<tr><td colspan="${totalColumns}" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles para este periodo</td></tr>`
+    };
   }
 
-  return rows
-    .map(row => `
-      <tr class="border-b border-slate-100">
-        <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
-        <td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatUnit(row.current)}</td>
-        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>
-        <td class="px-4 py-2 text-right text-sm font-semibold ${
-          row.diff > 0
-            ? isSms
-              ? 'text-rose-600'
-              : 'text-emerald-600'
-            : row.diff < 0
-            ? isSms
-              ? 'text-emerald-600'
-              : 'text-rose-600'
-            : 'text-slate-500'
-        }">${formatSignedUnit(row.diff)}</td>
-        <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
-      </tr>
-    `)
+  const bodyMarkup = rows
+    .map(row => {
+      const historicalCells = showHistorical
+        ? row.historicalValues
+            .map((value, index, array) =>
+              `<td class="px-4 py-2 text-right text-sm ${
+                index === array.length - 1 ? 'font-semibold text-slate-800' : 'text-slate-500'
+              }">${formatUnit(value)}</td>`
+            )
+            .join('')
+        : `<td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatUnit(row.current)}</td>`;
+
+      const comparisonCell = !showHistorical
+        ? `<td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>`
+        : '';
+
+      const variationClass =
+        row.diff > 0
+          ? isSms
+            ? 'text-rose-600'
+            : 'text-emerald-600'
+          : row.diff < 0
+          ? isSms
+            ? 'text-emerald-600'
+            : 'text-rose-600'
+          : 'text-slate-500';
+
+      return `
+        <tr class="border-b border-slate-100">
+          <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
+          ${historicalCells}
+          ${comparisonCell}
+          <td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}">
+            <div>${formatSignedUnit(row.diff)}</div>
+          </td>
+          <td class="px-4 py-2 text-right text-sm text-slate-600">
+            <div>${formatPercentage(row.pct)}</div>
+          </td>
+        </tr>
+      `;
+    })
     .join('');
+
+  return { headerMarkup, bodyMarkup };
 }
+
 function destroyActiveModalChart() {
   if (activeModalChart) {
     activeModalChart.destroy();
@@ -1450,9 +1592,9 @@ function closeIndicatorModal() {
   document.body.classList.remove('overflow-hidden');
 }
 
-function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' }) {
+function buildModalMarkup({ label, realData, type, scenario, chartType = 'line', showHistorical = false }) {
   const summary = buildSummary(realData, type, scenario);
-  const rowsMarkup = buildTableRows(realData, type, scenario);
+  const { headerMarkup, bodyMarkup } = buildTableContent(realData, type, scenario, showHistorical);
   const isSms = isSmsIndicator(realData?.indicator);
   const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
@@ -1541,8 +1683,8 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
             ${['monthly', 'quarterly'].includes(type) ? `
               <div class="mt-3 flex justify-end">
                 <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     data-show-historical
                     class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
@@ -1559,15 +1701,9 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
             <div class="max-h-72 overflow-auto">
               <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
-                  <tr>
-                    <th class="px-4 py-2 text-left">Periodo</th>
-                    <th class="px-4 py-2 text-right">Real</th>
-                    <th class="px-4 py-2 text-right">Comparativo</th>
-                    <th class="px-4 py-2 text-right">Variación</th>
-                    <th class="px-4 py-2 text-right">% Variación</th>
-                  </tr>
+                  ${headerMarkup}
                 </thead>
-                <tbody>${rowsMarkup}</tbody>
+                <tbody>${bodyMarkup}</tbody>
               </table>
             </div>
           </section>
@@ -1662,12 +1798,13 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
     let showHistorical = false;
 
     const renderModal = (chartType, historical) => {
-      root.innerHTML = buildModalMarkup({ 
-        label: foundIndicator.nombre, 
-        realData, 
-        type, 
+      root.innerHTML = buildModalMarkup({
+        label: foundIndicator.nombre,
+        realData,
+        type,
         scenario,
-        chartType 
+        chartType,
+        showHistorical: historical
       });
 
       const overlay = root.querySelector('[data-modal-overlay]');
@@ -1715,13 +1852,9 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       // NUEVO: Evento para checkbox de histórico
       if (historicalCheckbox) {
         historicalCheckbox.checked = historical;
-        historicalCheckbox.addEventListener('change', (event) => {
+        historicalCheckbox.addEventListener('change', event => {
           showHistorical = event.target.checked;
-          // Re-renderizar la gráfica con el nuevo estado
-          const chartConfig = buildChartConfig(realData, type, scenario, currentChartType, showHistorical);
-          if (chartConfig) {
-            renderModalChart(canvas, chartConfig);
-          }
+          renderModal(currentChartType, showHistorical);
         });
       }
 
