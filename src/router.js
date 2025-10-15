@@ -4,6 +4,7 @@ import { renderCapture } from './views/capture.js';
 import { renderVisualizationReact } from './views/visualizationReact.js';
 import { renderUsers } from './views/users.js';
 import { renderLogin } from './views/login.js';
+import { renderAirportTechnical } from './views/airportTechnical.js';
 import { getSession, setSession, subscribe } from './state/session.js';
 import { renderLayout, highlightActiveRoute } from './ui/layout.js';
 import { supabase, signOut } from './services/supabaseClient.js';
@@ -14,6 +15,7 @@ const routes = {
   login: renderLogin,
   dashboard: renderDashboard,
   visualizacion: renderVisualizationReact,
+  'airport-technical': renderAirportTechnical,
   indicators: renderIndicators,
   capture: renderCapture,
   users: renderUsers
