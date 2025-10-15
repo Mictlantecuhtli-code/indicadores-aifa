@@ -869,8 +869,23 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
   if (!hasHistoricalYears) {
     headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
   }
-  headerCells.push('<th class="px-4 py-2 text-right">Variación</th>');
-  headerCells.push('<th class="px-4 py-2 text-right">% Variación</th>');
+
+  const variationNote = hasHistoricalYears
+    ? `<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
+        currentYear - 1
+      } &rarr; ${currentYear}</div>`
+    : '';
+
+  headerCells.push(
+    hasHistoricalYears
+      ? `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
+      : '<th class="px-4 py-2 text-right">Variación</th>'
+  );
+  headerCells.push(
+    hasHistoricalYears
+      ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
+      : '<th class="px-4 py-2 text-right">% Variación</th>'
+  );
 
   const headerMarkup = `<tr>${headerCells.join('')}</tr>`;
 
@@ -1089,23 +1104,42 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
         ? `<td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>`
         : '';
 
+      const variationClass =
+        row.diff > 0
+          ? isSms
+            ? 'text-rose-600'
+            : 'text-emerald-600'
+          : row.diff < 0
+          ? isSms
+            ? 'text-emerald-600'
+            : 'text-rose-600'
+          : 'text-slate-500';
+
+      const variationDetails = showHistorical
+        ? `<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
+            currentYear - 1
+          } &rarr; ${currentYear}</div>`
+        : '';
+
+      const percentageDetails = showHistorical
+        ? `<div class="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
+            currentYear - 1
+          } &rarr; ${currentYear}</div>`
+        : '';
+
       return `
         <tr class="border-b border-slate-100">
           <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
           ${historicalCells}
           ${comparisonCell}
-          <td class="px-4 py-2 text-right text-sm font-semibold ${
-            row.diff > 0
-              ? isSms
-                ? 'text-rose-600'
-                : 'text-emerald-600'
-              : row.diff < 0
-              ? isSms
-                ? 'text-emerald-600'
-                : 'text-rose-600'
-              : 'text-slate-500'
-          }">${formatSignedUnit(row.diff)}</td>
-          <td class="px-4 py-2 text-right text-sm text-slate-600">${formatPercentage(row.pct)}</td>
+          <td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}">
+            <div>${formatSignedUnit(row.diff)}</div>
+            ${variationDetails}
+          </td>
+          <td class="px-4 py-2 text-right text-sm text-slate-600">
+            <div>${formatPercentage(row.pct)}</div>
+            ${percentageDetails}
+          </td>
         </tr>
       `;
     })
