@@ -839,7 +839,7 @@ function buildSummary(realData, type, scenario) {
   };
 }
 
-function buildTableRows(realData, type, scenario) {
+function buildTableRows(realData, type, scenario, showHistorical = false) {
   if (!realData || !realData.history.length) {
     return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td></tr>';
   }
@@ -867,64 +867,116 @@ function buildTableRows(realData, type, scenario) {
   let rows = [];
 
   if (type === 'monthly') {
-    const currentData = getDataByYear(history, currentYear);
-    const previousData = getDataByYear(history, currentYear - 1);
-    
-    const previousMap = new Map();
-    previousData.forEach(item => {
-      previousMap.set(item.mes, Number(item.valor) || 0);
-    });
+    if (showHistorical) {
+      const years = Array.from({ length: 4 }, (_, index) => currentYear - index).filter(year => year > 0);
 
-    rows = currentData.map(item => {
-      const current = Number(item.valor) || 0;
-      const hasComparison = previousMap.has(item.mes);
-      const comparison = hasComparison ? previousMap.get(item.mes) : null;
-      const diff = comparison != null ? current - comparison : null;
-      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+      years.forEach(year => {
+        const yearData = getDataByYear(history, year);
+        if (!yearData.length) {
+          return;
+        }
 
-      return {
-        label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
-        current,
-        comparison,
-        diff,
-        pct
-      };
-    });
-  } 
-  else if (type === 'quarterly') {
-    const completeQuarters = filterCompleteQuarters(history, currentYear);
-    
-    if (completeQuarters === 0) {
-      return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay trimestres completos disponibles</td></tr>';
+        const previousData = getDataByYear(history, year - 1);
+        const previousMap = new Map();
+        previousData.forEach(item => {
+          previousMap.set(item.mes, Number(item.valor) || 0);
+        });
+
+        yearData.forEach(item => {
+          const current = Number(item.valor) || 0;
+          const hasComparison = previousMap.has(item.mes);
+          const comparison = hasComparison ? previousMap.get(item.mes) : null;
+          const diff = comparison != null ? current - comparison : null;
+          const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
+          rows.push({
+            label: `${MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`} ${year}`,
+            current,
+            comparison,
+            diff,
+            pct
+          });
+        });
+      });
+    } else {
+      const currentData = getDataByYear(history, currentYear);
+      const previousData = getDataByYear(history, currentYear - 1);
+
+      const previousMap = new Map();
+      previousData.forEach(item => {
+        previousMap.set(item.mes, Number(item.valor) || 0);
+      });
+
+      rows = currentData.map(item => {
+        const current = Number(item.valor) || 0;
+        const hasComparison = previousMap.has(item.mes);
+        const comparison = hasComparison ? previousMap.get(item.mes) : null;
+        const diff = comparison != null ? current - comparison : null;
+        const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
+        return {
+          label: MONTHS[item.mes - 1]?.label || `Mes ${item.mes}`,
+          current,
+          comparison,
+          diff,
+          pct
+        };
+      });
     }
-    
-    const currentQuarters = aggregateQuarterlyData(history, currentYear, completeQuarters);
-    const previousQuarters = aggregateQuarterlyData(history, currentYear - 1, completeQuarters);
-    
-    const previousMap = new Map();
-    previousQuarters.forEach(q => {
-      previousMap.set(q.quarter, q.value);
-    });
+  } else if (type === 'quarterly') {
+    const buildQuarterRows = (year, limitQuarters) => {
+      const currentQuarters = aggregateQuarterlyData(history, year, limitQuarters);
+      if (!currentQuarters.length) {
+        return [];
+      }
 
-    rows = currentQuarters.map(q => {
-      const current = q.value;
-      const hasComparison = previousMap.has(q.quarter);
-      const comparison = hasComparison ? previousMap.get(q.quarter) : null;
-      const diff = comparison != null ? current - comparison : null;
-      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+      const previousQuarters = aggregateQuarterlyData(history, year - 1, limitQuarters);
+      const previousMap = new Map();
+      previousQuarters.forEach(q => {
+        previousMap.set(q.quarter, q.value);
+      });
 
-      return {
-        label: `Trimestre ${q.quarter}`,
-        current,
-        comparison,
-        diff,
-        pct
-      };
-    });
-  } 
+      return currentQuarters.map(q => {
+        const current = q.value;
+        const hasComparison = previousMap.has(q.quarter);
+        const comparison = hasComparison ? previousMap.get(q.quarter) : null;
+        const diff = comparison != null ? current - comparison : null;
+        const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+
+        return {
+          label: showHistorical ? `Trimestre ${q.quarter} ${year}` : `Trimestre ${q.quarter}`,
+          current,
+          comparison,
+          diff,
+          pct
+        };
+      });
+    };
+
+    if (showHistorical) {
+      const years = Array.from({ length: 4 }, (_, index) => currentYear - index).filter(year => year > 0);
+
+      years.forEach(year => {
+        const completeQuarters = filterCompleteQuarters(history, year);
+        if (completeQuarters === 0) {
+          return;
+        }
+
+        rows.push(...buildQuarterRows(year, completeQuarters));
+      });
+    } else {
+      const completeQuarters = filterCompleteQuarters(history, currentYear);
+
+      if (completeQuarters === 0) {
+        return '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay trimestres completos disponibles</td></tr>';
+      }
+
+      rows = buildQuarterRows(currentYear, completeQuarters);
+    }
+  }
   else if (type === 'annual') {
     const years = Array.from(new Set(history.map(item => item.anio))).sort((a, b) => b - a).slice(0, 5);
-    
+
     rows = years.map((year, index) => {
       const yearData = getDataByYear(history, year);
       const current = sum(yearData.map(item => item.valor));
@@ -1450,9 +1502,9 @@ function closeIndicatorModal() {
   document.body.classList.remove('overflow-hidden');
 }
 
-function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' }) {
+function buildModalMarkup({ label, realData, type, scenario, chartType = 'line', showHistorical = false }) {
   const summary = buildSummary(realData, type, scenario);
-  const rowsMarkup = buildTableRows(realData, type, scenario);
+  const rowsMarkup = buildTableRows(realData, type, scenario, showHistorical);
   const isSms = isSmsIndicator(realData?.indicator);
   const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
@@ -1541,8 +1593,8 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line' 
             ${['monthly', 'quarterly'].includes(type) ? `
               <div class="mt-3 flex justify-end">
                 <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     data-show-historical
                     class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
@@ -1662,12 +1714,13 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
     let showHistorical = false;
 
     const renderModal = (chartType, historical) => {
-      root.innerHTML = buildModalMarkup({ 
-        label: foundIndicator.nombre, 
-        realData, 
-        type, 
+      root.innerHTML = buildModalMarkup({
+        label: foundIndicator.nombre,
+        realData,
+        type,
         scenario,
-        chartType 
+        chartType,
+        showHistorical: historical
       });
 
       const overlay = root.querySelector('[data-modal-overlay]');
@@ -1715,13 +1768,9 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       // NUEVO: Evento para checkbox de histórico
       if (historicalCheckbox) {
         historicalCheckbox.checked = historical;
-        historicalCheckbox.addEventListener('change', (event) => {
+        historicalCheckbox.addEventListener('change', event => {
           showHistorical = event.target.checked;
-          // Re-renderizar la gráfica con el nuevo estado
-          const chartConfig = buildChartConfig(realData, type, scenario, currentChartType, showHistorical);
-          if (chartConfig) {
-            renderModalChart(canvas, chartConfig);
-          }
+          renderModal(currentChartType, showHistorical);
         });
       }
 
