@@ -77,7 +77,7 @@ const SMS_OPTION_BLUEPRINTS = [
   }
 ];
 
-const SMS_OBJECTIVE_BLUEPRINTS = [
+const SMS_OBJECTIVE_BLUEPRINTS = [  
 {
   id: 'objective-1',
   title: 'Objetivo 1',
@@ -89,6 +89,11 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
       codes: ['SMS-01'],
       keywords: ['impactos', 'fauna'],
       fallbackTitle: 'Impactos de fauna'
+    },
+    {
+      codes: ['SMS-02', 'SMS-FAUNA'],
+      keywords: ['cumplimiento', 'programa', 'gestion', 'peligro', 'aviario', 'fauna', 'silvestre'],
+      fallbackTitle: 'Cumplimiento del Programa de Gestión del Peligro Aviario y Fauna Silvestre'
     }
   ],
   customViews: [
@@ -402,20 +407,24 @@ function buildSmsGroupDefinitions(indicators = []) {
   const smsIndicators = indicators.filter(indicator => {
     if (!isSmsIndicator(indicator)) return false;
     
-    // Excluir indicadores individuales de capturas de especies
+    // Excluir SOLO indicadores individuales de capturas de especies específicas
     const searchText = buildIndicatorSearchText(indicator);
     const excludePatterns = [
       'capturas de aves realizadas',
       'capturas de mamiferos realizadas', 
-      'capturas de reptiles realizadas',
-      'captura aves',
-      'captura mamiferos',
-      'captura reptiles'
+      'capturas de reptiles realizadas'
     ];
     
-    const shouldExclude = excludePatterns.some(pattern => 
-      searchText.includes(normalizeMatchText(pattern))
-    );
+    // Solo excluir si coincide exactamente con estos patrones específicos
+    // y NO es el indicador de cumplimiento del programa
+    const shouldExclude = excludePatterns.some(pattern => {
+      const normalizedPattern = normalizeMatchText(pattern);
+      const normalizedSearch = normalizeMatchText(searchText);
+      return normalizedSearch.includes(normalizedPattern) && 
+             !normalizedSearch.includes('programa') && 
+             !normalizedSearch.includes('cumplimiento') &&
+             !normalizedSearch.includes('gestion');
+    });
     
     return !shouldExclude;
   });
@@ -445,11 +454,7 @@ function buildSmsGroupDefinitions(indicators = []) {
       }
     });
     
-    // Agregar vistas personalizadas si existen
-    if (objective.customViews && objective.customViews.length > 0) {
-      // Las vistas personalizadas se manejan en el markup, no aquí
-    }
-    
+    // Siempre crear el objetivo si tiene childGroups O customViews
     if (childGroups.length || (objective.customViews && objective.customViews.length > 0)) {
       objectiveDefinitions.push({
         id: `${SMS_GROUP_PREFIX}${objective.id}`,
@@ -2222,10 +2227,35 @@ function buildSmsIndicatorItem(definition) {
 
 function buildSmsObjectiveGroupMarkup(definition, rootId) {
   const childGroups = Array.isArray(definition.childGroups) ? definition.childGroups : [];
-  if (!childGroups.length) return '';
-
+  const customViews = Array.isArray(definition.customViews) ? definition.customViews : [];
+  
+  // Si no hay ni childGroups ni customViews, no mostrar nada
+  if (!childGroups.length && !customViews.length) return '';
+  
   const childMarkup = childGroups.map(buildSmsIndicatorItem).join('');
-
+  
+  // Soporte para vistas personalizadas
+  const customViewsMarkup = customViews.map(view => `
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        data-custom-view-button
+        data-view-type="${view.type}"
+        data-view-id="${view.id}"
+        data-view-title="${escapeHtml(view.title)}"
+      >
+        <span class="mt-0.5 text-slate-500">
+          <i class="fa-solid fa-chart-column h-4 w-4"></i>
+        </span>
+        <div>
+          <span class="font-medium">${escapeHtml(view.title)}</span>
+          <p class="mt-1 text-xs text-slate-500">${escapeHtml(view.description || '')}</p>
+        </div>
+      </button>
+    </li>
+  `).join('');
+  
   return `
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <button
@@ -2250,6 +2280,7 @@ function buildSmsObjectiveGroupMarkup(definition, rootId) {
       <div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-group-panel="${definition.id}" hidden>
         <ul class="space-y-3">
           ${childMarkup}
+          ${customViewsMarkup}
         </ul>
       </div>
     </div>
