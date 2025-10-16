@@ -78,25 +78,28 @@ const SMS_OPTION_BLUEPRINTS = [
 ];
 
 const SMS_OBJECTIVE_BLUEPRINTS = [
-  {
-    id: 'objective-1',
-    title: 'Objetivo 1',
-    description:
-      'Mantener la tasa de impactos con fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
-    iconClass: 'fa-solid fa-bullseye',
-    indicatorMatchers: [
-      {
-        codes: ['SMS-01'],
-        keywords: ['impactos', 'fauna'],
-        fallbackTitle: 'Impactos de fauna'
-      },
-      {
-        codes: ['SMS-02', 'SMS-FAUNA'],
-        keywords: ['capturas', 'fauna'],
-        fallbackTitle: 'Captura de fauna'
-      }
-    ]
-  },
+{
+  id: 'objective-1',
+  title: 'Objetivo 1',
+  description:
+    'Mantener la tasa de impactos con fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
+  iconClass: 'fa-solid fa-bullseye',
+  indicatorMatchers: [
+    {
+      codes: ['SMS-01'],
+      keywords: ['impactos', 'fauna'],
+      fallbackTitle: 'Impactos de fauna'
+    }
+  ],
+  customViews: [
+    {
+      id: 'captura-fauna',
+      title: 'Captura de Fauna',
+      type: 'fauna-capture',
+      description: 'Capturas de aves, mamíferos y reptiles por mes'
+    }
+  ]
+},
   {
     id: 'objective-2',
     title: 'Objetivo 2',
@@ -395,27 +398,42 @@ function createSmsPlaceholderDefinition(objectiveId, matcher = {}, index = 0) {
 }
 
 function buildSmsGroupDefinitions(indicators = []) {
-  const smsIndicators = indicators.filter(isSmsIndicator);
+  // Filtrar indicadores SMS y excluir capturas individuales de especies
+  const smsIndicators = indicators.filter(indicator => {
+    if (!isSmsIndicator(indicator)) return false;
+    
+    // Excluir indicadores individuales de capturas de especies
+    const searchText = buildIndicatorSearchText(indicator);
+    const excludePatterns = [
+      'capturas de aves realizadas',
+      'capturas de mamiferos realizadas', 
+      'capturas de reptiles realizadas',
+      'captura aves',
+      'captura mamiferos',
+      'captura reptiles'
+    ];
+    
+    const shouldExclude = excludePatterns.some(pattern => 
+      searchText.includes(normalizeMatchText(pattern))
+    );
+    
+    return !shouldExclude;
+  });
 
   smsIndicators.sort((a, b) => {
     const orderDiff = getVisualizationOrder(a?.orden_visualizacion) - getVisualizationOrder(b?.orden_visualizacion);
     if (orderDiff !== 0) return orderDiff;
-
     const nameA = a?.nombre ?? '';
     const nameB = b?.nombre ?? '';
     return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
   });
-
   const usedIndicatorIds = new Set();
   const objectiveDefinitions = [];
-
   SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
     const childGroups = [];
     let placeholderIndex = 1;
-
     objective.indicatorMatchers.forEach(matcher => {
       const matchedIndicator = findSmsIndicatorMatch(smsIndicators, matcher, usedIndicatorIds);
-
       if (matchedIndicator) {
         usedIndicatorIds.add(matchedIndicator.id);
         const definition = createSmsIndicatorDefinition(matchedIndicator, matcher);
@@ -426,8 +444,13 @@ function buildSmsGroupDefinitions(indicators = []) {
         childGroups.push(createSmsPlaceholderDefinition(objective.id, matcher, placeholderIndex++));
       }
     });
-
-    if (childGroups.length) {
+    
+    // Agregar vistas personalizadas si existen
+    if (objective.customViews && objective.customViews.length > 0) {
+      // Las vistas personalizadas se manejan en el markup, no aquí
+    }
+    
+    if (childGroups.length || (objective.customViews && objective.customViews.length > 0)) {
       objectiveDefinitions.push({
         id: `${SMS_GROUP_PREFIX}${objective.id}`,
         title: objective.title,
@@ -436,11 +459,11 @@ function buildSmsGroupDefinitions(indicators = []) {
         iconClass: objective.iconClass ?? SMS_SECTION_ICON_CLASS,
         optionBlueprints: [],
         childGroups,
+        customViews: objective.customViews || [],
         type: 'sms-objective'
       });
     }
   });
-
   smsIndicators.forEach(indicator => {
     if (!usedIndicatorIds.has(indicator.id)) {
       const definition = createSmsIndicatorDefinition(indicator);
@@ -449,7 +472,6 @@ function buildSmsGroupDefinitions(indicators = []) {
       }
     }
   });
-
   return objectiveDefinitions;
 }
 
@@ -2237,11 +2259,9 @@ function buildSmsObjectiveGroupMarkup(definition, rootId) {
 function buildGroupMarkup(groupId, rootId) {
   const definition = GROUP_DEFINITIONS[groupId];
   if (!definition) return '';
-
   if (Array.isArray(definition.childGroups) && definition.childGroups.length) {
     return buildSmsObjectiveGroupMarkup(definition, rootId);
   }
-
   const blueprints = resolveOptionBlueprints(definition);
   const options = blueprints.map(blueprint => ({
     id: `${definition.id}-${blueprint.id}`,
@@ -2250,6 +2270,30 @@ function buildGroupMarkup(groupId, rootId) {
     scenario: blueprint.scenario,
     dataKey: definition.dataKey
   }));
+
+  // Soporte para vistas personalizadas
+  const customViewsMarkup = definition.customViews 
+    ? definition.customViews.map(view => `
+        <li>
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+            data-custom-view-button
+            data-view-type="${view.type}"
+            data-view-id="${view.id}"
+            data-view-title="${escapeHtml(view.title)}"
+          >
+            <span class="mt-0.5 text-slate-500">
+              <i class="fa-solid fa-chart-column h-4 w-4"></i>
+            </span>
+            <div>
+              <span class="font-medium">${escapeHtml(view.title)}</span>
+              <p class="mt-1 text-xs text-slate-500">${escapeHtml(view.description || '')}</p>
+            </div>
+          </button>
+        </li>
+      `).join('')
+    : '';
 
   return `
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -2275,6 +2319,7 @@ function buildGroupMarkup(groupId, rootId) {
       <div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-group-panel="${definition.id}" hidden>
         <ul class="space-y-2">
           ${options.map(buildOptionMarkup).join('')}
+          ${customViewsMarkup}
         </ul>
       </div>
     </div>
@@ -2425,7 +2470,6 @@ function initAccordionControls(container) {
 
 function initGroupControls(container) {
   const groups = new Map();
-
   container.querySelectorAll('[data-group-button]').forEach(button => {
     const rootId = button.dataset.groupRoot;
     const groupId = button.dataset.groupId;
@@ -2435,7 +2479,6 @@ function initGroupControls(container) {
     }
     groups.get(rootId).items.push({ button, groupId });
   });
-
   const updateGroup = entry => {
     entry.items.forEach(({ button, groupId }) => {
       const panel = container.querySelector(`[data-group-panel="${groupId}"]`);
@@ -2454,9 +2497,7 @@ function initGroupControls(container) {
       }
     });
   };
-
   groups.forEach(entry => updateGroup(entry));
-
   groups.forEach(entry => {
     entry.items.forEach(({ button, groupId }) => {
       button.addEventListener('click', () => {
@@ -2464,6 +2505,20 @@ function initGroupControls(container) {
         updateGroup(entry);
       });
     });
+  });
+
+  // Event listener para vistas personalizadas
+  container.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-custom-view-button]');
+    if (!button) return;
+
+    const viewType = button.dataset.viewType;
+    const viewId = button.dataset.viewId;
+    const viewTitle = button.dataset.viewTitle;
+
+    if (viewType === 'fauna-capture') {
+      await openFaunaCaptureModal(viewTitle);
+    }
   });
 }
 
@@ -2693,6 +2748,298 @@ async function renderDirections(container) {
     console.error(error);
     renderError(container, error);
   }
+}
+
+async function openFaunaCaptureModal(title) {
+  try {
+    const root = ensureModalContainer();
+    document.body.classList.add('overflow-hidden');
+
+    // Mostrar loading
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="text-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p class="text-sm text-slate-600">Cargando datos de capturas...</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Obtener datos
+    const captureData = await getCapturasFauna();
+    
+    if (!captureData || !captureData.length) {
+      root.innerHTML = `
+        <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+          <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md">
+            <div class="text-center">
+              <i class="fa-solid fa-chart-simple text-4xl text-slate-300 mb-4"></i>
+              <h3 class="text-lg font-semibold text-slate-900 mb-2">Sin datos disponibles</h3>
+              <p class="text-sm text-slate-600 mb-4">No hay datos de capturas de fauna registrados.</p>
+              <button
+                type="button"
+                class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                data-modal-close
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const closeBtn = root.querySelector('[data-modal-close]');
+      closeBtn?.addEventListener('click', closeIndicatorModal);
+      return;
+    }
+
+    // Construir modal con gráfica
+    root.innerHTML = buildFaunaCaptureModalMarkup(title, captureData);
+
+    const overlay = root.querySelector('[data-modal-overlay]');
+    const closeButton = root.querySelector('[data-modal-close]');
+    const canvas = root.querySelector('[data-fauna-chart]');
+
+    const handleClose = () => {
+      overlay?.removeEventListener('click', overlayListener);
+      closeButton?.removeEventListener('click', handleClose);
+      document.removeEventListener('keydown', escListener);
+      closeIndicatorModal();
+    };
+
+    const overlayListener = event => {
+      if (event.target === overlay) {
+        handleClose();
+      }
+    };
+
+    const escListener = event => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    overlay?.addEventListener('click', overlayListener);
+    closeButton?.addEventListener('click', handleClose);
+    document.addEventListener('keydown', escListener);
+
+    // Renderizar gráfica
+    const chartConfig = buildFaunaCaptureChartConfig(captureData);
+    if (chartConfig) {
+      renderModalChart(canvas, chartConfig);
+    }
+
+  } catch (error) {
+    console.error('Error al abrir modal de capturas de fauna:', error);
+    const root = ensureModalContainer();
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md">
+          <div class="text-center">
+            <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
+            <h3 class="text-lg font-semibold text-slate-900 mb-2">Error al cargar datos</h3>
+            <p class="text-sm text-slate-600 mb-4">${escapeHtml(error.message || 'Ocurrió un error inesperado')}</p>
+            <button
+              type="button"
+              class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+              data-modal-close
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    const closeBtn = root.querySelector('[data-modal-close]');
+    closeBtn?.addEventListener('click', closeIndicatorModal);
+  }
+}
+
+function buildFaunaCaptureModalMarkup(title, captureData) {
+  const currentYear = new Date().getFullYear();
+  
+  // Procesar datos para la tabla
+  const monthlyData = processMonthlyFaunaData(captureData, currentYear);
+  
+  return `
+    <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
+      <div class="w-full max-w-6xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true">
+        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+          <div>
+            <h2 class="text-xl font-semibold text-slate-800">${escapeHtml(title)}</h2>
+            <p class="text-sm text-slate-500">Distribución mensual de capturas por tipo de fauna</p>
+          </div>
+          <button
+            type="button"
+            class="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            data-modal-close
+            aria-label="Cerrar"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        
+        <div class="p-6 space-y-6">
+          <!-- Gráfica -->
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="mb-4">
+              <h3 class="text-lg font-semibold text-slate-800">Capturas por mes - ${currentYear}</h3>
+              <p class="text-sm text-slate-500">Distribución de aves, mamíferos y reptiles</p>
+            </div>
+            <div class="relative h-80">
+              <canvas data-fauna-chart></canvas>
+            </div>
+          </div>
+          
+          <!-- Tabla de datos -->
+          <div class="rounded-xl border border-slate-200 bg-white">
+            <div class="border-b border-slate-200 px-4 py-3">
+              <h3 class="text-lg font-semibold text-slate-800">Datos detallados</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left font-semibold text-slate-500">Mes</th>
+                    <th class="px-4 py-3 text-right font-semibold text-slate-500">Aves</th>
+                    <th class="px-4 py-3 text-right font-semibold text-slate-500">Mamíferos</th>
+                    <th class="px-4 py-3 text-right font-semibold text-slate-500">Reptiles</th>
+                    <th class="px-4 py-3 text-right font-semibold text-slate-500">Total</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${monthlyData.map(row => `
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-3 font-medium text-slate-700">${escapeHtml(row.month)}</td>
+                      <td class="px-4 py-3 text-right text-blue-600 font-semibold">${row.aves}</td>
+                      <td class="px-4 py-3 text-right text-amber-600 font-semibold">${row.mamiferos}</td>
+                      <td class="px-4 py-3 text-right text-emerald-600 font-semibold">${row.reptiles}</td>
+                      <td class="px-4 py-3 text-right text-slate-800 font-bold">${row.total}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function processMonthlyFaunaData(captureData, year) {
+  const months = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  
+  // Filtrar datos del año actual
+  const yearData = captureData.filter(item => item.anio === year);
+  
+  // Crear estructura mensual
+  const monthlyData = months.map((monthName, index) => {
+    const monthNumber = index + 1;
+    const monthData = yearData.find(item => item.mes === monthNumber);
+    
+    return {
+      month: monthName,
+      aves: monthData?.aves || 0,
+      mamiferos: monthData?.mamiferos || 0,
+      reptiles: monthData?.reptiles || 0,
+      total: (monthData?.aves || 0) + (monthData?.mamiferos || 0) + (monthData?.reptiles || 0)
+    };
+  });
+  
+  return monthlyData;
+}
+
+function buildFaunaCaptureChartConfig(captureData) {
+  const currentYear = new Date().getFullYear();
+  const monthlyData = processMonthlyFaunaData(captureData, currentYear);
+  
+  const months = monthlyData.map(item => item.month.slice(0, 3)); // Abreviar nombres de meses
+  const avesData = monthlyData.map(item => item.aves);
+  const mamiferosData = monthlyData.map(item => item.mamiferos);
+  const reptilesData = monthlyData.map(item => item.reptiles);
+  
+  return {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        {
+          label: 'Aves',
+          data: avesData,
+          backgroundColor: '#3B82F6', // Azul
+          borderColor: '#2563EB',
+          borderWidth: 1
+        },
+        {
+          label: 'Mamíferos',
+          data: mamiferosData,
+          backgroundColor: '#F59E0B', // Ámbar
+          borderColor: '#D97706',
+          borderWidth: 1
+        },
+        {
+          label: 'Reptiles',
+          data: reptilesData,
+          backgroundColor: '#10B981', // Verde
+          borderColor: '#059669',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: true,
+          grid: {
+            display: false
+          }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: {
+            stepSize: 1,
+            callback: function(value) {
+              return Number.isInteger(value) ? value : '';
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end'
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            footer: function(tooltipItems) {
+              let total = 0;
+              tooltipItems.forEach(function(tooltipItem) {
+                total += tooltipItem.parsed.y;
+              });
+              return 'Total: ' + total;
+            }
+          }
+        }
+      },
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      }
+    }
+  };
 }
 
 export async function renderDashboard(container) {
