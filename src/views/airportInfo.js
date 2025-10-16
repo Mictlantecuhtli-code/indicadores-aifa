@@ -68,6 +68,22 @@ function canEdit() {
   return EDITABLE_ROLES.has(role);
 }
 
+function normalizeSectionKey(value) {
+  if (!value) return null;
+
+  return (
+    value
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .trim() || null
+  );
+}
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
   return value
@@ -102,14 +118,24 @@ function formatTimestamp(value) {
 function mergeSections(sections) {
   const byKey = new Map();
   sections.forEach(section => {
-    if (!section || !section.section_key) return;
-    byKey.set(section.section_key, section);
+    if (!section) return;
+    const normalizedKey = normalizeSectionKey(section.section_key || section.sectionKey || section.id || section.title);
+    if (!normalizedKey) return;
+
+    const normalizedSection = {
+      ...section,
+      section_key: section.section_key || section.sectionKey || normalizedKey
+    };
+
+    byKey.set(normalizedKey, normalizedSection);
   });
 
   const merged = SECTION_BLUEPRINTS.map(blueprint => {
-    const existing = byKey.get(blueprint.key);
+    const normalizedKey = normalizeSectionKey(blueprint.key);
+    const existing = normalizedKey ? byKey.get(normalizedKey) : null;
+
     if (existing) {
-      byKey.delete(blueprint.key);
+      byKey.delete(normalizedKey);
       return {
         ...existing,
         title: existing.title || blueprint.title,
@@ -118,16 +144,18 @@ function mergeSections(sections) {
       };
     }
 
+    const fallbackKey = normalizedKey || blueprint.key;
+
     return {
       id: null,
-      section_key: blueprint.key,
+      section_key: fallbackKey,
       title: blueprint.title,
       description: blueprint.description || '',
       content: [],
       display_order: blueprint.order ?? null,
       updated_at: null
     };
-  });
+  }).filter(Boolean);
 
   const extras = Array.from(byKey.values()).sort((a, b) => {
     const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
