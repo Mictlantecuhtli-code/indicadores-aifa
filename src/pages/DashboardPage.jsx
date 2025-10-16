@@ -57,6 +57,48 @@ const CATEGORY_ICON_MAP = {
 
 const MONTH_SHORT_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+function normalizeIndicatorLabel(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const FAUNA_SPECIES_NAMES = new Set(
+  [
+    'capturas de aves realizadas',
+    'capturas de mamiferos realizadas',
+    'capturas de mamíferos realizadas',
+    'capturas de reptiles realizadas'
+  ].map(normalizeIndicatorLabel)
+);
+
+function isFaunaSpeciesIndicator(indicator) {
+  const name = normalizeIndicatorLabel(indicator?.nombre);
+  if (!name) return false;
+  return FAUNA_SPECIES_NAMES.has(name);
+}
+
+function isFaunaAggregateIndicator(indicator) {
+  if (!indicator) return false;
+  if (Array.isArray(indicator._faunaSourceIds) && indicator._faunaSourceIds.length) {
+    return true;
+  }
+
+  const code = indicator?.clave?.toString().trim().toUpperCase();
+  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+    return true;
+  }
+
+  const name = normalizeIndicatorLabel(indicator?.nombre);
+  if (!name) return false;
+  if (name.includes('captura') && name.includes('fauna')) return true;
+  if (name.includes('capturas por especie')) return true;
+  return false;
+}
+
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -1023,7 +1065,7 @@ export default function DashboardPage() {
 
   const smsIndicators = useMemo(() => {
     const records = indicatorsQuery.data ?? [];
-    const normalized = records.filter(record => {
+    const smsRecords = records.filter(record => {
       const code = record?.clave?.toString().toUpperCase() ?? '';
       const name = record?.nombre?.toString().toLowerCase() ?? '';
       const description = record?.descripcion?.toString().toLowerCase() ?? '';
@@ -1034,19 +1076,66 @@ export default function DashboardPage() {
         name.includes('safety management') ||
         description.includes('safety management')
       );
-    });
-
-    return normalized
+    })
       .map(item => ({
         ...item,
         _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER
-      }))
-      .sort((a, b) => {
-        if (a._orden !== b._orden) {
-          return a._orden - b._orden;
+      }));
+
+    const faunaSpecies = [];
+    const baseList = [];
+
+    smsRecords.forEach(item => {
+      if (isFaunaSpeciesIndicator(item)) {
+        faunaSpecies.push(item);
+      } else {
+        baseList.push(item);
+      }
+    });
+
+    let result = [...baseList];
+
+    if (faunaSpecies.length) {
+      const faunaOrder = Math.min(
+        ...faunaSpecies.map(entry => entry._orden ?? Number.MAX_SAFE_INTEGER)
+      );
+      const faunaSourceIds = faunaSpecies.map(entry => entry.id).filter(Boolean);
+      const aggregateIndex = result.findIndex(isFaunaAggregateIndicator);
+
+      if (aggregateIndex >= 0) {
+        const aggregate = result[aggregateIndex];
+        result[aggregateIndex] = {
+          ...aggregate,
+          _orden: aggregate._orden ?? faunaOrder,
+          _faunaSourceIds: faunaSourceIds
+        };
+      } else {
+        const reference = faunaSpecies[0] ?? null;
+        if (reference) {
+          result.push({
+            id: 'sms-fauna-aggregate',
+            clave: 'SMS-FAUNA',
+            nombre: 'Captura de fauna',
+            descripcion: 'Capturas acumuladas de fauna (aves, mamíferos y reptiles).',
+            unidad_medida: reference.unidad_medida ?? null,
+            meta_anual: reference.meta_anual ?? null,
+            meta_objetivo: reference.meta_objetivo ?? null,
+            area_nombre: reference.area_nombre ?? reference.area ?? null,
+            area_clave: reference.area_clave ?? null,
+            _orden: faunaOrder,
+            _faunaSourceIds: faunaSourceIds,
+            _isSynthetic: true
+          });
         }
-        return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
-      });
+      }
+    }
+
+    return result.sort((a, b) => {
+      if (a._orden !== b._orden) {
+        return a._orden - b._orden;
+      }
+      return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
+    });
   }, [indicatorsQuery.data]);
 
   const sms05A = useMemo(() => {
