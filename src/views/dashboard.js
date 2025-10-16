@@ -91,7 +91,7 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
         fallbackTitle: 'Impactos de fauna'
       },
       {
-        codes: ['SMS-02'],
+        codes: ['SMS-02', 'SMS-FAUNA'],
         keywords: ['capturas', 'fauna'],
         fallbackTitle: 'Captura de fauna'
       }
