@@ -144,7 +144,161 @@ function sortRoutes(routes) {
     const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
     const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER;
     if (orderA !== orderB) return orderA - orderB;
-    return (a.nombre || a.route_code || '').localeCompare(b.nombre || b.route_code || '');
+
+    const labelA = a.destino || a.nombre || a.route_code || '';
+    const labelB = b.destino || b.nombre || b.route_code || '';
+    return labelA.localeCompare(labelB);
+  });
+}
+
+function extractAirlinesFromRoute(route) {
+  const airlines = Array.isArray(route?.airlines)
+    ? route.airlines
+        .filter(item => item && (item.nombre || item.frecuencia || item.notas))
+        .map(item => ({
+          id: item.id ?? null,
+          nombre: item.nombre ?? '',
+          frecuencia: item.frecuencia ?? '',
+          notas: item.notas ?? '',
+          display_order: typeof item.display_order === 'number' ? item.display_order : null
+        }))
+    : [];
+
+  const fallbackName = (route?.nombre || '').toString().trim();
+  if (fallbackName) {
+    const normalizedName = fallbackName.toLowerCase();
+    const hasName = airlines.some(item => (item.nombre || '').toString().trim().toLowerCase() === normalizedName);
+    if (!hasName) {
+      airlines.push({
+        id: route?.id != null ? `route-${route.id}-airline` : null,
+        nombre: fallbackName,
+        frecuencia: route?.frecuencia_base || '',
+        notas: route?.notas || '',
+        display_order: route?.display_order ?? null
+      });
+    }
+  }
+
+  return airlines;
+}
+
+function mergeTextValue(target, value) {
+  if (!value) return target;
+  if (!target) return value;
+  if (target.includes(value)) {
+    return target;
+  }
+  return `${target}\n${value}`.trim();
+}
+
+function groupRoutesByDestination(routes) {
+  const groups = new Map();
+  const list = Array.isArray(routes) ? routes : [];
+
+  list.forEach(route => {
+    if (!route) return;
+
+    const destination = (route.destino || '').toString().trim();
+    const country = (route.pais || '').toString().trim();
+    const keyParts = [destination.toLowerCase(), country.toLowerCase()].filter(Boolean);
+    const key = keyParts.join('::') || destination.toLowerCase() || (route.route_code || '').toString().toLowerCase();
+
+    const existing = groups.get(key);
+    if (!existing) {
+      const airlineMap = new Map();
+      extractAirlinesFromRoute(route).forEach(airline => {
+        const airlineKey = (airline.nombre || '').toString().trim().toLowerCase() || `airline-${airlineMap.size + 1}`;
+        if (!airlineMap.has(airlineKey)) {
+          airlineMap.set(airlineKey, { ...airline });
+        }
+      });
+
+      groups.set(key, {
+        id: route.id ?? null,
+        primaryRouteId: route.id ?? null,
+        routeIds: route.id != null ? [route.id] : [],
+        display_order: route.display_order ?? null,
+        destino: destination || route.nombre || '',
+        pais: country,
+        tipo_vuelo: route.tipo_vuelo || '',
+        distancia_km: route.distancia_km ?? null,
+        tiempo_estimado: route.tiempo_estimado || '',
+        descripcion: route.descripcion || '',
+        notas: route.notas || '',
+        airlines: airlineMap,
+        sourceRoutes: [route]
+      });
+      return;
+    }
+
+    if (existing.primaryRouteId == null && route.id != null) {
+      existing.primaryRouteId = route.id;
+      existing.id = route.id;
+    }
+
+    if (route.id != null && !existing.routeIds.includes(route.id)) {
+      existing.routeIds.push(route.id);
+    }
+
+    if (route.display_order != null) {
+      existing.display_order =
+        existing.display_order != null
+          ? Math.min(existing.display_order, route.display_order)
+          : route.display_order;
+    }
+
+    if (!existing.destino && route.destino) {
+      existing.destino = route.destino;
+    }
+    if (!existing.pais && route.pais) {
+      existing.pais = route.pais;
+    }
+    if (!existing.tipo_vuelo && route.tipo_vuelo) {
+      existing.tipo_vuelo = route.tipo_vuelo;
+    }
+    if ((existing.distancia_km === null || existing.distancia_km === undefined) && route.distancia_km != null) {
+      existing.distancia_km = route.distancia_km;
+    }
+    if (!existing.tiempo_estimado && route.tiempo_estimado) {
+      existing.tiempo_estimado = route.tiempo_estimado;
+    }
+    existing.descripcion = mergeTextValue(existing.descripcion, route.descripcion || '');
+    existing.notas = mergeTextValue(existing.notas, route.notas || '');
+
+    const airlineMap = existing.airlines;
+    extractAirlinesFromRoute(route).forEach(airline => {
+      const keyName = (airline.nombre || '').toString().trim().toLowerCase() || `airline-${airlineMap.size + 1}`;
+      const current = airlineMap.get(keyName);
+      if (current) {
+        if (!current.frecuencia && airline.frecuencia) {
+          current.frecuencia = airline.frecuencia;
+        }
+        if (!current.notas && airline.notas) {
+          current.notas = airline.notas;
+        }
+        return;
+      }
+
+      airlineMap.set(keyName, { ...airline });
+    });
+
+    existing.sourceRoutes.push(route);
+  });
+
+  return Array.from(groups.values()).map(group => {
+    const airlines = Array.from(group.airlines.values()).sort((a, b) => {
+      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.nombre || '').localeCompare(b.nombre || '');
+    });
+
+    return {
+      ...group,
+      display_order: group.display_order ?? null,
+      airlines,
+      sourceRoutes: group.sourceRoutes
+    };
   });
 }
 
@@ -388,7 +542,7 @@ function buildAirlinesList(route) {
         .map(airline => {
           const name = escapeHtml(airline.nombre || 'Aerolínea sin nombre');
           const frequency = airline.frecuencia
-            ? `<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary-500">${escapeHtml(airline.frecuencia)}</p>`
+            ? `<p class="text-xs text-slate-500"><span class="font-semibold text-slate-600">Frecuencia:</span> ${escapeHtml(airline.frecuencia)}</p>`
             : '';
           const notes = airline.notas
             ? `<p class="text-xs text-slate-500">${formatMultiline(airline.notas)}</p>`
@@ -412,7 +566,6 @@ function buildRouteDetails(route, editable) {
   const destinationParts = [route.destino, route.pais].filter(Boolean).map(escapeHtml);
   const destination = destinationParts.length ? destinationParts.join(', ') : '—';
   const type = route.tipo_vuelo ? escapeHtml(route.tipo_vuelo) : '—';
-  const baseFrequency = route.frecuencia_base ? escapeHtml(route.frecuencia_base) : '—';
   const estimatedTime = route.tiempo_estimado ? escapeHtml(route.tiempo_estimado) : '—';
   const description = route.descripcion ? `<p class="text-sm text-slate-600">${formatMultiline(route.descripcion)}</p>` : '';
   const notes = route.notas
@@ -421,6 +574,7 @@ function buildRouteDetails(route, editable) {
         <p class="mt-1">${formatMultiline(route.notas)}</p>
       </div>`
     : '';
+  const hasSingleRoute = !Array.isArray(route.routeIds) || route.routeIds.length <= 1;
 
   return `
     <div class="space-y-5" data-route-details="${identifier}">
@@ -442,18 +596,6 @@ function buildRouteDetails(route, editable) {
             <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Tiempo estimado</dt>
             <dd class="mt-1 text-sm text-slate-700">${estimatedTime}</dd>
           </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Frecuencia base</dt>
-            <dd class="mt-1 text-sm text-slate-700">${baseFrequency}</dd>
-          </div>
-          ${
-            route.route_code
-              ? `<div>
-                  <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Código de ruta</dt>
-                  <dd class="mt-1 font-mono text-sm text-slate-700">${escapeHtml(route.route_code)}</dd>
-                </div>`
-              : ''
-          }
         </dl>
         ${description ? `<div class="mt-4 text-sm text-slate-600">${description}</div>` : ''}
       </div>
@@ -465,7 +607,7 @@ function buildRouteDetails(route, editable) {
             <p class="text-xs text-slate-500">Consulta las aerolíneas autorizadas y su frecuencia de operación.</p>
           </div>
           ${
-            editable && route.id
+            editable && route.id && hasSingleRoute
               ? `<button
                   type="button"
                   class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-3 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50"
@@ -486,7 +628,7 @@ function buildRouteDetails(route, editable) {
       ${notes}
 
       ${
-        editable
+        editable && hasSingleRoute
           ? `<div class="flex flex-wrap gap-3">
               <button
                 type="button"
@@ -533,8 +675,7 @@ function buildRouteItem(route, editable) {
         aria-expanded="false"
       >
         <div class="min-w-0 flex-1">
-          ${route.route_code ? `<p class="font-mono text-xs uppercase tracking-[0.3em] text-slate-400">${escapeHtml(route.route_code)}</p>` : ''}
-          <p class="mt-1 text-base font-semibold text-slate-800">${escapeHtml(destination)}</p>
+          <p class="text-base font-semibold text-slate-800">${escapeHtml(destination)}</p>
           ${country}
         </div>
         <div class="flex items-center gap-3">
@@ -587,10 +728,11 @@ function buildRouteGroup(label, routes, groupId, editable) {
 }
 
 function buildRoutesSection(routes, editable) {
+  const groupedRoutes = groupRoutesByDestination(routes);
   const nationalRoutes = [];
   const internationalRoutes = [];
 
-  routes.forEach(route => {
+  groupedRoutes.forEach(route => {
     const type = (route?.tipo_vuelo || '').toString().toLowerCase();
     if (type.includes('inter')) {
       internationalRoutes.push(route);
