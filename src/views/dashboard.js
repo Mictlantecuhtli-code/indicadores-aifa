@@ -1,4 +1,4 @@
-import { getAreas, getIndicators, getIndicatorHistory, getIndicatorTargets } from '../services/supabaseClient.js';
+import { getAreas, getIndicators, getIndicatorHistory, getIndicatorTargets, getCapturasFauna } from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
 
