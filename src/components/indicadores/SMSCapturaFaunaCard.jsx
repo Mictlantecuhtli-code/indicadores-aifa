@@ -327,7 +327,7 @@ export default function SMSCapturaFaunaCard({ indicator }) {
     <article className="rounded-2xl bg-white p-4 shadow-md">
       <div className="space-y-5">
         <IndicadorHeader
-          nombre={indicator?.nombre ?? 'Captura de fauna'}
+          nombre={indicator?.nombre ?? 'Fauna capturada'}
           descripcion={indicator?.descripcion}
           unidadMedida={unidadMedida}
           metaAnual={metaAnual}
