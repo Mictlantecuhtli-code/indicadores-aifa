@@ -697,23 +697,23 @@ function buildRouteItem(route, editable) {
     <li class="border-b border-slate-100 last:border-b-0" data-route-item="${identifier}">
       <button
         type="button"
-        class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 sm:px-6"
+        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition hover:bg-slate-50 sm:px-5"
         data-action="toggle-route"
         data-route-target="${identifier}"
         aria-expanded="false"
       >
         <div class="min-w-0 flex-1">
-          <p class="text-base font-semibold text-slate-800">${escapeHtml(destination)}</p>
+          <p class="text-sm font-semibold text-slate-800 sm:text-base">${escapeHtml(destination)}</p>
           ${country}
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <span class="hidden text-xs text-slate-500 sm:block">${airlinesSummary}</span>
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 sm:h-8 sm:w-8">
             <i class="fa-solid fa-chevron-down transition duration-200" data-chevron></i>
           </span>
         </div>
       </button>
-      <div class="hidden border-t border-slate-100 bg-slate-50 px-5 py-5 sm:px-6" data-route-content="${identifier}">
+      <div class="hidden border-t border-slate-100 bg-slate-50 px-4 py-4 text-sm sm:px-6 sm:py-5" data-route-content="${identifier}">
         ${buildRouteDetails(route, editable)}
       </div>
     </li>
@@ -735,16 +735,16 @@ function buildRouteGroup(label, routes, groupId, editable) {
     <div class="rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5" data-route-group="${groupId}">
       <button
         type="button"
-        class="flex w-full items-center justify-between gap-4 rounded-3xl bg-slate-50 px-5 py-4 text-left transition hover:bg-slate-100 sm:px-6"
+        class="flex w-full items-center justify-between gap-3 rounded-3xl bg-slate-50 px-4 py-3 text-left text-sm transition hover:bg-slate-100 sm:gap-4 sm:px-6 sm:py-4"
         data-action="toggle-group"
         data-group-id="${groupId}"
         aria-expanded="false"
       >
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-primary-600">${label}</p>
-          <p class="mt-1 text-sm text-slate-600">${count === 1 ? '1 destino disponible' : `${count} destinos disponibles`}</p>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary-600 sm:text-xs">${label}</p>
+          <p class="mt-1 text-xs text-slate-600 sm:text-sm">${count === 1 ? '1 destino disponible' : `${count} destinos disponibles`}</p>
         </div>
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-600 sm:h-9 sm:w-9">
           <i class="fa-solid fa-chevron-down transition duration-200" data-chevron></i>
         </span>
       </button>
