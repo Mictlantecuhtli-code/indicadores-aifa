@@ -733,15 +733,25 @@ function getBadgeStyles(color) {
   };
 }
 
-// Función buildAreaTree modificada para excluir "Sin Asignar"
-
 function buildAreaTree(areas) {
   const byParent = new Map();
-  
-  // CAMBIO: Filtrar áreas que contengan "sin asignar" en el nombre
+
   const filteredAreas = (areas ?? []).filter(area => {
-  const nombre = (area?.nombre ?? '').toString().toLowerCase().trim();
-  return nombre && !nombre.includes('Sin asignar');
+    const normalizedName = (area?.nombre ?? '').toString().toLowerCase().trim();
+
+    if (!normalizedName) {
+      return false;
+    }
+
+    if (normalizedName.includes('sin asignar')) {
+      return false;
+    }
+
+    if (normalizedName === 'sms') {
+      return false;
+    }
+
+    return true;
   });
   
   filteredAreas.forEach(area => {
