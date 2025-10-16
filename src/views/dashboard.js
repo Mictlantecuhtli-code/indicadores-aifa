@@ -2663,14 +2663,32 @@ function extractDirectionRoots(tree) {
     if (!node) return;
 
     if (isGeneralDirection(node) && Array.isArray(node.children) && node.children.length) {
-      directions.push(...node.children);
+      // Filtrar las direcciones hijas que queremos ocultar
+      const filteredChildren = node.children.filter(child => !shouldHideDirection(child));
+      directions.push(...filteredChildren);
       return;
     }
 
-    directions.push(node);
+    // Solo agregar la dirección si no está en la lista de direcciones a ocultar
+    if (!shouldHideDirection(node)) {
+      directions.push(node);
+    }
   });
 
   return directions;
+}
+
+function shouldHideDirection(direction) {
+  if (!direction) return false;
+  
+  const name = direction?.nombre?.toLowerCase?.() ?? '';
+  const key = direction?.clave?.toLowerCase?.() ?? '';
+  
+  // Ocultar direcciones SMS y Sin Asignar
+  if (name === 'sms' || key === 'sms') return true;
+  if (name === 'sin asignar' || name.includes('sin asignar')) return true;
+  
+  return false;
 }
 
 function getDirectionChildrenLabel(direction) {
