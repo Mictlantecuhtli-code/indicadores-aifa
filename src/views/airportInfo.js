@@ -68,6 +68,22 @@ function canEdit() {
   return EDITABLE_ROLES.has(role);
 }
 
+function normalizeSectionKey(value) {
+  if (!value) return null;
+
+  return (
+    value
+      .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .trim() || null
+  );
+}
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
   return value
@@ -102,14 +118,24 @@ function formatTimestamp(value) {
 function mergeSections(sections) {
   const byKey = new Map();
   sections.forEach(section => {
-    if (!section || !section.section_key) return;
-    byKey.set(section.section_key, section);
+    if (!section) return;
+    const normalizedKey = normalizeSectionKey(section.section_key || section.sectionKey || section.id || section.title);
+    if (!normalizedKey) return;
+
+    const normalizedSection = {
+      ...section,
+      section_key: section.section_key || section.sectionKey || normalizedKey
+    };
+
+    byKey.set(normalizedKey, normalizedSection);
   });
 
   const merged = SECTION_BLUEPRINTS.map(blueprint => {
-    const existing = byKey.get(blueprint.key);
+    const normalizedKey = normalizeSectionKey(blueprint.key);
+    const existing = normalizedKey ? byKey.get(normalizedKey) : null;
+
     if (existing) {
-      byKey.delete(blueprint.key);
+      byKey.delete(normalizedKey);
       return {
         ...existing,
         title: existing.title || blueprint.title,
@@ -118,16 +144,18 @@ function mergeSections(sections) {
       };
     }
 
+    const fallbackKey = normalizedKey || blueprint.key;
+
     return {
       id: null,
-      section_key: blueprint.key,
+      section_key: fallbackKey,
       title: blueprint.title,
       description: blueprint.description || '',
       content: [],
       display_order: blueprint.order ?? null,
       updated_at: null
     };
-  });
+  }).filter(Boolean);
 
   const extras = Array.from(byKey.values()).sort((a, b) => {
     const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
@@ -669,23 +697,23 @@ function buildRouteItem(route, editable) {
     <li class="border-b border-slate-100 last:border-b-0" data-route-item="${identifier}">
       <button
         type="button"
-        class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 sm:px-6"
+        class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition hover:bg-slate-50 sm:px-5"
         data-action="toggle-route"
         data-route-target="${identifier}"
         aria-expanded="false"
       >
         <div class="min-w-0 flex-1">
-          <p class="text-base font-semibold text-slate-800">${escapeHtml(destination)}</p>
+          <p class="text-sm font-semibold text-slate-800 sm:text-base">${escapeHtml(destination)}</p>
           ${country}
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <span class="hidden text-xs text-slate-500 sm:block">${airlinesSummary}</span>
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 sm:h-8 sm:w-8">
             <i class="fa-solid fa-chevron-down transition duration-200" data-chevron></i>
           </span>
         </div>
       </button>
-      <div class="hidden border-t border-slate-100 bg-slate-50 px-5 py-5 sm:px-6" data-route-content="${identifier}">
+      <div class="hidden border-t border-slate-100 bg-slate-50 px-4 py-4 text-sm sm:px-6 sm:py-5" data-route-content="${identifier}">
         ${buildRouteDetails(route, editable)}
       </div>
     </li>
@@ -707,16 +735,16 @@ function buildRouteGroup(label, routes, groupId, editable) {
     <div class="rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5" data-route-group="${groupId}">
       <button
         type="button"
-        class="flex w-full items-center justify-between gap-4 rounded-3xl bg-slate-50 px-5 py-4 text-left transition hover:bg-slate-100 sm:px-6"
+        class="flex w-full items-center justify-between gap-3 rounded-3xl bg-slate-50 px-4 py-3 text-left text-sm transition hover:bg-slate-100 sm:gap-4 sm:px-6 sm:py-4"
         data-action="toggle-group"
         data-group-id="${groupId}"
         aria-expanded="false"
       >
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-primary-600">${label}</p>
-          <p class="mt-1 text-sm text-slate-600">${count === 1 ? '1 destino disponible' : `${count} destinos disponibles`}</p>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-primary-600 sm:text-xs">${label}</p>
+          <p class="mt-1 text-xs text-slate-600 sm:text-sm">${count === 1 ? '1 destino disponible' : `${count} destinos disponibles`}</p>
         </div>
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-600 sm:h-9 sm:w-9">
           <i class="fa-solid fa-chevron-down transition duration-200" data-chevron></i>
         </span>
       </button>
