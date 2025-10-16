@@ -96,7 +96,7 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
       {
         codes: ['SMS-02', 'SMS-FAUNA'],
         keywords: ['captur', 'fauna'],
-        fallbackTitle: 'Fauna capturada'
+        fallbackTitle: 'Captura de Fauna'
       }
     ]
   },
@@ -1227,7 +1227,7 @@ export default function DashboardPage() {
         const aggregate = result[aggregateIndex];
         result[aggregateIndex] = {
           ...aggregate,
-          nombre: aggregate?.nombre ?? 'Fauna capturada',
+          nombre: 'Captura de Fauna',
           descripcion:
             aggregate?.descripcion ?? 'Capturas acumuladas de fauna (aves, mamíferos y reptiles).',
           _orden: aggregate._orden ?? faunaOrder,
@@ -1239,7 +1239,7 @@ export default function DashboardPage() {
           result.push({
             id: 'sms-fauna-aggregate',
             clave: 'SMS-FAUNA',
-            nombre: 'Fauna capturada',
+            nombre: 'Captura de Fauna',
             descripcion: 'Capturas acumuladas de fauna (aves, mamíferos y reptiles).',
             unidad_medida: reference.unidad_medida ?? null,
             meta_anual: reference.meta_anual ?? null,
