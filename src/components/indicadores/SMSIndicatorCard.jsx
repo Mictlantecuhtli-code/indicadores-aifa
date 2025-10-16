@@ -18,6 +18,7 @@ import {
   Tooltip,
   ReferenceLine
 } from 'recharts';
+import SMSCapturaFaunaCard from './SMSCapturaFaunaCard.jsx';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -158,7 +159,38 @@ function SMSChartTooltip({ active, payload, label, unidadMedida }) {
   );
 }
 
+function normalizeIndicatorName(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isFaunaCaptureIndicator(indicator) {
+  if (!indicator) return false;
+  if (Array.isArray(indicator._faunaSourceIds) && indicator._faunaSourceIds.length) {
+    return true;
+  }
+
+  const code = indicator?.clave?.toString().trim().toUpperCase();
+  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+    return true;
+  }
+
+  const name = normalizeIndicatorName(indicator?.nombre);
+  if (!name) return false;
+  if (name.includes('captura') && name.includes('fauna')) return true;
+  if (name.includes('capturas por especie')) return true;
+  return false;
+}
+
 export default function SMSIndicatorCard({ indicator }) {
+  if (isFaunaCaptureIndicator(indicator)) {
+    return <SMSCapturaFaunaCard indicator={indicator} />;
+  }
+
   const queryClient = useQueryClient();
 
   const historyQuery = useQuery({

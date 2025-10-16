@@ -57,6 +57,169 @@ const CATEGORY_ICON_MAP = {
 
 const MONTH_SHORT_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+function normalizeIndicatorLabel(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const FAUNA_SPECIES_NAMES = new Set(
+  [
+    'capturas de aves realizadas',
+    'capturas de mamiferos realizadas',
+    'capturas de mamíferos realizadas',
+    'capturas de reptiles realizadas'
+  ].map(normalizeIndicatorLabel)
+);
+
+const FAUNA_SPECIES_KEYWORD_SETS = [
+  ['captur', 'ave'],
+  ['captur', 'mamif'],
+  ['captur', 'reptil']
+];
+
+const SMS_OBJECTIVE_BLUEPRINTS = [
+  {
+    id: 'objective-1',
+    title: 'Objetivo 1',
+    description:
+      'Mantener la tasa de impactos con fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-01'],
+        keywords: ['impact', 'fauna'],
+        fallbackTitle: 'Impactos de fauna'
+      },
+      {
+        codes: ['SMS-02', 'SMS-FAUNA'],
+        keywords: ['captur', 'fauna'],
+        fallbackTitle: 'Fauna capturada'
+      }
+    ]
+  },
+  {
+    id: 'objective-2',
+    title: 'Objetivo 2',
+    description:
+      'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-03'],
+        keywords: ['confiabilidad', 'disponibilidad', 'pista'],
+        fallbackTitle: 'Índice de confiabilidad y disponibilidad de pista'
+      },
+      {
+        codes: ['SMS-04'],
+        keywords: ['luces', 'operativas', 'pista'],
+        fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
+      }
+    ]
+  },
+  {
+    id: 'objective-3',
+    title: 'Objetivo 3',
+    description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-05A'],
+        keywords: ['pci', '04c'],
+        fallbackTitle: 'Índice de condición de pavimento (PCI) pista 04C–22C'
+      },
+      {
+        codes: ['SMS-05B'],
+        keywords: ['pci', '04l'],
+        fallbackTitle: 'Índice de condición de pavimento (PCI) pista 04L–22R'
+      },
+      {
+        codes: ['SMS-07'],
+        keywords: ['mantenimiento', 'pavimento'],
+        fallbackTitle: 'Porcentaje de mantenimiento realizado'
+      },
+      {
+        codes: ['SMS-06'],
+        keywords: ['disponibilidad', 'pistas'],
+        fallbackTitle: 'Índice de disponibilidad'
+      }
+    ]
+  },
+  {
+    id: 'objective-4',
+    title: 'Objetivo 4',
+    description:
+      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA.',
+    indicatorMatchers: [
+      {
+        codes: ['SMS-08'],
+        keywords: ['capacitaciones', 'sms'],
+        fallbackTitle: 'Capacitaciones SMS'
+      },
+      {
+        codes: ['SMS-09'],
+        keywords: ['supervisiones', 'seguridad'],
+        fallbackTitle: 'Supervisiones en materia de seguridad operacional'
+      }
+    ]
+  }
+];
+
+function isFaunaSpeciesIndicator(indicator) {
+  const name = normalizeIndicatorLabel(indicator?.nombre);
+  if (!name) return false;
+  if (FAUNA_SPECIES_NAMES.has(name)) return true;
+
+  return FAUNA_SPECIES_KEYWORD_SETS.some(keywords =>
+    keywords.every(keyword => name.includes(keyword))
+  );
+}
+
+function matchesIndicatorMatcher(indicator, matcher = {}) {
+  if (!indicator) return false;
+
+  const code = indicator?.clave?.toString().trim().toUpperCase() ?? '';
+  if (matcher.codes?.length) {
+    const codeMatch = matcher.codes.some(candidate => code === candidate.toUpperCase());
+    if (codeMatch) {
+      return true;
+    }
+  }
+
+  const name = normalizeIndicatorLabel(indicator?.nombre);
+  const description = normalizeIndicatorLabel(indicator?.descripcion);
+
+  if (matcher.keywords?.length) {
+    const keywords = matcher.keywords.map(word => word.toString().toLowerCase());
+    const haystacks = [name, description].filter(Boolean);
+    if (
+      haystacks.some(text => keywords.every(keyword => text.includes(keyword)))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isFaunaAggregateIndicator(indicator) {
+  if (!indicator) return false;
+  if (Array.isArray(indicator._faunaSourceIds) && indicator._faunaSourceIds.length) {
+    return true;
+  }
+
+  const code = indicator?.clave?.toString().trim().toUpperCase();
+  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+    return true;
+  }
+
+  const name = normalizeIndicatorLabel(indicator?.nombre);
+  if (!name) return false;
+  if (name.includes('captura') && name.includes('fauna')) return true;
+  if (name.includes('capturas por especie')) return true;
+  return false;
+}
+
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -1023,7 +1186,7 @@ export default function DashboardPage() {
 
   const smsIndicators = useMemo(() => {
     const records = indicatorsQuery.data ?? [];
-    const normalized = records.filter(record => {
+    const smsRecords = records.filter(record => {
       const code = record?.clave?.toString().toUpperCase() ?? '';
       const name = record?.nombre?.toString().toLowerCase() ?? '';
       const description = record?.descripcion?.toString().toLowerCase() ?? '';
@@ -1034,20 +1197,114 @@ export default function DashboardPage() {
         name.includes('safety management') ||
         description.includes('safety management')
       );
-    });
-
-    return normalized
+    })
       .map(item => ({
         ...item,
         _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER
-      }))
+      }));
+
+    const faunaSpecies = [];
+    const baseList = [];
+
+    smsRecords.forEach(item => {
+      if (isFaunaSpeciesIndicator(item)) {
+        faunaSpecies.push(item);
+      } else {
+        baseList.push(item);
+      }
+    });
+
+    let result = [...baseList];
+
+    if (faunaSpecies.length) {
+      const faunaOrder = Math.min(
+        ...faunaSpecies.map(entry => entry._orden ?? Number.MAX_SAFE_INTEGER)
+      );
+      const faunaSourceIds = faunaSpecies.map(entry => entry.id).filter(Boolean);
+      const aggregateIndex = result.findIndex(isFaunaAggregateIndicator);
+
+      if (aggregateIndex >= 0) {
+        const aggregate = result[aggregateIndex];
+        result[aggregateIndex] = {
+          ...aggregate,
+          nombre: aggregate?.nombre ?? 'Fauna capturada',
+          descripcion:
+            aggregate?.descripcion ?? 'Capturas acumuladas de fauna (aves, mamíferos y reptiles).',
+          _orden: aggregate._orden ?? faunaOrder,
+          _faunaSourceIds: faunaSourceIds
+        };
+      } else {
+        const reference = faunaSpecies[0] ?? null;
+        if (reference) {
+          result.push({
+            id: 'sms-fauna-aggregate',
+            clave: 'SMS-FAUNA',
+            nombre: 'Fauna capturada',
+            descripcion: 'Capturas acumuladas de fauna (aves, mamíferos y reptiles).',
+            unidad_medida: reference.unidad_medida ?? null,
+            meta_anual: reference.meta_anual ?? null,
+            meta_objetivo: reference.meta_objetivo ?? null,
+            area_nombre: reference.area_nombre ?? reference.area ?? null,
+            area_clave: reference.area_clave ?? null,
+            _orden: faunaOrder,
+            _faunaSourceIds: faunaSourceIds,
+            _isSynthetic: true
+          });
+        }
+      }
+    }
+
+    return result.sort((a, b) => {
+      if (a._orden !== b._orden) {
+        return a._orden - b._orden;
+      }
+      return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
+    });
+  }, [indicatorsQuery.data]);
+
+  const { smsObjectiveGroups, smsUnassignedIndicators } = useMemo(() => {
+    if (!smsIndicators.length) {
+      return { smsObjectiveGroups: [], smsUnassignedIndicators: [] };
+    }
+
+    const usedIds = new Set();
+    const objectives = [];
+
+    SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
+      const matchedIndicators = [];
+
+      objective.indicatorMatchers.forEach(matcher => {
+        const match = smsIndicators.find(
+          indicator => !usedIds.has(indicator.id) && matchesIndicatorMatcher(indicator, matcher)
+        );
+
+        if (match) {
+          usedIds.add(match.id);
+          matchedIndicators.push(match);
+        }
+      });
+
+      if (matchedIndicators.length) {
+        objectives.push({
+          id: objective.id,
+          title: objective.title,
+          description: objective.description,
+          indicators: matchedIndicators
+        });
+      }
+    });
+
+    const leftovers = smsIndicators
+      .filter(indicator => !usedIds.has(indicator.id))
       .sort((a, b) => {
         if (a._orden !== b._orden) {
           return a._orden - b._orden;
         }
         return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
       });
-  }, [indicatorsQuery.data]);
+
+    return { smsObjectiveGroups: objectives, smsUnassignedIndicators: leftovers };
+  }, [smsIndicators]);
 
   const sms05A = useMemo(() => {
     return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05A') ?? null;
@@ -1110,11 +1367,40 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 No se pudieron cargar los indicadores SMS.
               </div>
-            ) : smsIndicators.length ? (
-              <div className="space-y-6">
-                {smsIndicators.map(indicator => (
-                  <SMSIndicatorCard key={indicator.id} indicator={indicator} />
+            ) : smsObjectiveGroups.length || smsUnassignedIndicators.length ? (
+              <div className="space-y-8">
+                {smsObjectiveGroups.map(objective => (
+                  <section key={objective.id} className="space-y-4">
+                    <header className="space-y-1">
+                      <h3 className="text-base font-semibold text-slate-800">{objective.title}</h3>
+                      {objective.description ? (
+                        <p className="text-sm text-slate-500">{objective.description}</p>
+                      ) : null}
+                    </header>
+                    <div className="space-y-6">
+                      {objective.indicators.map(indicator => (
+                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
+                      ))}
+                    </div>
+                  </section>
                 ))}
+
+                {smsUnassignedIndicators.length ? (
+                  <section className="space-y-4">
+                    <header className="space-y-1">
+                      <h3 className="text-base font-semibold text-slate-800">Otros indicadores</h3>
+                      <p className="text-sm text-slate-500">
+                        Indicadores de Seguridad Operacional sin objetivo asignado.
+                      </p>
+                    </header>
+                    <div className="space-y-6">
+                      {smsUnassignedIndicators.map(indicator => (
+                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
                 {sms05A && sms05B ? (
                   <SMSComparativoPCI indicadorA={sms05A} indicadorB={sms05B} meta={70} />
                 ) : null}
