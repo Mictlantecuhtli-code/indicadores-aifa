@@ -2198,20 +2198,19 @@ function buildSmsIndicatorItem(definition) {
     `;
   }
 
-  const blueprints = resolveOptionBlueprints(definition);
-  const options = definition.dataKey
-    ? blueprints.map(blueprint => ({
-        id: `${definition.id}-${blueprint.id}`,
-        label: blueprint.buildLabel(definition.entity),
-        type: blueprint.type,
-        scenario: blueprint.scenario,
-        dataKey: definition.dataKey
-      }))
-    : [];
-
+  // Hacer el indicador directamente clickeable sin opciones intermedias
   return `
-    <li class="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-      <div class="flex items-start gap-3">
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+        data-option-button
+        data-option-id="${definition.id}-direct"
+        data-option-type="monthly"
+        data-option-scenario=""
+        data-option-label="${escapeHtml(definition.title)}"
+        data-option-datakey="${definition.dataKey ?? ''}"
+      >
         <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
           <i class="${definition.iconClass} h-4 w-4"></i>
         </span>
@@ -2219,8 +2218,7 @@ function buildSmsIndicatorItem(definition) {
           <p class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</p>
           ${definition.subtitle ? `<p class="mt-0.5 text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</p>` : ''}
         </div>
-      </div>
-      ${options.length ? `<ul class="mt-3 space-y-2">${options.map(buildOptionMarkup).join('')}</ul>` : ''}
+      </button>
     </li>
   `;
 }
