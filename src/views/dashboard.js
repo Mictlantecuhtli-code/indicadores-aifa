@@ -869,50 +869,36 @@ function formatTrendLabel(year, month, referenceYear = null) {
   return `${shortLabel} ${shortYear}`;
 }
 
-function forecastArima(values = [], steps = 6) {
+function forecastLinearRegression(values = [], steps = 6) {
   const series = values.map(toNumber).filter(value => value !== null);
 
-  if (series.length < 4 || steps <= 0) {
+  if (series.length < 3 || steps <= 0) {
     return [];
   }
 
-  const diffs = [];
-  for (let index = 1; index < series.length; index += 1) {
-    diffs.push(series[index] - series[index - 1]);
+  const n = series.length;
+  const indices = series.map((_, index) => index);
+
+  const sumX = indices.reduce((total, value) => total + value, 0);
+  const sumY = series.reduce((total, value) => total + value, 0);
+  const sumXY = indices.reduce((total, index, position) => total + index * series[position], 0);
+  const sumXX = indices.reduce((total, index) => total + index * index, 0);
+
+  const denominator = n * sumXX - sumX * sumX;
+  let slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
+  if (!Number.isFinite(slope)) {
+    slope = 0;
   }
-
-  if (diffs.length < 2) {
-    return [];
-  }
-
-  const meanDiff = diffs.reduce((total, value) => total + value, 0) / diffs.length;
-
-  let numerator = 0;
-  let denominator = 0;
-  for (let index = 1; index < diffs.length; index += 1) {
-    const prev = diffs[index - 1] - meanDiff;
-    const current = diffs[index] - meanDiff;
-    numerator += prev * current;
-    denominator += prev * prev;
-  }
-
-  let phi = denominator !== 0 ? numerator / denominator : 0;
-  if (!Number.isFinite(phi)) {
-    phi = 0;
-  } else {
-    const LIMIT = 0.99;
-    phi = Math.max(-LIMIT, Math.min(LIMIT, phi));
+  let intercept = n !== 0 ? (sumY - slope * sumX) / n : 0;
+  if (!Number.isFinite(intercept)) {
+    intercept = 0;
   }
 
   const predictions = [];
-  let lastValue = series[series.length - 1];
-  let lastDiff = diffs[diffs.length - 1];
-
-  for (let step = 0; step < steps; step += 1) {
-    const forecastDiff = meanDiff + phi * (lastDiff - meanDiff);
-    lastValue += forecastDiff;
-    predictions.push(lastValue);
-    lastDiff = forecastDiff;
+  for (let step = 1; step <= steps; step += 1) {
+    const index = n - 1 + step;
+    const value = intercept + slope * index;
+    predictions.push(value);
   }
 
   return predictions;
@@ -950,7 +936,7 @@ function computeForecastData(realData, type, { periods = 6 } = {}) {
     return null;
   }
 
-  const predictions = forecastArima(numericSeries, periods);
+  const predictions = forecastLinearRegression(numericSeries, periods);
   if (!predictions.length) {
     return null;
   }
