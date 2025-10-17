@@ -266,39 +266,132 @@ function computeTotals(rows = [], { type } = {}) {
   };
 }
 
-function forecastLinearRegression(values = [], steps = 6) {
+function forecastWithHoltLinear(series, steps, alpha = 0.5, beta = 0.3) {
+  if (series.length === 0 || steps <= 0) {
+    return [];
+  }
+
+  let level = series[0];
+  let trend = series.length > 1 ? series[1] - series[0] : 0;
+
+  if (!Number.isFinite(level)) level = 0;
+  if (!Number.isFinite(trend)) trend = 0;
+
+  const fallbackValue = Number.isFinite(series[series.length - 1])
+    ? series[series.length - 1]
+    : level;
+
+  for (let index = 1; index < series.length; index += 1) {
+    const value = series[index];
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    const previousLevel = level;
+    level = alpha * value + (1 - alpha) * (level + trend);
+    trend = beta * (level - previousLevel) + (1 - beta) * trend;
+  }
+
+  const predictions = [];
+  for (let step = 1; step <= steps; step += 1) {
+    const value = level + step * trend;
+    predictions.push(Number.isFinite(value) ? value : fallbackValue);
+  }
+  return predictions;
+}
+
+function forecastWithHoltWinters(series, steps, {
+  alpha = 0.4,
+  beta = 0.3,
+  gamma = 0.3,
+  seasonLength = 12
+} = {}) {
+  if (series.length < 2 || steps <= 0) {
+    return [];
+  }
+
+  const maxSeason = Math.min(seasonLength, Math.floor(series.length / 2));
+  if (!Number.isFinite(maxSeason) || maxSeason < 2) {
+    return forecastWithHoltLinear(series, steps, alpha, beta);
+  }
+
+  const effectiveSeasonLength = maxSeason;
+  const seasonCount = Math.floor(series.length / effectiveSeasonLength);
+  if (seasonCount < 2) {
+    return forecastWithHoltLinear(series, steps, alpha, beta);
+  }
+
+  const seasonals = new Array(effectiveSeasonLength).fill(0);
+  const seasonAverages = [];
+  for (let seasonIndex = 0; seasonIndex < seasonCount; seasonIndex += 1) {
+    const start = seasonIndex * effectiveSeasonLength;
+    let sum = 0;
+    for (let offset = 0; offset < effectiveSeasonLength; offset += 1) {
+      sum += series[start + offset];
+    }
+    seasonAverages.push(sum / effectiveSeasonLength);
+  }
+
+  for (let position = 0; position < effectiveSeasonLength; position += 1) {
+    let sum = 0;
+    for (let seasonIndex = 0; seasonIndex < seasonCount; seasonIndex += 1) {
+      const value = series[seasonIndex * effectiveSeasonLength + position];
+      sum += value - seasonAverages[seasonIndex];
+    }
+    seasonals[position] = sum / seasonCount;
+  }
+
+  let level = seasonAverages[0];
+  if (!Number.isFinite(level)) {
+    level = series[0];
+  }
+  let trendSum = 0;
+  for (let i = 0; i < effectiveSeasonLength; i += 1) {
+    const first = series[i];
+    const second = series[i + effectiveSeasonLength];
+    if (Number.isFinite(first) && Number.isFinite(second)) {
+      trendSum += (second - first) / effectiveSeasonLength;
+    }
+  }
+  let trend = trendSum / effectiveSeasonLength;
+  if (!Number.isFinite(trend)) {
+    trend = 0;
+  }
+
+  const fallbackValue = Number.isFinite(series[series.length - 1])
+    ? series[series.length - 1]
+    : level;
+
+  for (let index = 0; index < series.length; index += 1) {
+    const value = series[index];
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    const seasonIndex = index % effectiveSeasonLength;
+    const previousLevel = level;
+    const seasonal = seasonals[seasonIndex];
+    level = alpha * (value - seasonal) + (1 - alpha) * (level + trend);
+    trend = beta * (level - previousLevel) + (1 - beta) * trend;
+    seasonals[seasonIndex] = gamma * (value - level) + (1 - gamma) * seasonal;
+  }
+
+  const predictions = [];
+  for (let step = 1; step <= steps; step += 1) {
+    const seasonIndex = (series.length + step - 1) % effectiveSeasonLength;
+    const value = level + step * trend + seasonals[seasonIndex];
+    predictions.push(Number.isFinite(value) ? value : fallbackValue);
+  }
+
+  return predictions;
+}
+
+function forecastExponentialSmoothing(values = [], steps = 6, options = {}) {
   const series = values.map(value => Number(value)).filter(value => Number.isFinite(value));
 
   if (series.length < 3 || steps <= 0) {
     return [];
   }
 
-  const n = series.length;
-  const indices = series.map((_, index) => index);
-
-  const sumX = indices.reduce((total, value) => total + value, 0);
-  const sumY = series.reduce((total, value) => total + value, 0);
-  const sumXY = indices.reduce((total, index, position) => total + index * series[position], 0);
-  const sumXX = indices.reduce((total, index) => total + index * index, 0);
-
-  const denominator = n * sumXX - sumX * sumX;
-  let slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
-  if (!Number.isFinite(slope)) {
-    slope = 0;
-  }
-  let intercept = n !== 0 ? (sumY - slope * sumX) / n : 0;
-  if (!Number.isFinite(intercept)) {
-    intercept = 0;
-  }
-
-  const predictions = [];
-  for (let step = 1; step <= steps; step += 1) {
-    const index = n - 1 + step;
-    const value = intercept + slope * index;
-    predictions.push(value);
-  }
-
-  return predictions;
+  return forecastWithHoltWinters(series, steps, options);
 }
 
 function addMonths(year, month, offset) {
@@ -329,7 +422,7 @@ function computeForecast({ type, history = [], latestRecord, periods = 6 }) {
     return null;
   }
 
-  const predictions = forecastLinearRegression(series, periods);
+  const predictions = forecastExponentialSmoothing(series, periods, { seasonLength: 12 });
   if (!predictions.length) {
     return null;
   }
