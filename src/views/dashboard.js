@@ -105,32 +105,40 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
     }
   ]
 },
-  {
-    id: 'objective-2',
-    title: 'Objetivo 2',
-    description: 'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
-    iconClass: 'fa-solid fa-lightbulb',
-    isGroupedVisualization: true, // Nuevo flag para indicar visualización agrupada
-    indicatorMatchers: [
-      {
-        codes: ['SMS-03A'],
-        keywords: ['confiabilidad'],
-        fallbackTitle: 'Índice de Confiabilidad (%)',
-        chartColor: '#3b82f6' // Azul para confiabilidad
-      },
-      {
-        codes: ['SMS-03B'],
-        keywords: ['disponibilidad'],
-        fallbackTitle: 'Índice de Disponibilidad (%)',
-        chartColor: '#f97316' // Naranja para disponibilidad
-      },
-      {
-        codes: ['SMS-04'],
-        keywords: ['luces', 'operativas', 'pista'],
-        fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
-      }
-    ]
-  },
+{
+  id: 'objective-2',
+  title: 'Objetivo 2',
+  description: 'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+  iconClass: 'fa-solid fa-lightbulb',
+  isGroupedVisualization: true,
+  indicatorMatchers: [
+    {
+      codes: ['SMS-03A-C'],
+      keywords: ['confiabilidad', '04c'],
+      fallbackTitle: 'Índice de Confiabilidad (%) - Pista 04C-22C'
+    },
+    {
+      codes: ['SMS-03A-L'],
+      keywords: ['confiabilidad', '04l'],
+      fallbackTitle: 'Índice de Confiabilidad (%) - Pista 04L-22R'
+    },
+    {
+      codes: ['SMS-03B-C'],
+      keywords: ['disponibilidad', '04c'],
+      fallbackTitle: 'Índice de Disponibilidad (%) - Pista 04C-22C'
+    },
+    {
+      codes: ['SMS-03B-L'],
+      keywords: ['disponibilidad', '04l'],
+      fallbackTitle: 'Índice de Disponibilidad (%) - Pista 04L-22R'
+    },
+    {
+      codes: ['SMS-04'],
+      keywords: ['luces', 'operativas', 'pista'],
+      fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
+    }
+  ]
+},
   {
     id: 'objective-3',
     title: 'Objetivo 3',
@@ -2353,19 +2361,25 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
 // CAMBIO: Ahora acepta los parámetros showHistorical y showTrend para controlar histórico extendido y tendencia proyectada
 
 function buildChartConfig(realData, type, scenario, chartType = 'line', showHistorical = false) {
-  // NUEVA LÓGICA PARA OBJETIVO 2 SMS
-  if (Array.isArray(realData) && realData.length > 1) {
-    // Verificar si es el objetivo 2 (ambos indicadores SMS-03A y SMS-03B)
-    const hasConfiabilidad = realData.some(data => data.indicator?.clave === 'SMS-03A');
-    const hasDisponibilidad = realData.some(data => data.indicator?.clave === 'SMS-03B');
+    if (Array.isArray(realData) && realData.length >= 4) {
+    // Verificar si tenemos los 4 indicadores del objetivo 2
+    const smsIndicators = realData.filter(data => 
+      data.indicator?.clave && data.indicator.clave.startsWith('SMS-03')
+    );
     
-    if (hasConfiabilidad && hasDisponibilidad) {
-      return buildSmsObjective2ChartConfig(realData, 'bar'); // Forzar barras para esta visualización
+    if (smsIndicators.length >= 4) {
+      const hasConfC = smsIndicators.some(data => data.indicator?.clave === 'SMS-03A-C');
+      const hasConfL = smsIndicators.some(data => data.indicator?.clave === 'SMS-03A-L');
+      const hasDispC = smsIndicators.some(data => data.indicator?.clave === 'SMS-03B-C');
+      const hasDispL = smsIndicators.some(data => data.indicator?.clave === 'SMS-03B-L');
+      
+      if (hasConfC && hasConfL && hasDispC && hasDispL) {
+        return buildSmsObjective2ChartConfig(smsIndicators, 'bar');
+      }
     }
   }
   
-  // CONTINÚA CON LA LÓGICA EXISTENTE...
-  if (!realData) return null;
+    if (!realData) return null;
   
   if (type === 'monthly') {
     return buildMonthlyChartConfig(realData, chartType, showHistorical);
@@ -3474,57 +3488,128 @@ function buildDirectionSectionsMarkup(tree) {
   return directions.map(buildDirectionSection).join('');
 }
 
+function buildSmsObjective2ModalMarkup(indicatorsData, config) {
+  const title = 'Objetivo 2 - Índice de Confiabilidad y Disponibilidad de Pistas';
+  
+  return `
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+        <header class="flex items-center justify-between p-6 border-b border-slate-200">
+          <div>
+            <h2 class="text-xl font-semibold text-slate-900">${title}</h2>
+            <p class="text-sm text-slate-500 mt-1">
+              Comparativo mensual por indicador con niveles de alerta
+            </p>
+          </div>
+          <button type="button" data-close-modal class="text-slate-400 hover:text-slate-600">
+            <i class="fa-solid fa-times text-xl"></i>
+          </button>
+        </header>
+        
+        <div class="flex-1 p-6 overflow-auto">
+          <div class="bg-slate-50 rounded-lg p-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div class="text-center">
+                <div class="w-4 h-4 bg-green-600 mx-auto mb-1 rounded"></div>
+                <span class="font-medium">Objetivo: 90%</span>
+              </div>
+              <div class="text-center">
+                <div class="w-4 h-4 bg-yellow-500 mx-auto mb-1 rounded"></div>
+                <span class="font-medium">Alerta 1: 87%</span>
+              </div>
+              <div class="text-center">
+                <div class="w-4 h-4 bg-orange-500 mx-auto mb-1 rounded"></div>
+                <span class="font-medium">Alerta 2: 83%</span>
+              </div>
+              <div class="text-center">
+                <div class="w-4 h-4 bg-red-600 mx-auto mb-1 rounded"></div>
+                <span class="font-medium">Alerta 3: 80%</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-white border border-slate-200 rounded-lg p-4">
+            <canvas data-chart class="w-full" style="height: 400px;"></canvas>
+          </div>
+          
+          <div class="mt-6 text-xs text-slate-500">
+            <p><strong>Nota:</strong> Los valores mostrados son promedios de ambas pistas (04C-22C y 04L-22R). 
+            Pase el cursor sobre las barras para ver los valores detallados por pista.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
-  if (!indicatorsData || indicatorsData.length < 2) {
+  if (!indicatorsData || indicatorsData.length < 4) {
     return null;
   }
 
-  // Buscar los datos de SMS-03A y SMS-03B
-  const confiabilidadData = indicatorsData.find(data => 
-    data.indicator?.clave === 'SMS-03A'
-  );
-  const disponibilidadData = indicatorsData.find(data => 
-    data.indicator?.clave === 'SMS-03B'
-  );
+  // Buscar los datos de los 4 indicadores
+  const confC = indicatorsData.find(data => data.indicator?.clave === 'SMS-03A-C');
+  const confL = indicatorsData.find(data => data.indicator?.clave === 'SMS-03A-L');
+  const dispC = indicatorsData.find(data => data.indicator?.clave === 'SMS-03B-C');
+  const dispL = indicatorsData.find(data => data.indicator?.clave === 'SMS-03B-L');
 
-  if (!confiabilidadData || !disponibilidadData) {
+  if (!confC || !confL || !dispC || !dispL) {
     return null;
   }
 
   const currentYear = CURRENT_YEAR;
 
-  // Obtener datos por mes para ambos indicadores
-  const confiabilidadValues = Array(12).fill(null);
-  const disponibilidadValues = Array(12).fill(null);
-
-  // Procesar datos de confiabilidad
-  const confData = getDataByYear(confiabilidadData.history, currentYear);
-  confData.forEach(item => {
-    if (item.mes >= 1 && item.mes <= 12) {
-      const numericValue = Number(item.valor);
-      if (Number.isFinite(numericValue)) {
-        confiabilidadValues[item.mes - 1] = numericValue;
+  // Función helper para procesar datos por indicador
+  function processIndicatorData(indicatorData) {
+    const values = Array(12).fill(null);
+    const data = getDataByYear(indicatorData.history, currentYear);
+    data.forEach(item => {
+      if (item.mes >= 1 && item.mes <= 12) {
+        const numericValue = Number(item.valor);
+        if (Number.isFinite(numericValue)) {
+          values[item.mes - 1] = numericValue;
+        }
       }
-    }
-  });
+    });
+    return values;
+  }
 
-  // Procesar datos de disponibilidad
-  const dispData = getDataByYear(disponibilidadData.history, currentYear);
-  dispData.forEach(item => {
-    if (item.mes >= 1 && item.mes <= 12) {
-      const numericValue = Number(item.valor);
-      if (Number.isFinite(numericValue)) {
-        disponibilidadValues[item.mes - 1] = numericValue;
-      }
-    }
-  });
+  // Procesar datos de cada indicador
+  const confCValues = processIndicatorData(confC);
+  const confLValues = processIndicatorData(confL);
+  const dispCValues = processIndicatorData(dispC);
+  const dispLValues = processIndicatorData(dispL);
 
-  // Obtener metas/niveles de alerta
+  // Calcular promedios combinados para la visualización principal
+  const confiabilidadPromedio = Array(12).fill(null);
+  const disponibilidadPromedio = Array(12).fill(null);
+
+  for (let i = 0; i < 12; i++) {
+    // Promedio de confiabilidad (04C-22C + 04L-22R)
+    if (confCValues[i] !== null && confLValues[i] !== null) {
+      confiabilidadPromedio[i] = (confCValues[i] + confLValues[i]) / 2;
+    } else if (confCValues[i] !== null) {
+      confiabilidadPromedio[i] = confCValues[i];
+    } else if (confLValues[i] !== null) {
+      confiabilidadPromedio[i] = confLValues[i];
+    }
+
+    // Promedio de disponibilidad (04C-22C + 04L-22R)
+    if (dispCValues[i] !== null && dispLValues[i] !== null) {
+      disponibilidadPromedio[i] = (dispCValues[i] + dispLValues[i]) / 2;
+    } else if (dispCValues[i] !== null) {
+      disponibilidadPromedio[i] = dispCValues[i];
+    } else if (dispLValues[i] !== null) {
+      disponibilidadPromedio[i] = dispLValues[i];
+    }
+  }
+
+  // Configuración de niveles de alerta
   const alertLevels = {
-    objetivo: 90.0,    // MEDIO en la base de datos
-    alerta1: 87.0,     // Nivel de alerta 1
-    alerta2: 83.0,     // Nivel de alerta 2  
-    alerta3: 80.0      // BAJO en la base de datos
+    objetivo: 90.0,    // Verde - Objetivo institucional
+    alerta1: 87.0,     // Amarillo - Nivel de alerta 1
+    alerta2: 83.0,     // Naranja - Nivel de alerta 2  
+    alerta3: 80.0      // Rojo - Nivel de alerta 3
   };
 
   const config = {
@@ -3534,7 +3619,7 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
       datasets: [
         {
           label: 'Índice de Confiabilidad (%)',
-          data: confiabilidadValues,
+          data: confiabilidadPromedio,
           backgroundColor: 'rgba(59, 130, 246, 0.8)',
           borderColor: '#3b82f6',
           borderWidth: 1,
@@ -3543,7 +3628,7 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
         },
         {
           label: 'Índice de Disponibilidad (%)',
-          data: disponibilidadValues,
+          data: disponibilidadPromedio,
           backgroundColor: 'rgba(249, 115, 22, 0.8)',
           borderColor: '#f97316',
           borderWidth: 1,
@@ -3555,19 +3640,30 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
       scales: {
         x: {
-          stacked: false
+          stacked: false,
+          grid: {
+            display: false
+          }
         },
         y: {
           beginAtZero: false,
-          min: 75, // Empezar desde 75% para mejor visualización
-          max: 105,
+          min: 78,
+          max: 102,
           stacked: false,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.1)'
+          },
           ticks: {
             callback: function(value) {
               return value.toFixed(1) + '%';
-            }
+            },
+            stepSize: 2
           }
         }
       },
@@ -3576,7 +3672,40 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
           position: 'bottom',
           labels: {
             usePointStyle: true,
-            padding: 20
+            padding: 20,
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: function(context) {
+              return MONTHS[context[0].dataIndex].label + ' 2025';
+            },
+            label: function(context) {
+              const value = context.parsed.y;
+              return context.dataset.label + ': ' + value.toFixed(2) + '%';
+            },
+            afterBody: function(context) {
+              const monthIndex = context[0].dataIndex;
+              const details = [];
+              
+              if (confCValues[monthIndex] !== null) {
+                details.push(`Confiabilidad 04C-22C: ${confCValues[monthIndex].toFixed(2)}%`);
+              }
+              if (confLValues[monthIndex] !== null) {
+                details.push(`Confiabilidad 04L-22R: ${confLValues[monthIndex].toFixed(2)}%`);
+              }
+              if (dispCValues[monthIndex] !== null) {
+                details.push(`Disponibilidad 04C-22C: ${dispCValues[monthIndex].toFixed(2)}%`);
+              }
+              if (dispLValues[monthIndex] !== null) {
+                details.push(`Disponibilidad 04L-22R: ${dispLValues[monthIndex].toFixed(2)}%`);
+              }
+              
+              return details;
+            }
           }
         },
         annotation: {
@@ -3590,27 +3719,39 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
               borderDash: [5, 5],
               label: {
                 enabled: true,
-                content: 'Objetivo 90%',
+                content: 'Objetivo: 90%',
                 position: 'end',
                 backgroundColor: '#059669',
                 color: 'white',
-                padding: 4
+                padding: {
+                  x: 6,
+                  y: 4
+                },
+                font: {
+                  size: 10
+                }
               }
             },
             alerta1: {
               type: 'line',
               yMin: alertLevels.alerta1,
               yMax: alertLevels.alerta1,
-              borderColor: '#fbbf24',
+              borderColor: '#eab308',
               borderWidth: 2,
               borderDash: [3, 3],
               label: {
                 enabled: true,
                 content: 'Nivel de alerta 1: 87%',
                 position: 'start',
-                backgroundColor: '#fbbf24',
+                backgroundColor: '#eab308',
                 color: 'white',
-                padding: 4
+                padding: {
+                  x: 6,
+                  y: 4
+                },
+                font: {
+                  size: 10
+                }
               }
             },
             alerta2: {
@@ -3626,7 +3767,13 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
                 position: 'start',
                 backgroundColor: '#f97316',
                 color: 'white',
-                padding: 4
+                padding: {
+                  x: 6,
+                  y: 4
+                },
+                font: {
+                  size: 10
+                }
               }
             },
             alerta3: {
@@ -3642,7 +3789,13 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
                 position: 'start',
                 backgroundColor: '#dc2626',
                 color: 'white',
-                padding: 4
+                padding: {
+                  x: 6,
+                  y: 4
+                },
+                font: {
+                  size: 10
+                }
               }
             }
           }
@@ -3652,6 +3805,74 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
   };
 
   return config;
+}
+async function loadSmsObjective2Data() {
+  try {
+    const indicatorCodes = ['SMS-03A-C', 'SMS-03A-L', 'SMS-03B-C', 'SMS-03B-L'];
+    const indicatorsData = [];
+    
+    for (const code of indicatorCodes) {
+      const indicator = cachedIndicators.find(ind => ind.clave === code);
+      if (indicator) {
+        const [history, targets] = await Promise.all([
+          getIndicatorHistory(indicator.id),
+          getIndicatorTargets(indicator.id)
+        ]);
+        
+        indicatorsData.push({
+          indicator,
+          history: Array.isArray(history) ? history : [],
+          targets: Array.isArray(targets) ? targets : []
+        });
+      }
+    }
+    
+    return indicatorsData.length === 4 ? indicatorsData : null;
+  } catch (error) {
+    console.error('Error loading SMS Objective 2 data:', error);
+    return null;
+  }
+}
+
+async function handleSmsObjective2Option(optionBlueprint) {
+  const container = ensureModalContainer();
+  
+  renderLoading(container, 'Cargando datos del Objetivo 2...');
+  
+  try {
+    const indicatorsData = await loadSmsObjective2Data();
+    
+    if (!indicatorsData) {
+      throw new Error('No se pudieron cargar los datos del Objetivo 2');
+    }
+    
+    const config = buildSmsObjective2ChartConfig(indicatorsData, 'bar');
+    
+    if (!config) {
+      throw new Error('No se pudo generar la configuración del gráfico');
+    }
+    
+    const modalMarkup = buildSmsObjective2ModalMarkup(indicatorsData, config);
+    container.innerHTML = modalMarkup;
+    
+    // Inicializar el gráfico
+    const canvas = container.querySelector('canvas[data-chart]');
+    if (canvas) {
+      const chart = new Chart(canvas, config);
+      activeModalChart = chart;
+    }
+    
+    // Agregar event listeners para cerrar
+    const closeButtons = container.querySelectorAll('[data-close-modal]');
+    closeButtons.forEach(button => {
+      button.addEventListener('click', closeIndicatorModal);
+    });
+    
+    document.body.classList.add('overflow-hidden');
+  } catch (error) {
+    console.error('Error al cargar Objetivo 2:', error);
+    renderError(container, error);
+  }
 }
 
 async function renderDirections(container) {
