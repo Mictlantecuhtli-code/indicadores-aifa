@@ -19,6 +19,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import SMSCapturaFaunaCard from './SMSCapturaFaunaCard.jsx';
+import SMSRunwayMetricCard from './SMSRunwayMetricCard.jsx';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -189,6 +190,10 @@ function isFaunaCaptureIndicator(indicator) {
 export default function SMSIndicatorCard({ indicator }) {
   if (isFaunaCaptureIndicator(indicator)) {
     return <SMSCapturaFaunaCard indicator={indicator} />;
+  }
+
+  if (indicator?._isRunwayMetric) {
+    return <SMSRunwayMetricCard indicator={indicator} />;
   }
 
   const queryClient = useQueryClient();
