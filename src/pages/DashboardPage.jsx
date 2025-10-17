@@ -340,7 +340,7 @@ function computeForecast({ type, history = [], latestRecord, periods = 6 }) {
     .map(item => toNumber(item?.valor))
     .filter(value => Number.isFinite(value));
 
-  if (series.length < 6) {
+  if (series.length < 4) {
     return null;
   }
 
@@ -1124,15 +1124,40 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
   }, [hasForecast]);
 
   const detailRows = useMemo(() => {
-    if (!analytics?.rows) {
+    if (!analytics?.rows?.length) {
       return [];
     }
-    const baseRows = analytics.rows.map(row => ({ ...row, isForecast: false }));
-    if (showTrend && analytics.forecast?.rows?.length) {
-      const forecastRows = analytics.forecast.rows.map(row => ({ ...row, isForecast: true }));
-      return [...baseRows, ...forecastRows];
+
+    const rows = analytics.rows.map(row => ({ ...row, rowType: 'history' }));
+
+    if (analytics?.totals) {
+      rows.push({
+        period: 'Total',
+        currentValue: analytics.totals.currentValue,
+        comparisonValue: analytics.totals.comparisonValue,
+        diff: analytics.totals.diff,
+        pct: analytics.totals.pct,
+        rowType: 'history-total'
+      });
     }
-    return baseRows;
+
+    if (showTrend && analytics.forecast?.rows?.length) {
+      const forecastRows = analytics.forecast.rows.map(row => ({ ...row, rowType: 'forecast' }));
+      rows.push(...forecastRows);
+
+      if (analytics.forecast?.totals) {
+        rows.push({
+          period: 'Total tendencia',
+          currentValue: analytics.forecast.totals.currentValue,
+          comparisonValue: analytics.forecast.totals.comparisonValue,
+          diff: analytics.forecast.totals.diff,
+          pct: analytics.forecast.totals.pct,
+          rowType: 'forecast-total'
+        });
+      }
+    }
+
+    return rows;
   }, [analytics, showTrend]);
 
   const chartDataForDisplay = useMemo(() => {
@@ -1160,9 +1185,6 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
     }
     return analytics.chartSeries;
   }, [analytics, showTrend]);
-
-  const totals = analytics?.totals ?? null;
-  const forecastTotals = analytics?.forecast?.totals ?? null;
 
   const formatPctValue = value => {
     if (analytics?.type === 'scenario') {
@@ -1295,23 +1317,31 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {hasForecast ? (
-                        <label
-                          className={classNames(
-                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition',
-                            showTrend
-                              ? 'border-violet-300 bg-violet-50 text-violet-700'
-                              : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600'
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
-                            checked={showTrend}
-                            onChange={event => setShowTrend(event.target.checked)}
-                          />
-                          Tendencia
-                        </label>
+                      <label
+                        className={classNames(
+                          'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition',
+                          showTrend && hasForecast
+                            ? 'border-violet-300 bg-violet-50 text-violet-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600',
+                          hasForecast ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:border-slate-200 hover:text-slate-500'
+                        )}
+                        title={hasForecast ? 'Mostrar tendencia proyectada' : 'Sin datos suficientes para proyectar'}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                          checked={showTrend}
+                          disabled={!hasForecast}
+                          onChange={event => {
+                            if (hasForecast) {
+                              setShowTrend(event.target.checked);
+                            }
+                          }}
+                        />
+                        Tendencia
+                      </label>
+                      {!hasForecast ? (
+                        <span className="text-xs font-medium text-slate-400">Sin datos suficientes</span>
                       ) : null}
                       <ChartTypeToggle value={chartType} onChange={setChartType} />
                     </div>
@@ -1342,23 +1372,27 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {detailRows.map((row, index) => {
-                          const key = row.isForecast ? `forecast-${index}` : `${row.period}-${index}`;
+                          const isForecastRow = row.rowType === 'forecast' || row.rowType === 'forecast-total';
+                          const isTotalRow = row.rowType === 'history-total' || row.rowType === 'forecast-total';
+                          const key = `${row.rowType ?? 'history'}-${row.period ?? index}-${index}`;
                           return (
                             <tr
                               key={key}
                               className={classNames(
                                 'hover:bg-slate-50/60',
-                                row.isForecast ? 'bg-violet-50/40' : ''
+                                isForecastRow ? 'bg-violet-50/40' : '',
+                                isTotalRow ? 'bg-slate-50/80 font-semibold' : ''
                               )}
                             >
                               <td
                                 className={classNames(
                                   'px-4 py-2 text-left text-slate-700',
-                                  row.isForecast ? 'text-violet-800' : ''
+                                  isForecastRow ? 'text-violet-800' : '',
+                                  isTotalRow && !isForecastRow ? 'text-slate-900' : ''
                                 )}
                               >
                                 {row.period}
-                                {row.isForecast ? (
+                                {isForecastRow ? (
                                   <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-xs font-semibold text-violet-700">
                                     Tendencia
                                   </span>
@@ -1367,7 +1401,7 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                               <td
                                 className={classNames(
                                   'px-4 py-2 text-right',
-                                  row.isForecast ? 'text-violet-800' : 'text-slate-900'
+                                  isForecastRow ? 'text-violet-800' : 'text-slate-900'
                                 )}
                               >
                                 {formatNumber(row.currentValue, { decimals: 0 })}
@@ -1375,7 +1409,7 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                               <td
                                 className={classNames(
                                   'px-4 py-2 text-right',
-                                  row.isForecast ? 'text-violet-700' : 'text-slate-900'
+                                  isForecastRow ? 'text-violet-700' : 'text-slate-900'
                                 )}
                               >
                                 {formatNumber(row.comparisonValue, { decimals: 0 })}
@@ -1383,7 +1417,7 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                               <td
                                 className={classNames(
                                   'px-4 py-2 text-right',
-                                  row.isForecast ? 'text-violet-700' : getTrendTextClass(row.diff)
+                                  isForecastRow ? 'text-violet-700' : getTrendTextClass(row.diff)
                                 )}
                               >
                                 {formatSignedNumber(row.diff)}
@@ -1391,7 +1425,7 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                               <td
                                 className={classNames(
                                   'px-4 py-2 text-right',
-                                  row.isForecast ? 'text-violet-700' : 'text-slate-500'
+                                  isForecastRow ? 'text-violet-700' : 'text-slate-500'
                                 )}
                               >
                                 {formatPctValue(row.pct)}
@@ -1400,45 +1434,6 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                           );
                         })}
                       </tbody>
-                      <tfoot className="bg-slate-50 text-sm font-semibold text-slate-800">
-                        {totals ? (
-                          <tr>
-                            <td className="px-4 py-2 text-left text-slate-700">Total</td>
-                            <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(totals.currentValue, { decimals: 0 })}
-                            </td>
-                            <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(totals.comparisonValue, { decimals: 0 })}
-                            </td>
-                            <td className={classNames('px-4 py-2 text-right', getTrendTextClass(totals.diff))}>
-                              {formatSignedNumber(totals.diff)}
-                            </td>
-                            <td className="px-4 py-2 text-right text-slate-500">{formatPctValue(totals.pct)}</td>
-                          </tr>
-                        ) : null}
-                        {showTrend && forecastTotals ? (
-                          <tr className="text-violet-800">
-                            <td className="px-4 py-2 text-left">
-                              Total tendencia
-                              <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-xs font-semibold text-violet-700">
-                                Tendencia
-                              </span>
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              {formatNumber(forecastTotals.currentValue, { decimals: 0 })}
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              {formatNumber(forecastTotals.comparisonValue, { decimals: 0 })}
-                            </td>
-                            <td className="px-4 py-2 text-right text-violet-700">
-                              {formatSignedNumber(forecastTotals.diff)}
-                            </td>
-                            <td className="px-4 py-2 text-right text-violet-700">
-                              {formatPctValue(forecastTotals.pct)}
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tfoot>
                     </table>
                   </div>
                 </section>
