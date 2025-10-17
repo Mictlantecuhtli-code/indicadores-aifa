@@ -35,7 +35,6 @@ import {
   YAxis
 } from 'recharts';
 import SMSIndicatorCard from '../components/indicadores/SMSIndicatorCard.jsx';
-import SMSComparativoPCI from '../components/indicadores/SMSComparativoPCI.jsx';
 
 const TEMPLATE_META = {
   mensual_vs_anterior: { type: 'monthly', icon: LineChartIcon },
@@ -56,6 +55,16 @@ const CATEGORY_ICON_MAP = {
 };
 
 const MONTH_SHORT_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+function normalizeIndicatorCode(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .trim();
+}
 
 function normalizeIndicatorLabel(value) {
   return (value ?? '')
@@ -106,6 +115,16 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
     description:
       'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
     indicatorMatchers: [
+      {
+        codes: ['SMS-03A'],
+        keywords: ['confiabilidad', 'pista'],
+        fallbackTitle: 'Índice de confiabilidad de pistas'
+      },
+      {
+        codes: ['SMS-03B'],
+        keywords: ['disponibilidad', 'pista'],
+        fallbackTitle: 'Índice de disponibilidad de pistas'
+      },
       {
         codes: ['SMS-03'],
         keywords: ['confiabilidad', 'disponibilidad', 'pista'],
@@ -178,9 +197,11 @@ function isFaunaSpeciesIndicator(indicator) {
 function matchesIndicatorMatcher(indicator, matcher = {}) {
   if (!indicator) return false;
 
-  const code = indicator?.clave?.toString().trim().toUpperCase() ?? '';
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
   if (matcher.codes?.length) {
-    const codeMatch = matcher.codes.some(candidate => code === candidate.toUpperCase());
+    const codeMatch = matcher.codes
+      .map(candidate => normalizeIndicatorCode(candidate))
+      .some(candidate => candidate && candidate === normalizedCode);
     if (codeMatch) {
       return true;
     }
@@ -208,8 +229,8 @@ function isFaunaAggregateIndicator(indicator) {
     return true;
   }
 
-  const code = indicator?.clave?.toString().trim().toUpperCase();
-  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
+  if (normalizedCode === 'SMS02' || normalizedCode === 'SMSFAUNA') {
     return true;
   }
 
@@ -1699,22 +1720,40 @@ export default function DashboardPage() {
 
   const smsIndicators = useMemo(() => {
     const records = indicatorsQuery.data ?? [];
-    const smsRecords = records.filter(record => {
-      const code = record?.clave?.toString().toUpperCase() ?? '';
-      const name = record?.nombre?.toString().toLowerCase() ?? '';
-      const description = record?.descripcion?.toString().toLowerCase() ?? '';
-      return (
-        code.startsWith('SMS-') ||
-        name.includes('seguridad operacional') ||
-        description.includes('seguridad operacional') ||
-        name.includes('safety management') ||
-        description.includes('safety management')
-      );
-    })
-      .map(item => ({
-        ...item,
-        _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER
-      }));
+    const smsRecords = records
+      .filter(record => {
+        const code = record?.clave?.toString().toUpperCase() ?? '';
+        const name = record?.nombre?.toString().toLowerCase() ?? '';
+        const description = record?.descripcion?.toString().toLowerCase() ?? '';
+        return (
+          code.startsWith('SMS-') ||
+          name.includes('seguridad operacional') ||
+          description.includes('seguridad operacional') ||
+          name.includes('safety management') ||
+          description.includes('safety management')
+        );
+      })
+      .map(item => {
+        const rawCode = (item?.clave ?? '').toString();
+        const normalizedCode = normalizeIndicatorCode(rawCode);
+        const runwayMetricType = normalizedCode === 'SMS03A' ? 'confiabilidad' : normalizedCode === 'SMS03B' ? 'disponibilidad' : null;
+        const trimmedCode =
+          typeof rawCode === 'string'
+            ? rawCode.trim()
+            : rawCode !== null && rawCode !== undefined
+              ? String(rawCode).trim()
+              : item?.clave;
+
+        return {
+          ...item,
+          clave: trimmedCode,
+          _normalizedCode: normalizedCode,
+          _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER,
+          _isRunwayMetric: Boolean(runwayMetricType),
+          _runwayMetricType: runwayMetricType,
+          _runwayMetricRunways: runwayMetricType ? ['04C-22C', '04L-22R'] : []
+        };
+      });
 
     const faunaSpecies = [];
     const baseList = [];
@@ -1775,15 +1814,14 @@ export default function DashboardPage() {
     });
   }, [indicatorsQuery.data]);
 
-  const { smsObjectiveGroups, smsUnassignedIndicators } = useMemo(() => {
+  const smsObjectiveGroups = useMemo(() => {
     if (!smsIndicators.length) {
-      return { smsObjectiveGroups: [], smsUnassignedIndicators: [] };
+      return [];
     }
 
     const usedIds = new Set();
-    const objectives = [];
 
-    SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
+    const objectives = SMS_OBJECTIVE_BLUEPRINTS.map(objective => {
       const matchedIndicators = [];
 
       objective.indicatorMatchers.forEach(matcher => {
@@ -1797,34 +1835,20 @@ export default function DashboardPage() {
         }
       });
 
-      if (matchedIndicators.length) {
-        objectives.push({
-          id: objective.id,
-          title: objective.title,
-          description: objective.description,
-          indicators: matchedIndicators
-        });
-      }
+      return {
+        id: objective.id,
+        title: objective.title,
+        description: objective.description,
+        indicators: matchedIndicators.sort((a, b) => {
+          if ((a?._orden ?? 0) !== (b?._orden ?? 0)) {
+            return (a?._orden ?? 0) - (b?._orden ?? 0);
+          }
+          return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
+        })
+      };
     });
 
-    const leftovers = smsIndicators
-      .filter(indicator => !usedIds.has(indicator.id))
-      .sort((a, b) => {
-        if (a._orden !== b._orden) {
-          return a._orden - b._orden;
-        }
-        return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
-      });
-
-    return { smsObjectiveGroups: objectives, smsUnassignedIndicators: leftovers };
-  }, [smsIndicators]);
-
-  const sms05A = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05A') ?? null;
-  }, [smsIndicators]);
-
-  const sms05B = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05B') ?? null;
+    return objectives;
   }, [smsIndicators]);
 
   const activeEntry = activeOptionId ? optionIndex.get(activeOptionId) ?? null : null;
@@ -1880,7 +1904,7 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 No se pudieron cargar los indicadores SMS.
               </div>
-            ) : smsObjectiveGroups.length || smsUnassignedIndicators.length ? (
+            ) : smsObjectiveGroups.length ? (
               <div className="space-y-8">
                 {smsObjectiveGroups.map(objective => (
                   <section key={objective.id} className="space-y-4">
@@ -1891,32 +1915,18 @@ export default function DashboardPage() {
                       ) : null}
                     </header>
                     <div className="space-y-6">
-                      {objective.indicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
+                      {objective.indicators.length ? (
+                        objective.indicators.map(indicator => (
+                          <SMSIndicatorCard key={indicator.id} indicator={indicator} />
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+                          No hay indicadores asignados a este objetivo.
+                        </div>
+                      )}
                     </div>
                   </section>
                 ))}
-
-                {smsUnassignedIndicators.length ? (
-                  <section className="space-y-4">
-                    <header className="space-y-1">
-                      <h3 className="text-base font-semibold text-slate-800">Otros indicadores</h3>
-                      <p className="text-sm text-slate-500">
-                        Indicadores de Seguridad Operacional sin objetivo asignado.
-                      </p>
-                    </header>
-                    <div className="space-y-6">
-                      {smsUnassignedIndicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {sms05A && sms05B ? (
-                  <SMSComparativoPCI indicadorA={sms05A} indicadorB={sms05B} meta={70} />
-                ) : null}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">

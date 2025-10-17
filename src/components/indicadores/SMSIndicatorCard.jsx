@@ -19,6 +19,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import SMSCapturaFaunaCard from './SMSCapturaFaunaCard.jsx';
+import SMSRunwayMetricCard from './SMSRunwayMetricCard.jsx';
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -159,6 +160,16 @@ function SMSChartTooltip({ active, payload, label, unidadMedida }) {
   );
 }
 
+function normalizeIndicatorCode(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .trim();
+}
+
 function normalizeIndicatorName(value) {
   return (value ?? '')
     .toString()
@@ -174,8 +185,8 @@ function isFaunaCaptureIndicator(indicator) {
     return true;
   }
 
-  const code = indicator?.clave?.toString().trim().toUpperCase();
-  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
+  if (normalizedCode === 'SMS02' || normalizedCode === 'SMSFAUNA') {
     return true;
   }
 
@@ -189,6 +200,10 @@ function isFaunaCaptureIndicator(indicator) {
 export default function SMSIndicatorCard({ indicator }) {
   if (isFaunaCaptureIndicator(indicator)) {
     return <SMSCapturaFaunaCard indicator={indicator} />;
+  }
+
+  if (indicator?._isRunwayMetric) {
+    return <SMSRunwayMetricCard indicator={indicator} />;
   }
 
   const queryClient = useQueryClient();
