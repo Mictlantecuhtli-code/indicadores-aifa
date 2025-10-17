@@ -35,7 +35,6 @@ import {
   YAxis
 } from 'recharts';
 import SMSIndicatorCard from '../components/indicadores/SMSIndicatorCard.jsx';
-import SMSComparativoPCI from '../components/indicadores/SMSComparativoPCI.jsx';
 
 const TEMPLATE_META = {
   mensual_vs_anterior: { type: 'monthly', icon: LineChartIcon },
@@ -106,6 +105,16 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
     description:
       'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
     indicatorMatchers: [
+      {
+        codes: ['SMS-03A'],
+        keywords: ['confiabilidad', 'pista'],
+        fallbackTitle: 'Índice de confiabilidad de pistas'
+      },
+      {
+        codes: ['SMS-03B'],
+        keywords: ['disponibilidad', 'pista'],
+        fallbackTitle: 'Índice de disponibilidad de pistas'
+      },
       {
         codes: ['SMS-03'],
         keywords: ['confiabilidad', 'disponibilidad', 'pista'],
@@ -1711,10 +1720,17 @@ export default function DashboardPage() {
         description.includes('safety management')
       );
     })
-      .map(item => ({
-        ...item,
-        _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER
-      }));
+      .map(item => {
+        const code = (item?.clave ?? '').toString().trim().toUpperCase();
+        const runwayMetricType = code === 'SMS-03A' ? 'confiabilidad' : code === 'SMS-03B' ? 'disponibilidad' : null;
+        return {
+          ...item,
+          _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER,
+          _isRunwayMetric: Boolean(runwayMetricType),
+          _runwayMetricType: runwayMetricType,
+          _runwayMetricRunways: runwayMetricType ? ['04C-22C', '04L-22R'] : []
+        };
+      });
 
     const faunaSpecies = [];
     const baseList = [];
@@ -1775,9 +1791,9 @@ export default function DashboardPage() {
     });
   }, [indicatorsQuery.data]);
 
-  const { smsObjectiveGroups, smsUnassignedIndicators } = useMemo(() => {
+  const smsObjectiveGroups = useMemo(() => {
     if (!smsIndicators.length) {
-      return { smsObjectiveGroups: [], smsUnassignedIndicators: [] };
+      return [];
     }
 
     const usedIds = new Set();
@@ -1807,24 +1823,7 @@ export default function DashboardPage() {
       }
     });
 
-    const leftovers = smsIndicators
-      .filter(indicator => !usedIds.has(indicator.id))
-      .sort((a, b) => {
-        if (a._orden !== b._orden) {
-          return a._orden - b._orden;
-        }
-        return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
-      });
-
-    return { smsObjectiveGroups: objectives, smsUnassignedIndicators: leftovers };
-  }, [smsIndicators]);
-
-  const sms05A = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05A') ?? null;
-  }, [smsIndicators]);
-
-  const sms05B = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05B') ?? null;
+    return objectives;
   }, [smsIndicators]);
 
   const activeEntry = activeOptionId ? optionIndex.get(activeOptionId) ?? null : null;
@@ -1880,7 +1879,7 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 No se pudieron cargar los indicadores SMS.
               </div>
-            ) : smsObjectiveGroups.length || smsUnassignedIndicators.length ? (
+            ) : smsObjectiveGroups.length ? (
               <div className="space-y-8">
                 {smsObjectiveGroups.map(objective => (
                   <section key={objective.id} className="space-y-4">
@@ -1897,26 +1896,6 @@ export default function DashboardPage() {
                     </div>
                   </section>
                 ))}
-
-                {smsUnassignedIndicators.length ? (
-                  <section className="space-y-4">
-                    <header className="space-y-1">
-                      <h3 className="text-base font-semibold text-slate-800">Otros indicadores</h3>
-                      <p className="text-sm text-slate-500">
-                        Indicadores de Seguridad Operacional sin objetivo asignado.
-                      </p>
-                    </header>
-                    <div className="space-y-6">
-                      {smsUnassignedIndicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {sms05A && sms05B ? (
-                  <SMSComparativoPCI indicadorA={sms05A} indicadorB={sms05B} meta={70} />
-                ) : null}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
