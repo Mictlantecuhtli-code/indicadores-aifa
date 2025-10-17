@@ -796,6 +796,51 @@ function toNumber(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function buildValueTimeline(records = []) {
+  return records
+    .map(item => ({
+      year: Number(item?.anio),
+      month: Number(item?.mes ?? 0),
+      value: toNumber(item?.valor)
+    }))
+    .filter(item => Number.isFinite(item.year) && Number.isFinite(item.month) && item.value !== null)
+    .sort((a, b) => {
+      if (a.year === b.year) {
+        return a.month - b.month;
+      }
+      return a.year - b.year;
+    });
+}
+
+function buildTimelineIndex(timeline = []) {
+  const map = new Map();
+  timeline.forEach((entry, index) => {
+    const key = `${entry.year}-${entry.month}`;
+    if (!map.has(key)) {
+      map.set(key, index);
+    }
+  });
+  return map;
+}
+
+function findPreviousTimelineEntry(timeline = [], indexMap = new Map(), year, month) {
+  const key = `${Number(year)}-${Number(month)}`;
+  if (!indexMap.has(key)) {
+    return null;
+  }
+
+  let pointer = indexMap.get(key) - 1;
+  while (pointer >= 0) {
+    const candidate = timeline[pointer];
+    if (candidate && candidate.value !== null) {
+      return candidate;
+    }
+    pointer -= 1;
+  }
+
+  return null;
+}
+
 function computeTotals(rows = []) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return null;
@@ -1140,6 +1185,8 @@ function buildSummary(realData, type, scenario) {
   const { history } = realData;
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
+  const timeline = buildValueTimeline(history);
+  const timelineIndex = buildTimelineIndex(timeline);
   
   if (!lastLoaded) {
     return {
@@ -1157,23 +1204,23 @@ function buildSummary(realData, type, scenario) {
     const latestMonth = lastLoaded.month;
     const latestYear = lastLoaded.year;
     const month = MONTHS[latestMonth - 1] || MONTHS[MONTHS.length - 1];
-    
+
     const currentItem = history.find(
       item => item.anio === latestYear && item.mes === latestMonth
     );
-    const comparisonItem = history.find(
-      item => item.anio === latestYear - 1 && item.mes === latestMonth
-    );
-    
+    const comparisonEntry = findPreviousTimelineEntry(timeline, timelineIndex, latestYear, latestMonth);
+
     const current = currentItem ? Number(currentItem.valor) : null;
-    const comparison = comparisonItem ? Number(comparisonItem.valor) : null;
+    const comparison = comparisonEntry ? comparisonEntry.value : null;
     const diff = current != null && comparison != null ? current - comparison : null;
     const pct = diff != null && comparison ? diff / comparison : null;
-    
+
     return {
-      title: `Comparativo mensual (${month.label} ${latestYear})`,
-      currentLabel: `${latestYear}`,
-      comparisonLabel: `${latestYear - 1}`,
+      title: `Variación mensual (${month.label} ${latestYear})`,
+      currentLabel: `${month.label} ${latestYear}`,
+      comparisonLabel: comparisonEntry
+        ? formatMonthLabel(comparisonEntry.year, comparisonEntry.month)
+        : 'Mes anterior',
       currentValue: current,
       comparisonValue: comparison,
       diff,
@@ -1292,26 +1339,23 @@ function buildTableContent(realData, type, scenario, options = {}) {
   }
 
   if (!hasHistoricalYears) {
-    headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
+    headerCells.push('<th class="px-4 py-2 text-right">Mes anterior</th>');
   }
 
-  const variationNote = hasHistoricalYears
-    ? `<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
-        currentYear - 1
-      } &rarr; ${currentYear}</div>`
-    : '';
+  const variationNote =
+    '<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">vs. mes anterior</div>';
 
   headerCells.push(
     hasHistoricalYears
       ? `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
-      : '<th class="px-4 py-2 text-right">Variación</th>'
+      : `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
   );
 
   if (!isSms) {
     headerCells.push(
       hasHistoricalYears
         ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
-        : '<th class="px-4 py-2 text-right">% Variación</th>'
+        : `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
     );
   }
 
@@ -1328,6 +1372,8 @@ function buildTableContent(realData, type, scenario, options = {}) {
 
   const { history } = realData;
   const lastLoaded = getLastLoadedMonth(history);
+  const timeline = buildValueTimeline(history);
+  const timelineIndex = buildTimelineIndex(timeline);
   const unit = indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
   const percentageScale = isSms ? 'percentage' : 'auto';
@@ -1351,8 +1397,6 @@ function buildTableContent(realData, type, scenario, options = {}) {
 
   if (type === 'monthly') {
     const currentData = getDataByYear(history, currentYear);
-    const previousData = getDataByYear(history, currentYear - 1);
-
     const toNumeric = value => {
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : null;
@@ -1363,14 +1407,6 @@ function buildTableContent(realData, type, scenario, options = {}) {
       const numeric = toNumeric(item.valor);
       if (numeric != null) {
         currentMap.set(item.mes, numeric);
-      }
-    });
-
-    const previousMap = new Map();
-    previousData.forEach(item => {
-      const numeric = toNumeric(item.valor);
-      if (numeric != null) {
-        previousMap.set(item.mes, numeric);
       }
     });
 
@@ -1393,10 +1429,14 @@ function buildTableContent(realData, type, scenario, options = {}) {
 
     rows = monthsToRender.map(monthNumber => {
       const current = currentMap.has(monthNumber) ? currentMap.get(monthNumber) : null;
-      const hasComparison = previousMap.has(monthNumber);
-      const comparison = hasComparison ? previousMap.get(monthNumber) : null;
+      if (current === null) {
+        return null;
+      }
+
+      const previousEntry = findPreviousTimelineEntry(timeline, timelineIndex, currentYear, monthNumber);
+      const comparison = previousEntry ? previousEntry.value : null;
       const diff = current != null && comparison != null ? current - comparison : null;
-      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+      const pct = diff !== null && comparison !== null && comparison !== 0 ? diff / comparison : null;
 
       const historicalValues = showHistorical
         ? historicalYears.map(year => {
@@ -1413,7 +1453,7 @@ function buildTableContent(realData, type, scenario, options = {}) {
         pct,
         historicalValues
       };
-    });
+    }).filter(Boolean);
   } else if (type === 'quarterly') {
     const completeQuarters = filterCompleteQuarters(history, currentYear);
 
@@ -1547,7 +1587,8 @@ function buildTableContent(realData, type, scenario, options = {}) {
     });
   }
 
-  const forecastRows = showTrend && forecastData?.rows?.length ? forecastData.rows : [];
+  const includeForecast = showTrend && !showHistorical && forecastData?.rows?.length;
+  const forecastRows = includeForecast ? forecastData.rows : [];
   if (forecastRows.length) {
     const historicalPlaceholder = showHistorical
       ? Array.from({ length: historicalYears.length }, () => null)
@@ -1565,7 +1606,7 @@ function buildTableContent(realData, type, scenario, options = {}) {
       });
     });
 
-    if (forecastData?.totals) {
+    if (includeForecast && forecastData?.totals) {
       tableRows.push({
         label: 'Total tendencia',
         current: forecastData.totals.current,
