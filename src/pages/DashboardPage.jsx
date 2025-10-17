@@ -35,7 +35,6 @@ import {
   YAxis
 } from 'recharts';
 import SMSIndicatorCard from '../components/indicadores/SMSIndicatorCard.jsx';
-import SMSComparativoPCI from '../components/indicadores/SMSComparativoPCI.jsx';
 
 const TEMPLATE_META = {
   mensual_vs_anterior: { type: 'monthly', icon: LineChartIcon },
@@ -1722,7 +1721,7 @@ export default function DashboardPage() {
       );
     })
       .map(item => {
-        const code = (item?.clave ?? '').toString().toUpperCase();
+        const code = (item?.clave ?? '').toString().trim().toUpperCase();
         const runwayMetricType = code === 'SMS-03A' ? 'confiabilidad' : code === 'SMS-03B' ? 'disponibilidad' : null;
         return {
           ...item,
@@ -1827,14 +1826,6 @@ export default function DashboardPage() {
     return objectives;
   }, [smsIndicators]);
 
-  const sms05A = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05A') ?? null;
-  }, [smsIndicators]);
-
-  const sms05B = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05B') ?? null;
-  }, [smsIndicators]);
-
   const activeEntry = activeOptionId ? optionIndex.get(activeOptionId) ?? null : null;
 
   const handleCloseModal = () => setActiveOptionId(null);
@@ -1905,9 +1896,6 @@ export default function DashboardPage() {
                     </div>
                   </section>
                 ))}
-                {sms05A && sms05B ? (
-                  <SMSComparativoPCI indicadorA={sms05A} indicadorB={sms05B} meta={70} />
-                ) : null}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">

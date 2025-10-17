@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import classNames from 'classnames';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import {
@@ -441,14 +440,26 @@ export default function SMSRunwayMetricCard({ indicator }) {
     return [lower, upper <= lower ? lower + 5 : upper];
   }, [chartData, series, thresholds]);
 
-  const handleOpenModal = () => {
-    if (chartData.length) {
-      setIsModalOpen(true);
+  const openModal = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleKeyDownCard = event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openModal();
     }
   };
 
   return (
-    <article className="rounded-2xl bg-white p-4 shadow-md">
+    <article
+      className="cursor-pointer rounded-2xl bg-white p-4 shadow-md transition hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light/80 focus-visible:ring-offset-2"
+      role="button"
+      tabIndex={0}
+      onClick={openModal}
+      onKeyDown={handleKeyDownCard}
+      aria-label={indicator?.nombre ? `Ver detalle del indicador ${indicator.nombre}` : 'Ver detalle del indicador'}
+    >
       <div className="space-y-4">
         <div className="space-y-1">
           <h3 className="text-lg font-semibold text-slate-900">{indicator?.nombre}</h3>
@@ -496,23 +507,9 @@ export default function SMSRunwayMetricCard({ indicator }) {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-slate-500">
-            {latestYear ? `Datos disponibles para ${latestYear}` : 'Sin datos recientes'}
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenModal}
-            disabled={!chartData.length}
-            className={classNames(
-              'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2',
-              chartData.length
-                ? 'bg-aifa-blue text-white hover:bg-aifa-blue/90'
-                : 'cursor-not-allowed bg-slate-200 text-slate-500'
-            )}
-          >
-            Ver detalle
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+          <span>{latestYear ? `Datos disponibles para ${latestYear}` : 'Sin datos recientes'}</span>
+          <span className="font-semibold text-aifa-blue">Haz clic para ver detalle</span>
         </div>
       </div>
 
