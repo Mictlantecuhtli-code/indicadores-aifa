@@ -56,6 +56,16 @@ const CATEGORY_ICON_MAP = {
 
 const MONTH_SHORT_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+function normalizeIndicatorCode(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .trim();
+}
+
 function normalizeIndicatorLabel(value) {
   return (value ?? '')
     .toString()
@@ -187,9 +197,11 @@ function isFaunaSpeciesIndicator(indicator) {
 function matchesIndicatorMatcher(indicator, matcher = {}) {
   if (!indicator) return false;
 
-  const code = indicator?.clave?.toString().trim().toUpperCase() ?? '';
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
   if (matcher.codes?.length) {
-    const codeMatch = matcher.codes.some(candidate => code === candidate.toUpperCase());
+    const codeMatch = matcher.codes
+      .map(candidate => normalizeIndicatorCode(candidate))
+      .some(candidate => candidate && candidate === normalizedCode);
     if (codeMatch) {
       return true;
     }
@@ -217,8 +229,8 @@ function isFaunaAggregateIndicator(indicator) {
     return true;
   }
 
-  const code = indicator?.clave?.toString().trim().toUpperCase();
-  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
+  if (normalizedCode === 'SMS02' || normalizedCode === 'SMSFAUNA') {
     return true;
   }
 
@@ -1708,23 +1720,34 @@ export default function DashboardPage() {
 
   const smsIndicators = useMemo(() => {
     const records = indicatorsQuery.data ?? [];
-    const smsRecords = records.filter(record => {
-      const code = record?.clave?.toString().toUpperCase() ?? '';
-      const name = record?.nombre?.toString().toLowerCase() ?? '';
-      const description = record?.descripcion?.toString().toLowerCase() ?? '';
-      return (
-        code.startsWith('SMS-') ||
-        name.includes('seguridad operacional') ||
-        description.includes('seguridad operacional') ||
-        name.includes('safety management') ||
-        description.includes('safety management')
-      );
-    })
+    const smsRecords = records
+      .filter(record => {
+        const code = record?.clave?.toString().toUpperCase() ?? '';
+        const name = record?.nombre?.toString().toLowerCase() ?? '';
+        const description = record?.descripcion?.toString().toLowerCase() ?? '';
+        return (
+          code.startsWith('SMS-') ||
+          name.includes('seguridad operacional') ||
+          description.includes('seguridad operacional') ||
+          name.includes('safety management') ||
+          description.includes('safety management')
+        );
+      })
       .map(item => {
-        const code = (item?.clave ?? '').toString().trim().toUpperCase();
-        const runwayMetricType = code === 'SMS-03A' ? 'confiabilidad' : code === 'SMS-03B' ? 'disponibilidad' : null;
+        const rawCode = (item?.clave ?? '').toString();
+        const normalizedCode = normalizeIndicatorCode(rawCode);
+        const runwayMetricType = normalizedCode === 'SMS03A' ? 'confiabilidad' : normalizedCode === 'SMS03B' ? 'disponibilidad' : null;
+        const trimmedCode =
+          typeof rawCode === 'string'
+            ? rawCode.trim()
+            : rawCode !== null && rawCode !== undefined
+              ? String(rawCode).trim()
+              : item?.clave;
+
         return {
           ...item,
+          clave: trimmedCode,
+          _normalizedCode: normalizedCode,
           _orden: Number(item?.orden_visualizacion) || Number.MAX_SAFE_INTEGER,
           _isRunwayMetric: Boolean(runwayMetricType),
           _runwayMetricType: runwayMetricType,
@@ -1797,9 +1820,8 @@ export default function DashboardPage() {
     }
 
     const usedIds = new Set();
-    const objectives = [];
 
-    SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
+    const objectives = SMS_OBJECTIVE_BLUEPRINTS.map(objective => {
       const matchedIndicators = [];
 
       objective.indicatorMatchers.forEach(matcher => {
@@ -1813,14 +1835,17 @@ export default function DashboardPage() {
         }
       });
 
-      if (matchedIndicators.length) {
-        objectives.push({
-          id: objective.id,
-          title: objective.title,
-          description: objective.description,
-          indicators: matchedIndicators
-        });
-      }
+      return {
+        id: objective.id,
+        title: objective.title,
+        description: objective.description,
+        indicators: matchedIndicators.sort((a, b) => {
+          if ((a?._orden ?? 0) !== (b?._orden ?? 0)) {
+            return (a?._orden ?? 0) - (b?._orden ?? 0);
+          }
+          return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
+        })
+      };
     });
 
     return objectives;
@@ -1890,9 +1915,15 @@ export default function DashboardPage() {
                       ) : null}
                     </header>
                     <div className="space-y-6">
-                      {objective.indicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
+                      {objective.indicators.length ? (
+                        objective.indicators.map(indicator => (
+                          <SMSIndicatorCard key={indicator.id} indicator={indicator} />
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+                          No hay indicadores asignados a este objetivo.
+                        </div>
+                      )}
                     </div>
                   </section>
                 ))}

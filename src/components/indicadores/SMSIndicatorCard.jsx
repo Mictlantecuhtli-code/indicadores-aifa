@@ -160,6 +160,16 @@ function SMSChartTooltip({ active, payload, label, unidadMedida }) {
   );
 }
 
+function normalizeIndicatorCode(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .trim();
+}
+
 function normalizeIndicatorName(value) {
   return (value ?? '')
     .toString()
@@ -175,8 +185,8 @@ function isFaunaCaptureIndicator(indicator) {
     return true;
   }
 
-  const code = indicator?.clave?.toString().trim().toUpperCase();
-  if (code === 'SMS-02' || code === 'SMS-FAUNA') {
+  const normalizedCode = indicator?._normalizedCode ?? normalizeIndicatorCode(indicator?.clave);
+  if (normalizedCode === 'SMS02' || normalizedCode === 'SMSFAUNA') {
     return true;
   }
 
