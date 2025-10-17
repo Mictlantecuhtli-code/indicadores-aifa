@@ -110,27 +110,21 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
   title: 'Objetivo 2',
   description: 'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
   iconClass: 'fa-solid fa-lightbulb',
-  isGroupedVisualization: true,
   indicatorMatchers: [
     {
-      codes: ['SMS-03A-C'],
-      keywords: ['confiabilidad', '04c'],
-      fallbackTitle: 'Índice de Confiabilidad (%) - Pista 04C-22C'
+      codes: ['SMS-03A'],
+      keywords: ['confiabilidad', 'pistas'],
+      fallbackTitle: 'Índice de Confiabilidad de pistas'
     },
     {
-      codes: ['SMS-03A-L'],
-      keywords: ['confiabilidad', '04l'],
-      fallbackTitle: 'Índice de Confiabilidad (%) - Pista 04L-22R'
+      codes: ['SMS-03B'],
+      keywords: ['disponibilidad', 'pistas'],
+      fallbackTitle: 'Índice de Disponibilidad de pistas'
     },
     {
-      codes: ['SMS-03B-C'],
-      keywords: ['disponibilidad', '04c'],
-      fallbackTitle: 'Índice de Disponibilidad (%) - Pista 04C-22C'
-    },
-    {
-      codes: ['SMS-03B-L'],
-      keywords: ['disponibilidad', '04l'],
-      fallbackTitle: 'Índice de Disponibilidad (%) - Pista 04L-22R'
+      codes: ['SMS-04'],
+      keywords: ['luces', 'operativas', 'pista'],
+      fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
     }
   ]
 },
@@ -2005,6 +1999,242 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
 
 // Función buildQuarterlyChartConfig corregida
 // CAMBIO: Ahora soporta chartType (line/bar) y showHistorical (2 o 4 años)
+function hasPistaData(realData) {
+  if (!realData || !realData.history || !realData.history.length) return false;
+  
+  // Verificar si algún registro tiene JSON con datos de pistas en observaciones
+  return realData.history.some(item => {
+    if (!item.observaciones) return false;
+    try {
+      const data = JSON.parse(item.observaciones);
+      return data && data['04C-22C'] !== undefined && data['04L-22R'] !== undefined;
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
+function buildPistaChartConfig(realData, chartType = 'bar') {
+  if (!realData || !realData.history || !realData.history.length) {
+    return null;
+  }
+
+  const currentYear = CURRENT_YEAR;
+  const currentData = getDataByYear(realData.history, currentYear);
+
+  // Arrays para almacenar datos de cada pista
+  const pista04C = Array(12).fill(null);
+  const pista04L = Array(12).fill(null);
+  
+  let indicatorType = 'general'; // Por defecto
+
+  // Procesar datos JSON
+  currentData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12 && item.observaciones) {
+      try {
+        const pistaData = JSON.parse(item.observaciones);
+        if (pistaData['04C-22C'] !== undefined && pistaData['04L-22R'] !== undefined) {
+          pista04C[item.mes - 1] = Number(pistaData['04C-22C']);
+          pista04L[item.mes - 1] = Number(pistaData['04L-22R']);
+          if (pistaData.tipo) {
+            indicatorType = pistaData.tipo;
+          }
+        }
+      } catch (e) {
+        console.warn('Error parsing JSON for item:', item);
+      }
+    }
+  });
+
+  // Determinar colores según el tipo de indicador
+  const isConfiabilidad = indicatorType === 'confiabilidad' || 
+                         realData.indicator?.clave === 'SMS-03A' ||
+                         realData.indicator?.nombre?.toLowerCase().includes('confiabilidad');
+
+  const colors = isConfiabilidad ? {
+    pista04C: { bg: 'rgba(59, 130, 246, 0.8)', border: '#3b82f6' },  // Azul claro
+    pista04L: { bg: 'rgba(37, 99, 235, 0.8)', border: '#2563eb' }   // Azul oscuro
+  } : {
+    pista04C: { bg: 'rgba(249, 115, 22, 0.8)', border: '#f97316' }, // Naranja claro
+    pista04L: { bg: 'rgba(234, 88, 12, 0.8)', border: '#ea580c' }   // Naranja oscuro
+  };
+
+  // Configuración de niveles de alerta
+  const alertLevels = {
+    objetivo: 90.0,
+    alerta1: 87.0,
+    alerta2: 83.0,
+    alerta3: 80.0
+  };
+
+  const unit = realData?.indicator?.unidad_medida ?? null;
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const formatTick = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 1, percentageScale });
+
+  const config = {
+    type: chartType,
+    data: {
+      labels: MONTHS.map(month => month.short),
+      datasets: [
+        {
+          label: 'Pista 04C-22C',
+          data: pista04C,
+          backgroundColor: colors.pista04C.bg,
+          borderColor: colors.pista04C.border,
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        },
+        {
+          label: 'Pista 04L-22R',
+          data: pista04L,
+          backgroundColor: colors.pista04L.bg,
+          borderColor: colors.pista04L.border,
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: {
+            display: false
+          },
+          title: {
+            display: true,
+            text: '2025'
+          }
+        },
+        y: {
+          beginAtZero: false,
+          min: 75,
+          max: 105,
+          stacked: false,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.1)'
+          },
+          title: {
+            display: true,
+            text: 'Porcentaje'
+          },
+          ticks: {
+            callback: formatTick,
+            stepSize: 5
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: function(context) {
+              return MONTHS[context[0].dataIndex].label + ' 2025';
+            },
+            label: function(context) {
+              const value = context.parsed.y;
+              return context.dataset.label + ': ' + formatTick(value);
+            }
+          }
+        },
+        annotation: {
+          annotations: {
+            objetivo: {
+              type: 'line',
+              yMin: alertLevels.objetivo,
+              yMax: alertLevels.objetivo,
+              borderColor: '#059669',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              label: {
+                enabled: true,
+                content: 'Objetivo: 90%',
+                position: 'end',
+                backgroundColor: '#059669',
+                color: 'white',
+                padding: { x: 6, y: 4 },
+                font: { size: 10 }
+              }
+            },
+            alerta1: {
+              type: 'line',
+              yMin: alertLevels.alerta1,
+              yMax: alertLevels.alerta1,
+              borderColor: '#eab308',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 1: 87%',
+                position: 'start',
+                backgroundColor: '#eab308',
+                color: 'white',
+                padding: { x: 6, y: 4 },
+                font: { size: 10 }
+              }
+            },
+            alerta2: {
+              type: 'line',
+              yMin: alertLevels.alerta2,
+              yMax: alertLevels.alerta2,
+              borderColor: '#f97316',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 2: 83%',
+                position: 'start',
+                backgroundColor: '#f97316',
+                color: 'white',
+                padding: { x: 6, y: 4 },
+                font: { size: 10 }
+              }
+            },
+            alerta3: {
+              type: 'line',
+              yMin: alertLevels.alerta3,
+              yMax: alertLevels.alerta3,
+              borderColor: '#dc2626',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 3: 80%',
+                position: 'start',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                padding: { x: 6, y: 4 },
+                font: { size: 10 }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  return config;
+}
+
 
 function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical = false) {
   if (!realData || !realData.history.length) {
@@ -2356,26 +2586,14 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
 // CAMBIO: Ahora acepta los parámetros showHistorical y showTrend para controlar histórico extendido y tendencia proyectada
 
 function buildChartConfig(realData, type, scenario, chartType = 'line', showHistorical = false) {
-    if (Array.isArray(realData) && realData.length >= 4) {
-    // Verificar si tenemos los 4 indicadores del objetivo 2
-    const smsIndicators = realData.filter(data => 
-      data.indicator?.clave && data.indicator.clave.startsWith('SMS-03')
-    );
-    
-    if (smsIndicators.length >= 4) {
-      const hasConfC = smsIndicators.some(data => data.indicator?.clave === 'SMS-03A-C');
-      const hasConfL = smsIndicators.some(data => data.indicator?.clave === 'SMS-03A-L');
-      const hasDispC = smsIndicators.some(data => data.indicator?.clave === 'SMS-03B-C');
-      const hasDispL = smsIndicators.some(data => data.indicator?.clave === 'SMS-03B-L');
-      
-      if (hasConfC && hasConfL && hasDispC && hasDispL) {
-        return buildSmsObjective2ChartConfig(smsIndicators, 'bar');
-      }
-    }
+  if (!realData) return null;
+  
+  // NUEVA LÓGICA: Detectar si el indicador tiene datos de pistas en JSON
+  if (hasPistaData(realData)) {
+    return buildPistaChartConfig(realData, 'bar'); // Forzar barras para indicadores de pistas
   }
   
-    if (!realData) return null;
-  
+  // CONTINÚA CON LA LÓGICA EXISTENTE PARA OTROS INDICADORES...
   if (type === 'monthly') {
     return buildMonthlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'quarterly') {
@@ -2385,6 +2603,56 @@ function buildChartConfig(realData, type, scenario, chartType = 'line', showHist
   } else {
     return buildScenarioChartConfig(realData, scenario, chartType);
   }
+}
+
+function buildPistaSummary(realData, type, scenario) {
+  if (!realData || !realData.history.length) {
+    return {
+      current: null,
+      previous: null,
+      diff: null,
+      pct: null,
+      comparisonLabel: 'Sin datos'
+    };
+  }
+
+  const currentYear = CURRENT_YEAR;
+  const currentData = getDataByYear(realData.history, currentYear);
+  
+  if (!currentData.length) return { comparisonLabel: 'Sin datos del año actual' };
+
+  // Obtener el último mes con datos
+  const latestMonth = Math.max(...currentData.map(item => item.mes));
+  const latestData = currentData.find(item => item.mes === latestMonth);
+  
+  if (!latestData) return { comparisonLabel: 'Sin datos' };
+
+  // Para indicadores de pistas, usar el valor promedio del campo valor
+  const current = Number(latestData.valor);
+  
+  // Obtener datos del año anterior para comparación
+  const previousYear = currentYear - 1;
+  const previousData = getDataByYear(realData.history, previousYear);
+  const previousMonthData = previousData.find(item => item.mes === latestMonth);
+  const previous = previousMonthData ? Number(previousMonthData.valor) : null;
+
+  let diff = null;
+  let pct = null;
+  let comparisonLabel = `${MONTHS[latestMonth - 1].label} ${currentYear}`;
+
+  if (previous !== null) {
+    diff = current - previous;
+    pct = previous !== 0 ? (diff / previous) * 100 : 0;
+    comparisonLabel += ` vs ${MONTHS[latestMonth - 1].label} ${previousYear}`;
+  }
+
+  return {
+    current,
+    previous,
+    diff,
+    pct,
+    comparisonLabel
+  };
 }
 
 // Función buildChartTypeToggle corregida
@@ -2443,19 +2711,133 @@ function closeIndicatorModal() {
   document.body.classList.remove('overflow-hidden');
 }
 
-function buildModalMarkup({
-  label,
-  realData,
-  type,
-  scenario,
-  chartType = 'line',
-  showHistorical = false,
-  showTrend = false,
-  forecastData = null,
-  hasForecast = false,
-  trendEnabled = false,
-  trendHelperText = ''
-}) {
+function buildModalMarkup({ label, realData, type, scenario, chartType = 'line', showHistorical = false }) {
+  // Detectar si es indicador de pistas
+  const isPistaIndicator = hasPistaData(realData);
+  
+  // Usar buildPistaSummary para indicadores de pistas
+  const summary = isPistaIndicator ? 
+    buildPistaSummary(realData, type, scenario) : 
+    buildSummary(realData, type, scenario);
+
+  const { headerMarkup, bodyMarkup } = buildTableContent(realData, type, scenario, showHistorical);
+  const isSms = isSmsIndicator(realData?.indicator);
+  const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
+  const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
+  
+  // No mostrar toggle de tipo de gráfico para indicadores de pistas (siempre barras)
+  const chartToggle = isPistaIndicator ? '' : buildChartTypeToggle(chartType, type);
+  
+  const unit = realData?.indicator?.unidad_medida ?? null;
+  const numberDigits = resolveNumberDigitsByUnit(unit);
+  const percentageScale = isSms ? 'percentage' : 'auto';
+  const formatUnit = value =>
+    formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
+  const formatSignedUnit = value =>
+    formatSignedUnitValue(value, unit, {
+      numberDigits,
+      percentageDigits: 3,
+      percentageScale
+    });
+  
+  const formattedDiff = formatSignedUnit(summary.diff);
+  const formattedPct = formatPercentage(summary.pct);
+  const variationValueMarkup = isSms
+    ? `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedDiff}</p>`
+    : `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedPct}</p>`;
+  const variationDetailMarkup = isSms ? ''
+    : `<p class="mt-1 text-sm text-slate-500">${formattedDiff}</p>`;
+
+  // Título específico para indicadores de pistas
+  const modalTitle = isPistaIndicator ? 
+    (realData.indicator?.clave === 'SMS-03A' ? 'Indicador 2.1' : 'Indicador 2.2') :
+    label;
+    
+  const modalSubtitle = isPistaIndicator ?
+    realData.indicator?.nombre : 
+    scenarioLabel;
+
+  return `
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+        <header class="flex items-center justify-between p-6 border-b border-slate-200">
+          <div>
+            <h2 class="text-xl font-semibold text-slate-900">${modalTitle}</h2>
+            <p class="text-sm text-slate-500 mt-1">${modalSubtitle}</p>
+          </div>
+          <div class="flex items-center gap-4">
+            ${chartToggle}
+            <button type="button" data-close-modal class="text-slate-400 hover:text-slate-600">
+              <i class="fa-solid fa-times text-xl"></i>
+            </button>
+          </div>
+        </header>
+        
+        <div class="flex-1 flex overflow-hidden">
+          <div class="flex-1 p-6">
+            <div class="bg-white border border-slate-200 rounded-lg p-4 mb-6">
+              <canvas data-chart class="w-full" style="height: 400px;"></canvas>
+            </div>
+            
+            ${isPistaIndicator ? `
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div class="flex items-center justify-center space-x-2">
+                  <div class="w-4 h-1 bg-green-600 rounded"></div>
+                  <span class="font-medium">Objetivo: 90%</span>
+                </div>
+                <div class="flex items-center justify-center space-x-2">
+                  <div class="w-4 h-1 bg-yellow-500 rounded"></div>
+                  <span class="font-medium">Alerta 1: 87%</span>
+                </div>
+                <div class="flex items-center justify-center space-x-2">
+                  <div class="w-4 h-1 bg-orange-500 rounded"></div>
+                  <span class="font-medium">Alerta 2: 83%</span>
+                </div>
+                <div class="flex items-center justify-center space-x-2">
+                  <div class="w-4 h-1 bg-red-600 rounded"></div>
+                  <span class="font-medium">Alerta 3: 80%</span>
+                </div>
+              </div>
+            </div>
+            ` : ''}
+          </div>
+          
+          <div class="w-80 bg-slate-50 border-l border-slate-200 p-6 overflow-auto">
+            <div class="space-y-6">
+              <div>
+                <h3 class="text-lg font-semibold text-slate-900 mb-3">Resumen</h3>
+                <div class="space-y-4">
+                  <div>
+                    <p class="text-sm text-slate-500">${scenarioLabel}</p>
+                    <p class="text-2xl font-semibold text-slate-900">${formatUnit(summary.current)}</p>
+                  </div>
+                  ${summary.previous !== null ? `
+                  <div>
+                    <p class="text-sm text-slate-500">Variación</p>
+                    ${variationValueMarkup}
+                    ${variationDetailMarkup}
+                  </div>
+                  ` : ''}
+                </div>
+              </div>
+              
+              <div>
+                <h3 class="text-lg font-semibold text-slate-900 mb-3">Datos</h3>
+                <div class="space-y-2">
+                  ${headerMarkup}
+                  <div class="max-h-64 overflow-auto">
+                    ${bodyMarkup}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+} {
   const summary = buildSummary(realData, type, scenario);
   const { headerMarkup, bodyMarkup } = buildTableContent(realData, type, scenario, {
     showHistorical,
