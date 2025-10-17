@@ -790,6 +790,238 @@ function findIndicatorByDataKey(indicators, dataKey) {
 function sum(values = []) {
   return values.reduce((acc, value) => acc + (Number(value) || 0), 0);
 }
+
+function toNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildValueTimeline(records = []) {
+  return records
+    .map(item => ({
+      year: Number(item?.anio),
+      month: Number(item?.mes ?? 0),
+      value: toNumber(item?.valor)
+    }))
+    .filter(item => Number.isFinite(item.year) && Number.isFinite(item.month) && item.value !== null)
+    .sort((a, b) => {
+      if (a.year === b.year) {
+        return a.month - b.month;
+      }
+      return a.year - b.year;
+    });
+}
+
+function buildTimelineIndex(timeline = []) {
+  const map = new Map();
+  timeline.forEach((entry, index) => {
+    const key = `${entry.year}-${entry.month}`;
+    if (!map.has(key)) {
+      map.set(key, index);
+    }
+  });
+  return map;
+}
+
+function findPreviousTimelineEntry(timeline = [], indexMap = new Map(), year, month) {
+  const key = `${Number(year)}-${Number(month)}`;
+  if (!indexMap.has(key)) {
+    return null;
+  }
+
+  let pointer = indexMap.get(key) - 1;
+  while (pointer >= 0) {
+    const candidate = timeline[pointer];
+    if (candidate && candidate.value !== null) {
+      return candidate;
+    }
+    pointer -= 1;
+  }
+
+  return null;
+}
+
+function computeTotals(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  const hasCurrent = rows.some(row => toNumber(row?.current) !== null);
+  const hasComparison = rows.some(row => toNumber(row?.comparison) !== null);
+
+  if (!hasCurrent && !hasComparison) {
+    return null;
+  }
+
+  const currentSum = hasCurrent
+    ? rows.reduce((total, row) => {
+        const value = toNumber(row?.current);
+        return total + (value ?? 0);
+      }, 0)
+    : null;
+
+  const comparisonSum = hasComparison
+    ? rows.reduce((total, row) => {
+        const value = toNumber(row?.comparison);
+        return total + (value ?? 0);
+      }, 0)
+    : null;
+
+  const diff =
+    hasCurrent && hasComparison && comparisonSum !== null
+      ? (currentSum ?? 0) - (comparisonSum ?? 0)
+      : null;
+
+  const canComputePct =
+    hasComparison && comparisonSum !== null && comparisonSum !== 0 && hasCurrent;
+
+  const pct = canComputePct ? diff / comparisonSum : null;
+
+  return {
+    current: hasCurrent ? currentSum : null,
+    comparison: hasComparison ? comparisonSum : null,
+    diff,
+    pct
+  };
+}
+
+function addMonths(baseYear, baseMonth, offset) {
+  const year = Number(baseYear) || 2000;
+  const month = Number(baseMonth) || 1;
+  const date = new Date(year, month - 1, 1);
+  date.setMonth(date.getMonth() + offset);
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1
+  };
+}
+
+function formatMonthLabel(year, month) {
+  const entry = MONTHS[(Number(month) || 1) - 1];
+  if (!entry) {
+    return `${month}/${year}`;
+  }
+  return `${entry.label} ${year}`;
+}
+
+function formatTrendLabel(year, month, referenceYear = null) {
+  const entry = MONTHS[(Number(month) || 1) - 1];
+  const shortLabel = entry ? entry.short : `Mes ${month}`;
+  if (referenceYear !== null && Number(year) === Number(referenceYear)) {
+    return shortLabel;
+  }
+  const shortYear = String(year).slice(-2);
+  return `${shortLabel} ${shortYear}`;
+}
+
+function forecastLinearRegression(values = [], steps = 6) {
+  const series = values.map(toNumber).filter(value => value !== null);
+
+  if (series.length < 3 || steps <= 0) {
+    return [];
+  }
+
+  const n = series.length;
+  const indices = series.map((_, index) => index);
+
+  const sumX = indices.reduce((total, value) => total + value, 0);
+  const sumY = series.reduce((total, value) => total + value, 0);
+  const sumXY = indices.reduce((total, index, position) => total + index * series[position], 0);
+  const sumXX = indices.reduce((total, index) => total + index * index, 0);
+
+  const denominator = n * sumXX - sumX * sumX;
+  let slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
+  if (!Number.isFinite(slope)) {
+    slope = 0;
+  }
+  let intercept = n !== 0 ? (sumY - slope * sumX) / n : 0;
+  if (!Number.isFinite(intercept)) {
+    intercept = 0;
+  }
+
+  const predictions = [];
+  for (let step = 1; step <= steps; step += 1) {
+    const index = n - 1 + step;
+    const value = intercept + slope * index;
+    predictions.push(value);
+  }
+
+  return predictions;
+}
+
+function computeForecastData(realData, type, { periods = 6 } = {}) {
+  if (!realData?.history?.length) {
+    return null;
+  }
+
+  if (type !== 'monthly' && type !== 'scenario') {
+    return null;
+  }
+
+  const sortedHistory = [...realData.history]
+    .map(item => ({
+      year: Number(item?.anio),
+      month: Number(item?.mes ?? 0),
+      value: toNumber(item?.valor)
+    }))
+    .filter(item => Number.isFinite(item.year) && Number.isFinite(item.month) && item.value !== null)
+    .sort((a, b) => {
+      if (a.year === b.year) {
+        return a.month - b.month;
+      }
+      return a.year - b.year;
+    });
+
+  if (!sortedHistory.length) {
+    return null;
+  }
+
+  const numericSeries = sortedHistory.map(item => item.value);
+  if (numericSeries.length < 4) {
+    return null;
+  }
+
+  const predictions = forecastLinearRegression(numericSeries, periods);
+  if (!predictions.length) {
+    return null;
+  }
+
+  const latestRecord = sortedHistory[sortedHistory.length - 1];
+  const anchorIndex = (latestRecord.month || 1) - 1;
+  const anchorValue = latestRecord.value;
+
+  const rows = [];
+  const chartPoints = [];
+
+  predictions.forEach((value, index) => {
+    const { year, month } = addMonths(latestRecord.year, latestRecord.month, index + 1);
+    rows.push({
+      label: formatMonthLabel(year, month),
+      current: value,
+      comparison: null,
+      diff: null,
+      pct: null
+    });
+    chartPoints.push({
+      label: formatTrendLabel(year, month, latestRecord.year),
+      value,
+      year,
+      monthIndex: (Number(month) || 1) - 1
+    });
+  });
+
+  const totals = computeTotals(rows);
+
+  return {
+    rows,
+    totals,
+    chartPoints,
+    anchor: {
+      index: anchorIndex,
+      value: anchorValue
+    }
+  };
+}
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(Number(value));
@@ -953,6 +1185,8 @@ function buildSummary(realData, type, scenario) {
   const { history } = realData;
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(history);
+  const timeline = buildValueTimeline(history);
+  const timelineIndex = buildTimelineIndex(timeline);
   
   if (!lastLoaded) {
     return {
@@ -970,23 +1204,23 @@ function buildSummary(realData, type, scenario) {
     const latestMonth = lastLoaded.month;
     const latestYear = lastLoaded.year;
     const month = MONTHS[latestMonth - 1] || MONTHS[MONTHS.length - 1];
-    
+
     const currentItem = history.find(
       item => item.anio === latestYear && item.mes === latestMonth
     );
-    const comparisonItem = history.find(
-      item => item.anio === latestYear - 1 && item.mes === latestMonth
-    );
-    
+    const comparisonEntry = findPreviousTimelineEntry(timeline, timelineIndex, latestYear, latestMonth);
+
     const current = currentItem ? Number(currentItem.valor) : null;
-    const comparison = comparisonItem ? Number(comparisonItem.valor) : null;
+    const comparison = comparisonEntry ? comparisonEntry.value : null;
     const diff = current != null && comparison != null ? current - comparison : null;
     const pct = diff != null && comparison ? diff / comparison : null;
-    
+
     return {
-      title: `Comparativo mensual (${month.label} ${latestYear})`,
-      currentLabel: `${latestYear}`,
-      comparisonLabel: `${latestYear - 1}`,
+      title: `Variación mensual (${month.label} ${latestYear})`,
+      currentLabel: `${month.label} ${latestYear}`,
+      comparisonLabel: comparisonEntry
+        ? formatMonthLabel(comparisonEntry.year, comparisonEntry.month)
+        : 'Mes anterior',
       currentValue: current,
       comparisonValue: comparison,
       diff,
@@ -1080,7 +1314,8 @@ function buildSummary(realData, type, scenario) {
 }
 
 
-function buildTableContent(realData, type, scenario, showHistorical = false) {
+function buildTableContent(realData, type, scenario, options = {}) {
+  const { showHistorical = false, showTrend = false, forecastData = null } = options;
   const currentYear = CURRENT_YEAR;
   const indicator = realData?.indicator ?? null;
   const isSms = isSmsIndicator(indicator);
@@ -1104,26 +1339,23 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
   }
 
   if (!hasHistoricalYears) {
-    headerCells.push('<th class="px-4 py-2 text-right">Comparativo</th>');
+    headerCells.push('<th class="px-4 py-2 text-right">Mes anterior</th>');
   }
 
-  const variationNote = hasHistoricalYears
-    ? `<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">${
-        currentYear - 1
-      } &rarr; ${currentYear}</div>`
-    : '';
+  const variationNote =
+    '<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">vs. mes anterior</div>';
 
   headerCells.push(
     hasHistoricalYears
       ? `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
-      : '<th class="px-4 py-2 text-right">Variación</th>'
+      : `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
   );
 
   if (!isSms) {
     headerCells.push(
       hasHistoricalYears
         ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
-        : '<th class="px-4 py-2 text-right">% Variación</th>'
+        : `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
     );
   }
 
@@ -1140,6 +1372,8 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
 
   const { history } = realData;
   const lastLoaded = getLastLoadedMonth(history);
+  const timeline = buildValueTimeline(history);
+  const timelineIndex = buildTimelineIndex(timeline);
   const unit = indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
   const percentageScale = isSms ? 'percentage' : 'auto';
@@ -1163,8 +1397,6 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
 
   if (type === 'monthly') {
     const currentData = getDataByYear(history, currentYear);
-    const previousData = getDataByYear(history, currentYear - 1);
-
     const toNumeric = value => {
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : null;
@@ -1175,14 +1407,6 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
       const numeric = toNumeric(item.valor);
       if (numeric != null) {
         currentMap.set(item.mes, numeric);
-      }
-    });
-
-    const previousMap = new Map();
-    previousData.forEach(item => {
-      const numeric = toNumeric(item.valor);
-      if (numeric != null) {
-        previousMap.set(item.mes, numeric);
       }
     });
 
@@ -1205,10 +1429,14 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
 
     rows = monthsToRender.map(monthNumber => {
       const current = currentMap.has(monthNumber) ? currentMap.get(monthNumber) : null;
-      const hasComparison = previousMap.has(monthNumber);
-      const comparison = hasComparison ? previousMap.get(monthNumber) : null;
+      if (current === null) {
+        return null;
+      }
+
+      const previousEntry = findPreviousTimelineEntry(timeline, timelineIndex, currentYear, monthNumber);
+      const comparison = previousEntry ? previousEntry.value : null;
       const diff = current != null && comparison != null ? current - comparison : null;
-      const pct = diff !== null && comparison != null && comparison !== 0 ? diff / comparison : null;
+      const pct = diff !== null && comparison !== null && comparison !== 0 ? diff / comparison : null;
 
       const historicalValues = showHistorical
         ? historicalYears.map(year => {
@@ -1225,7 +1453,7 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
         pct,
         historicalValues
       };
-    });
+    }).filter(Boolean);
   } else if (type === 'quarterly') {
     const completeQuarters = filterCompleteQuarters(history, currentYear);
 
@@ -1329,50 +1557,136 @@ function buildTableContent(realData, type, scenario, showHistorical = false) {
     };
   }
 
-  const bodyMarkup = rows
-    .map(row => {
-      const historicalCells = showHistorical
-        ? row.historicalValues
-            .map((value, index, array) =>
-              `<td class="px-4 py-2 text-right text-sm ${
-                index === array.length - 1 ? 'font-semibold text-slate-800' : 'text-slate-500'
-              }">${formatUnit(value)}</td>`
-            )
-            .join('')
-        : `<td class="px-4 py-2 text-right text-sm font-semibold text-slate-800">${formatUnit(row.current)}</td>`;
+  const totals = computeTotals(rows);
+  const historicalTotals = showHistorical
+    ? historicalYears.map((_, columnIndex) => {
+        let hasValue = false;
+        const total = rows.reduce((sum, row) => {
+          const value = toNumber(row?.historicalValues?.[columnIndex]);
+          if (value !== null) {
+            hasValue = true;
+            return sum + value;
+          }
+          return sum;
+        }, 0);
+        return hasValue ? total : null;
+      })
+    : [];
 
-      const comparisonCell = !showHistorical
-        ? `<td class="px-4 py-2 text-right text-sm text-slate-600">${formatUnit(row.comparison)}</td>`
+  const tableRows = rows.map(row => ({ ...row, rowType: 'history' }));
+
+  if (totals) {
+    tableRows.push({
+      label: 'Total',
+      current: totals.current,
+      comparison: totals.comparison,
+      diff: totals.diff,
+      pct: totals.pct,
+      historicalValues: showHistorical ? historicalTotals : [],
+      rowType: 'total'
+    });
+  }
+
+  const includeForecast = showTrend && !showHistorical && forecastData?.rows?.length;
+  const forecastRows = includeForecast ? forecastData.rows : [];
+  if (forecastRows.length) {
+    const historicalPlaceholder = showHistorical
+      ? Array.from({ length: historicalYears.length }, () => null)
+      : [];
+
+    forecastRows.forEach(item => {
+      tableRows.push({
+        label: item.label,
+        current: item.current,
+        comparison: item.comparison,
+        diff: item.diff,
+        pct: item.pct,
+        historicalValues: showHistorical ? [...historicalPlaceholder] : [],
+        rowType: 'forecast'
+      });
+    });
+
+    if (includeForecast && forecastData?.totals) {
+      tableRows.push({
+        label: 'Total tendencia',
+        current: forecastData.totals.current,
+        comparison: forecastData.totals.comparison,
+        diff: forecastData.totals.diff,
+        pct: forecastData.totals.pct,
+        historicalValues: showHistorical ? [...historicalPlaceholder] : [],
+        rowType: 'forecast-total'
+      });
+    }
+  }
+
+  const bodyMarkup = tableRows
+    .map(row => {
+      const isForecast = row.rowType === 'forecast' || row.rowType === 'forecast-total';
+      const isTotal = row.rowType === 'total' || row.rowType === 'forecast-total';
+
+      const rowClasses = ['border-b border-slate-100'];
+      if (isForecast) {
+        rowClasses.push('bg-violet-50/60');
+      }
+      if (isTotal) {
+        rowClasses.push('bg-slate-50/80 font-semibold');
+      }
+      const rowClassName = rowClasses.filter(Boolean).join(' ');
+
+      const labelBadge = isForecast
+        ? '<span class="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-[11px] font-semibold text-violet-700">Tendencia</span>'
         : '';
 
-      const variationClass =
-        row.diff > 0
-          ? isSms
-            ? 'text-rose-600'
-            : 'text-emerald-600'
-          : row.diff < 0
-          ? isSms
-            ? 'text-emerald-600'
-            : 'text-rose-600'
-          : 'text-slate-500';
+      const labelCell = `<td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}${labelBadge}</td>`;
+
+      const historicalCells = showHistorical
+        ? row.historicalValues
+            .map((value, index, array) => {
+              const classes = ['px-4 py-2 text-right text-sm'];
+              if (index === array.length - 1) {
+                classes.push('font-semibold text-slate-800');
+              } else {
+                classes.push('text-slate-500');
+              }
+              if (isForecast) {
+                classes.push('text-violet-700');
+              }
+              return `<td class="${classes.join(' ')}">${formatUnit(value)}</td>`;
+            })
+            .join('')
+        : `<td class="px-4 py-2 text-right text-sm font-semibold ${
+            isForecast ? 'text-violet-700' : 'text-slate-800'
+          }">${formatUnit(row.current)}</td>`;
+
+      const comparisonCell = !showHistorical
+        ? `<td class="px-4 py-2 text-right text-sm ${
+            isForecast ? 'text-violet-700' : 'text-slate-600'
+          }">${formatUnit(row.comparison)}</td>`
+        : '';
+
+      const variationClass = isForecast
+        ? 'text-violet-700'
+        : row.diff > 0
+        ? isSms
+          ? 'text-rose-600'
+          : 'text-emerald-600'
+        : row.diff < 0
+        ? isSms
+          ? 'text-emerald-600'
+          : 'text-rose-600'
+        : 'text-slate-500';
+
+      const variationCell = `<td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}"><div>${formatSignedUnit(
+        row.diff
+      )}</div></td>`;
 
       const pctCell = isSms
         ? ''
-        : `<td class="px-4 py-2 text-right text-sm text-slate-600">
-            <div>${formatPercentage(row.pct)}</div>
-          </td>`;
+        : `<td class="px-4 py-2 text-right text-sm ${
+            isForecast ? 'text-violet-700' : 'text-slate-600'
+          }"><div>${formatPercentage(row.pct)}</div></td>`;
 
-      return `
-        <tr class="border-b border-slate-100">
-          <td class="px-4 py-2 text-left text-sm text-slate-600">${escapeHtml(row.label)}</td>
-          ${historicalCells}
-          ${comparisonCell}
-          <td class="px-4 py-2 text-right text-sm font-semibold ${variationClass}">
-            <div>${formatSignedUnit(row.diff)}</div>
-          </td>
-          ${pctCell}
-        </tr>
-      `;
+      return `<tr class="${rowClassName}">${labelCell}${historicalCells}${comparisonCell}${variationCell}${pctCell}</tr>`;
     })
     .join('');
 
@@ -1402,13 +1716,14 @@ function renderModalChart(canvas, config) {
 }
 
 // Función buildMonthlyChartConfig corregida
-// CAMBIO: Ahora soporta mostrar últimos 4 años cuando showHistorical = true
+// CAMBIO: Ahora soporta mostrar últimos 4 años cuando showHistorical = true y sobreponer la tendencia proyectada
 
-function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = false) {
+function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = false, options = {}) {
   if (!realData || !realData.history.length) {
     return null;
   }
 
+  const { showTrend = false, forecastData = null } = options;
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(realData.history);
 
@@ -1419,7 +1734,7 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   // CAMBIO: Generar datasets dinámicamente para los años solicitados
   const datasets = [];
   const colors = ['#2563eb', '#10b981', '#f97316', '#8b5cf6']; // 4 colores distintos
-  
+
   for (let i = 0; i < yearsToShow; i++) {
     const year = startYear + i;
     const yearData = getDataByYear(realData.history, year);
@@ -1439,16 +1754,101 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
       }
     });
 
-    datasets.push({
+    const dataset = {
       label: `${year}`,
       data: yearValues,
       borderColor: colors[i],
       backgroundColor: chartType === 'bar' ? colors[i] : `${colors[i]}26`, // 26 en hex = 15% opacidad
-      borderWidth: 2,
+      borderWidth: chartType === 'bar' ? 0 : 2,
       spanGaps: true
-    });
+    };
+
+    if (chartType === 'line') {
+      dataset.tension = 0.3;
+      dataset.fill = true;
+      dataset.pointRadius = 3;
+    }
+
+    datasets.push(dataset);
   }
-  
+
+  let labels = MONTHS.map(month => month.short);
+
+  const trendEnabled = showTrend && forecastData?.chartPoints?.length;
+  if (trendEnabled) {
+    const trendData = Array(labels.length).fill(null);
+    const anchorIndex = Number.isFinite(forecastData?.anchor?.index) ? forecastData.anchor.index : null;
+    const anchorValue = toNumber(forecastData?.anchor?.value);
+
+    if (anchorIndex !== null && anchorIndex >= 0 && anchorIndex < trendData.length && anchorValue !== null) {
+      trendData[anchorIndex] = anchorValue;
+    }
+
+    forecastData.chartPoints.forEach(point => {
+      const baseMonthIndex = Number(point.monthIndex);
+      const chartLabel = point.label;
+      let targetIndex = null;
+
+      if (Number(point.year) === currentYear && baseMonthIndex >= 0 && baseMonthIndex < 12) {
+        targetIndex = baseMonthIndex;
+      } else {
+        let existingIndex = labels.indexOf(chartLabel);
+        if (existingIndex === -1) {
+          labels.push(chartLabel);
+          existingIndex = labels.length - 1;
+          datasets.forEach(dataset => {
+            while (dataset.data.length < labels.length) {
+              dataset.data.push(null);
+            }
+          });
+          while (trendData.length < labels.length) {
+            trendData.push(null);
+          }
+        }
+        targetIndex = existingIndex;
+      }
+
+      if (targetIndex !== null) {
+        if (targetIndex >= trendData.length) {
+          const missing = targetIndex - trendData.length + 1;
+          for (let fillIndex = 0; fillIndex < missing; fillIndex += 1) {
+            trendData.push(null);
+            datasets.forEach(dataset => dataset.data.push(null));
+          }
+        }
+        trendData[targetIndex] = point.value;
+      }
+    });
+
+    const trendDataset = {
+      label: 'Tendencia',
+      data: trendData,
+      borderColor: '#7c3aed',
+      backgroundColor: '#7c3aed1a',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      spanGaps: true,
+      type: 'line',
+      fill: false,
+      tension: 0.3,
+      isTrend: true
+    };
+
+    if (chartType === 'bar') {
+      trendDataset.order = datasets.length + 1;
+    }
+
+    datasets.push(trendDataset);
+  }
+
+  // Asegurar que todas las series tengan la misma longitud
+  datasets.forEach(dataset => {
+    while (dataset.data.length < labels.length) {
+      dataset.data.push(null);
+    }
+  });
+
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
   const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
@@ -1458,8 +1858,8 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
   const config = {
     type: chartType,
     data: {
-      labels: MONTHS.map(month => month.short),
-      datasets: datasets
+      labels,
+      datasets
     },
     options: {
       responsive: true,
@@ -1479,18 +1879,17 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
       }
     }
   };
-  
-  // Configuración específica para gráficas de línea
+
   if (chartType === 'line') {
     config.data.datasets.forEach(dataset => {
+      if (dataset.isTrend) {
+        return;
+      }
       dataset.tension = 0.3;
       dataset.fill = true;
       dataset.pointRadius = 3;
     });
-  }
-  
-  // Configuración específica para gráficas de barras
-  if (chartType === 'bar') {
+  } else if (chartType === 'bar') {
     config.options.scales.x = {
       stacked: false
     };
@@ -1598,17 +1997,21 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   return config;
 }
 
-function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
+function buildScenarioChartConfig(realData, scenario, chartType = 'line', options = {}) {
   if (!realData || !realData.history.length) {
     return null;
   }
 
+  const { showTrend = false, forecastData = null } = options;
   const currentYear = CURRENT_YEAR;
   const lastLoaded = getLastLoadedMonth(realData.history);
   const currentData = getDataByYear(realData.history, currentYear);
 
-  const realValues = Array(12).fill(null);
-  const { values: targetValues } = buildScenarioTargetValues(realData.targets, scenario, currentYear);
+  let labels = MONTHS.map(month => month.short);
+
+  const realValues = Array(labels.length).fill(null);
+  const { values: targetValuesBase } = buildScenarioTargetValues(realData.targets, scenario, currentYear);
+  const targetValues = [...targetValuesBase];
 
   currentData.forEach(item => {
     if (item.mes >= 1 && item.mes <= 12) {
@@ -1626,34 +2029,110 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
 
   const label = SCENARIO_LABELS[scenario] || 'Meta';
 
+  const trendEnabled = showTrend && forecastData?.chartPoints?.length;
+  let trendDataset = null;
+
+  if (trendEnabled) {
+    const trendData = Array(labels.length).fill(null);
+    const anchorIndex = Number.isFinite(forecastData?.anchor?.index) ? forecastData.anchor.index : null;
+    const anchorValue = toNumber(forecastData?.anchor?.value);
+
+    if (anchorIndex !== null && anchorIndex >= 0 && anchorIndex < trendData.length && anchorValue !== null) {
+      trendData[anchorIndex] = anchorValue;
+    }
+
+    forecastData.chartPoints.forEach(point => {
+      const baseMonthIndex = Number(point.monthIndex);
+      const chartLabel = point.label;
+      let targetIndex = null;
+
+      if (Number(point.year) === currentYear && baseMonthIndex >= 0 && baseMonthIndex < 12) {
+        targetIndex = baseMonthIndex;
+      } else {
+        let existingIndex = labels.indexOf(chartLabel);
+        if (existingIndex === -1) {
+          labels.push(chartLabel);
+          existingIndex = labels.length - 1;
+          while (realValues.length < labels.length) {
+            realValues.push(null);
+          }
+          while (targetValues.length < labels.length) {
+            targetValues.push(null);
+          }
+          while (trendData.length < labels.length) {
+            trendData.push(null);
+          }
+        }
+        targetIndex = existingIndex;
+      }
+
+      if (targetIndex !== null) {
+        if (targetIndex >= trendData.length) {
+          const missing = targetIndex - trendData.length + 1;
+          for (let fillIndex = 0; fillIndex < missing; fillIndex += 1) {
+            trendData.push(null);
+            realValues.push(null);
+            targetValues.push(null);
+          }
+        }
+        trendData[targetIndex] = point.value;
+      }
+    });
+
+    trendDataset = {
+      label: 'Tendencia',
+      data: trendData,
+      borderColor: '#7c3aed',
+      backgroundColor: '#7c3aed1a',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      spanGaps: true,
+      type: 'line',
+      fill: false,
+      tension: 0.3,
+      isTrend: true
+    };
+
+    if (chartType === 'bar') {
+      trendDataset.order = 3;
+    }
+  }
+
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
   const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
   const formatTick = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
+  const datasets = [
+    {
+      label: 'Real',
+      data: realValues,
+      borderColor: '#2563eb',
+      backgroundColor: chartType === 'bar' ? '#2563eb' : 'rgba(37, 99, 235, 0.15)',
+      borderWidth: 2,
+      spanGaps: true
+    },
+    {
+      label,
+      data: targetValues,
+      borderColor: '#f97316',
+      backgroundColor: chartType === 'bar' ? '#f97316' : 'rgba(249, 115, 22, 0.15)',
+      borderWidth: 2,
+      spanGaps: true
+    }
+  ];
+
+  if (trendDataset) {
+    datasets.push(trendDataset);
+  }
+
   const config = {
     type: chartType,
     data: {
-      labels: MONTHS.map(month => month.short),
-      datasets: [
-        {
-          label: 'Real',
-          data: realValues,
-          borderColor: '#2563eb',
-          backgroundColor: chartType === 'bar' ? '#2563eb' : 'rgba(37, 99, 235, 0.15)',
-          borderWidth: 2,
-          spanGaps: true
-        },
-        {
-          label,
-          data: targetValues,
-          borderColor: '#f97316',
-          backgroundColor: chartType === 'bar' ? '#f97316' : 'rgba(249, 115, 22, 0.15)',
-          borderWidth: 2,
-          spanGaps: true
-        }
-      ]
+      labels,
+      datasets
     },
     options: {
       responsive: true,
@@ -1675,14 +2154,20 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line') {
   };
 
   if (chartType === 'line') {
-    config.data.datasets[0].tension = 0.3;
-    config.data.datasets[0].fill = true;
-    config.data.datasets[0].pointRadius = 3;
-    
-    config.data.datasets[1].borderDash = [6, 4];
-    config.data.datasets[1].tension = 0.3;
-    config.data.datasets[1].fill = false;
-    config.data.datasets[1].pointRadius = 3;
+    config.data.datasets.forEach((dataset, index) => {
+      if (dataset.isTrend) {
+        return;
+      }
+
+      dataset.tension = 0.3;
+      dataset.pointRadius = 3;
+      if (index === 0) {
+        dataset.fill = true;
+      } else {
+        dataset.fill = false;
+        dataset.borderDash = [6, 4];
+      }
+    });
   }
 
   return config;
@@ -1764,21 +2249,23 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
 }
 
 // Función buildChartConfig corregida
-// CAMBIO: Ahora acepta el parámetro showHistorical para mostrar últimos 4 años
+// CAMBIO: Ahora acepta los parámetros showHistorical y showTrend para controlar histórico extendido y tendencia proyectada
 
-function buildChartConfig(realData, type, scenario, chartType = 'line', showHistorical = false) {
+function buildChartConfig(realData, type, scenario, chartType = 'line', options = {}) {
   if (!realData) return null;
-  
+
+  const { showHistorical = false, showTrend = false, forecastData = null } = options;
+
   if (type === 'monthly') {
-    return buildMonthlyChartConfig(realData, chartType, showHistorical);
+    return buildMonthlyChartConfig(realData, chartType, showHistorical, { showTrend, forecastData });
   } else if (type === 'quarterly') {
     return buildQuarterlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'annual') {
     return buildAnnualChartConfig(realData, chartType, showHistorical);
-  } else {
-    // Los escenarios no usan el histórico de 4 años
-    return buildScenarioChartConfig(realData, scenario, chartType);
   }
+
+  // Los escenarios no usan el histórico de 4 años
+  return buildScenarioChartConfig(realData, scenario, chartType, { showTrend, forecastData });
 }
 
 // Función buildChartTypeToggle corregida
@@ -1837,9 +2324,25 @@ function closeIndicatorModal() {
   document.body.classList.remove('overflow-hidden');
 }
 
-function buildModalMarkup({ label, realData, type, scenario, chartType = 'line', showHistorical = false }) {
+function buildModalMarkup({
+  label,
+  realData,
+  type,
+  scenario,
+  chartType = 'line',
+  showHistorical = false,
+  showTrend = false,
+  forecastData = null,
+  hasForecast = false,
+  trendEnabled = false,
+  trendHelperText = ''
+}) {
   const summary = buildSummary(realData, type, scenario);
-  const { headerMarkup, bodyMarkup } = buildTableContent(realData, type, scenario, showHistorical);
+  const { headerMarkup, bodyMarkup } = buildTableContent(realData, type, scenario, {
+    showHistorical,
+    showTrend,
+    forecastData
+  });
   const isSms = isSmsIndicator(realData?.indicator);
   const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: isSms });
   const scenarioLabel = type === 'scenario' ? SCENARIO_LABELS[scenario] ?? 'Meta' : summary.comparisonLabel;
@@ -1861,6 +2364,46 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line',
     ? `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedDiff}</p>`
     : `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedPct}</p>`;
   const variationDetailMarkup = isSms ? '' : `<p class="mt-1 text-sm text-slate-600">(${formattedDiff})</p>`;
+
+  const trendToggleClasses = [
+    'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition shadow-sm'
+  ];
+  if (trendEnabled) {
+    trendToggleClasses.push('cursor-pointer');
+    if (showTrend) {
+      trendToggleClasses.push('border-violet-300 bg-violet-50 text-violet-700');
+    } else {
+      trendToggleClasses.push('border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600');
+    }
+  } else {
+    trendToggleClasses.push('cursor-not-allowed border-slate-200 bg-white text-slate-400 opacity-60');
+  }
+  const trendToggleClass = trendToggleClasses.join(' ');
+  const resolvedTrendTitle = trendEnabled
+    ? 'Mostrar tendencia proyectada'
+    : trendHelperText || 'Sin datos suficientes para proyectar';
+  const trendHelperMarkup = trendHelperText
+    ? `<span class="text-xs font-medium text-slate-400" data-trend-helper>${escapeHtml(trendHelperText)}</span>`
+    : '';
+  const trendToggleMarkup = ['monthly', 'scenario'].includes(type)
+    ? `
+        <label
+          class="${trendToggleClass}"
+          data-trend-toggle-wrapper
+          title="${escapeHtml(resolvedTrendTitle)}"
+        >
+          <input
+            type="checkbox"
+            data-toggle-trend
+            class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            ${showTrend && trendEnabled ? 'checked' : ''}
+            ${trendEnabled ? '' : 'disabled'}
+          />
+          Tendencia
+        </label>
+        ${trendHelperMarkup}
+      `
+    : '';
 
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay>
@@ -1918,6 +2461,7 @@ function buildModalMarkup({ label, realData, type, scenario, chartType = 'line',
             <div class="mb-3 flex items-center justify-between flex-wrap gap-3">
               <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Visualización</h3>
               <div class="flex items-center gap-3">
+                ${trendToggleMarkup}
                 ${chartToggle}
               </div>
             </div>
@@ -2038,18 +2582,43 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       return;
     }
 
-    // CAMBIO: Agregar estado para el checkbox de histórico
+    // CAMBIO: Agregar estado para el checkbox de histórico y la tendencia
     let currentChartType = type === 'quarterly' ? 'bar' : 'line';
     let showHistorical = false;
+    let showTrend = false;
 
-    const renderModal = (chartType, historical) => {
+    const supportsTrend = type === 'monthly' || type === 'scenario';
+    const forecastData = computeForecastData(realData, type);
+    const hasForecast = Boolean(forecastData?.rows?.length);
+
+    const renderModal = (chartType, historical, trend) => {
+      const normalizedTrend = historical ? false : Boolean(trend);
+      showHistorical = historical;
+      showTrend = normalizedTrend;
+      currentChartType = chartType;
+
+      const trendEnabled = supportsTrend && hasForecast && !historical;
+      const trendHelperText = supportsTrend
+        ? !hasForecast
+          ? 'Sin datos suficientes'
+          : historical
+          ? 'Desactive el histórico para ver la tendencia'
+          : ''
+        : '';
+      const effectiveTrend = normalizedTrend && trendEnabled;
+
       root.innerHTML = buildModalMarkup({
         label: foundIndicator.nombre,
         realData,
         type,
         scenario,
         chartType,
-        showHistorical: historical
+        showHistorical: historical,
+        showTrend: effectiveTrend,
+        forecastData,
+        hasForecast,
+        trendEnabled,
+        trendHelperText
       });
 
       const overlay = root.querySelector('[data-modal-overlay]');
@@ -2057,6 +2626,7 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       const canvas = root.querySelector('[data-modal-chart]');
       const chartToggle = root.querySelector('[data-chart-toggle]');
       const historicalCheckbox = root.querySelector('[data-show-historical]'); // NUEVO
+      const trendToggle = root.querySelector('[data-toggle-trend]');
 
       const handleClose = () => {
         overlay?.removeEventListener('click', overlayListener);
@@ -2088,7 +2658,7 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
             const newChartType = btn.dataset.chartType;
             if (newChartType !== currentChartType) {
               currentChartType = newChartType;
-              renderModal(newChartType, showHistorical);
+              renderModal(newChartType, showHistorical, showTrend);
             }
           });
         });
@@ -2098,19 +2668,33 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
       if (historicalCheckbox) {
         historicalCheckbox.checked = historical;
         historicalCheckbox.addEventListener('change', event => {
-          showHistorical = event.target.checked;
-          renderModal(currentChartType, showHistorical);
+          const nextHistorical = event.target.checked;
+          const nextTrend = nextHistorical ? false : showTrend;
+          renderModal(currentChartType, nextHistorical, nextTrend);
+        });
+      }
+
+      if (trendToggle) {
+        trendToggle.checked = effectiveTrend;
+        trendToggle.disabled = !trendEnabled;
+        trendToggle.addEventListener('change', event => {
+          const nextTrend = event.target.checked;
+          renderModal(currentChartType, showHistorical, nextTrend);
         });
       }
 
       // Renderizar gráfica inicial
-      const chartConfig = buildChartConfig(realData, type, scenario, chartType, historical);
+      const chartConfig = buildChartConfig(realData, type, scenario, chartType, {
+        showHistorical: historical,
+        showTrend: effectiveTrend,
+        forecastData
+      });
       if (chartConfig) {
         renderModalChart(canvas, chartConfig);
       }
     };
 
-    renderModal(currentChartType, showHistorical);
+    renderModal(currentChartType, showHistorical, showTrend);
 
   } catch (error) {
     console.error('Error al abrir modal:', error);

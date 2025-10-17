@@ -229,6 +229,152 @@ function sumValues(values = []) {
   return values.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
 }
 
+function computeTotals(rows = [], { type } = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  const hasCurrent = rows.some(row => Number.isFinite(row?.currentValue));
+  const hasComparison = rows.some(row => Number.isFinite(row?.comparisonValue));
+
+  if (!hasCurrent && !hasComparison) {
+    return null;
+  }
+
+  const currentSum = hasCurrent ? sumValues(rows.map(row => row?.currentValue ?? null)) : null;
+  const comparisonSum = hasComparison ? sumValues(rows.map(row => row?.comparisonValue ?? null)) : null;
+
+  const diff =
+    hasCurrent && hasComparison && comparisonSum !== null
+      ? (currentSum ?? 0) - (comparisonSum ?? 0)
+      : null;
+
+  const canComputePct =
+    hasComparison && comparisonSum !== null && comparisonSum !== 0 && hasCurrent;
+
+  const pct = canComputePct
+    ? type === 'scenario'
+      ? (currentSum ?? 0) / comparisonSum
+      : diff / comparisonSum
+    : null;
+
+  return {
+    currentValue: hasCurrent ? currentSum : null,
+    comparisonValue: hasComparison ? comparisonSum : null,
+    diff,
+    pct
+  };
+}
+
+function forecastLinearRegression(values = [], steps = 6) {
+  const series = values.map(value => Number(value)).filter(value => Number.isFinite(value));
+
+  if (series.length < 3 || steps <= 0) {
+    return [];
+  }
+
+  const n = series.length;
+  const indices = series.map((_, index) => index);
+
+  const sumX = indices.reduce((total, value) => total + value, 0);
+  const sumY = series.reduce((total, value) => total + value, 0);
+  const sumXY = indices.reduce((total, index, position) => total + index * series[position], 0);
+  const sumXX = indices.reduce((total, index) => total + index * index, 0);
+
+  const denominator = n * sumXX - sumX * sumX;
+  let slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
+  if (!Number.isFinite(slope)) {
+    slope = 0;
+  }
+  let intercept = n !== 0 ? (sumY - slope * sumX) / n : 0;
+  if (!Number.isFinite(intercept)) {
+    intercept = 0;
+  }
+
+  const predictions = [];
+  for (let step = 1; step <= steps; step += 1) {
+    const index = n - 1 + step;
+    const value = intercept + slope * index;
+    predictions.push(value);
+  }
+
+  return predictions;
+}
+
+function addMonths(year, month, offset) {
+  const date = new Date(Number(year) || 2000, (Number(month) || 1) - 1, 1);
+  date.setMonth(date.getMonth() + offset);
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1
+  };
+}
+
+function formatTrendLabel(year, month) {
+  const short = MONTH_SHORT_LABELS[(month - 1 + 12) % 12] ?? monthName(month);
+  const shortYear = `${year}`.slice(-2);
+  return `${short} '${shortYear} · T`;
+}
+
+function computeForecast({ type, history = [], latestRecord, periods = 6 }) {
+  if (type !== 'monthly' && type !== 'scenario') {
+    return null;
+  }
+
+  const series = history
+    .map(item => toNumber(item?.valor))
+    .filter(value => Number.isFinite(value));
+
+  if (series.length < 4) {
+    return null;
+  }
+
+  const predictions = forecastLinearRegression(series, periods);
+  if (!predictions.length) {
+    return null;
+  }
+
+  const baseYear = Number(latestRecord?.anio) || new Date().getFullYear();
+  const baseMonth = Number(latestRecord?.mes ?? 12) || 12;
+
+  const rows = predictions.map((value, index) => {
+    const { year, month } = addMonths(baseYear, baseMonth, index + 1);
+    return {
+      period: formatMonth(year, month),
+      label: formatTrendLabel(year, month),
+      currentValue: value,
+      comparisonValue: null,
+      diff: null,
+      pct: null,
+      isForecast: true
+    };
+  });
+
+  const totals = computeTotals(rows, { type });
+
+  return {
+    rows,
+    totals,
+    chartPoints: rows.map(item => ({
+      period: item.label,
+      current: null,
+      comparison: null,
+      trend: item.currentValue,
+      fullPeriod: item.period,
+      isForecast: true
+    })),
+    series: {
+      key: 'trend',
+      name: 'Tendencia',
+      color: '#7c3aed',
+      renderer: 'line',
+      strokeDasharray: '6 4',
+      strokeWidth: 2,
+      dot: false
+    }
+  };
+}
+
 function buildYearMonthIndex(history = []) {
   const index = new Map();
   history.forEach(item => {
@@ -243,6 +389,51 @@ function buildYearMonthIndex(history = []) {
     index.get(year).set(month, value);
   });
   return index;
+}
+
+function buildValueTimeline(history = []) {
+  return history
+    .map(item => ({
+      year: Number(item?.anio),
+      month: Number(item?.mes ?? 0),
+      value: toNumber(item?.valor)
+    }))
+    .filter(item => Number.isFinite(item.year) && Number.isFinite(item.month) && item.value !== null)
+    .sort((a, b) => {
+      if (a.year === b.year) {
+        return a.month - b.month;
+      }
+      return a.year - b.year;
+    });
+}
+
+function buildTimelineIndex(timeline = []) {
+  const map = new Map();
+  timeline.forEach((entry, index) => {
+    const key = `${entry.year}-${entry.month}`;
+    if (!map.has(key)) {
+      map.set(key, index);
+    }
+  });
+  return map;
+}
+
+function findPreviousTimelineEntry(timeline = [], indexMap = new Map(), year, month) {
+  const key = `${Number(year)}-${Number(month)}`;
+  if (!indexMap.has(key)) {
+    return null;
+  }
+
+  let pointer = indexMap.get(key) - 1;
+  while (pointer >= 0) {
+    const candidate = timeline[pointer];
+    if (candidate && candidate.value !== null) {
+      return candidate;
+    }
+    pointer -= 1;
+  }
+
+  return null;
 }
 
 function sortHistory(records = []) {
@@ -307,20 +498,22 @@ function computeMonthlyRows({
   currentYear,
   latestMonth,
   currentYearMonths,
-  previousYearMonths,
-  previousYear
+  timeline,
+  timelineIndex
 }) {
   const rows = [];
   for (let month = 1; month <= latestMonth; month += 1) {
     const currentValue = currentYearMonths.get(month) ?? null;
-    const previousValue = previousYearMonths.get(month) ?? null;
-    if (currentValue === null && previousValue === null) continue;
+    if (currentValue === null) continue;
+
+    const previousEntry = findPreviousTimelineEntry(timeline, timelineIndex, currentYear, month);
+    const previousValue = previousEntry ? previousEntry.value : null;
     const diff =
       currentValue !== null && previousValue !== null ? currentValue - previousValue : null;
     const pct = diff !== null && previousValue ? diff / previousValue : null;
     rows.push({
       period: formatMonth(currentYear, month),
-      comparisonPeriod: previousYear ? formatMonth(previousYear, month) : null,
+      comparisonPeriod: previousEntry ? formatMonth(previousEntry.year, previousEntry.month) : null,
       label: MONTH_SHORT_LABELS[month - 1] ?? String(month),
       currentValue,
       comparisonValue: previousValue,
@@ -433,6 +626,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
   const index = buildYearMonthIndex(sortedHistory);
   const currentYearMonths = index.get(currentYear) ?? new Map();
   const previousYearMonths = previousYear ? index.get(previousYear) ?? new Map() : new Map();
+  const timeline = buildValueTimeline(sortedHistory);
+  const timelineIndex = buildTimelineIndex(timeline);
 
   if (!currentYearMonths.size) {
     return null;
@@ -442,6 +637,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
     const targetsIndex = buildScenarioTargetsIndex(targets);
     const scenarioTargets = targetsIndex.get(scenario) ?? new Map();
     const rows = computeScenarioRows({ currentYear, latestMonth, currentYearMonths, scenarioTargets });
+    const totals = computeTotals(rows, { type });
+    const forecast = computeForecast({ type, history: sortedHistory, latestRecord, periods: 6 });
     if (!rows.length) {
       return {
         type,
@@ -451,6 +648,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
         latestMonth,
         latestRecord,
         rows,
+        totals,
+        forecast,
         comparisonLabel: formatScenarioLabel(scenario)
       };
     }
@@ -463,6 +662,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows,
+      totals,
+      forecast,
       comparisonLabel: formatScenarioLabel(scenario),
       summary: {
         title: `Comparativo Real vs Meta – ${formatScenarioLabel(scenario).replace('Meta ', '')}`,
@@ -485,8 +686,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
     currentYear,
     latestMonth,
     currentYearMonths,
-    previousYearMonths,
-    previousYear
+    timeline,
+    timelineIndex
   });
 
   if (!monthlyRows.length) {
@@ -495,15 +696,16 @@ function computeAnalytics({ type, scenario, history, targets }) {
 
   const lastMonthlyRow = monthlyRows[monthlyRows.length - 1];
 
-  const chartData = buildChartData({ rows: monthlyRows, comparisonLabel: previousYear });
-  const chartSeries = [
-    { key: 'current', name: `${currentYear}`, color: '#2563eb' }
-  ];
-  if (previousYear) {
-    chartSeries.push({ key: 'comparison', name: `${previousYear}`, color: '#10b981' });
+  const chartData = buildChartData({ rows: monthlyRows });
+  const chartSeries = [{ key: 'current', name: `${currentYear}`, color: '#2563eb' }];
+  const hasComparisonSeries = monthlyRows.some(row => row.comparisonValue !== null);
+  if (hasComparisonSeries) {
+    chartSeries.push({ key: 'comparison', name: 'Mes anterior', color: '#10b981' });
   }
 
   if (type === 'monthly') {
+    const totals = computeTotals(monthlyRows, { type });
+    const forecast = computeForecast({ type, history: sortedHistory, latestRecord, periods: 6 });
     return {
       type,
       currentYear,
@@ -511,11 +713,13 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: monthlyRows,
-      comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
+      totals,
+      forecast,
+      comparisonLabel: 'Mes anterior',
       summary: {
-        title: `Comparación Mensual ${currentYear} vs ${previousYear ?? 'anterior'}`,
+        title: `Variación mensual ${currentYear}`,
         currentLabel: lastMonthlyRow.period,
-        comparisonLabel: lastMonthlyRow.comparisonPeriod ?? '',
+        comparisonLabel: lastMonthlyRow.comparisonPeriod ?? 'Mes anterior',
         currentValue: lastMonthlyRow.currentValue,
         comparisonValue: lastMonthlyRow.comparisonValue,
         diff: lastMonthlyRow.diff,
@@ -535,6 +739,7 @@ function computeAnalytics({ type, scenario, history, targets }) {
       previousYear
     });
     const lastQuarterRow = quarterRows[quarterRows.length - 1];
+    const totals = computeTotals(quarterRows, { type });
     return {
       type,
       currentYear,
@@ -542,6 +747,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: quarterRows,
+      totals,
+      forecast: null,
       comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
       summary: {
         title: `Comparación Trimestral ${currentYear} vs ${previousYear ?? 'anterior'}`,
@@ -566,6 +773,7 @@ function computeAnalytics({ type, scenario, history, targets }) {
       previousYear
     });
     const annualRow = annualRows[0];
+    const totals = computeTotals(annualRows, { type });
     return {
       type,
       currentYear,
@@ -573,6 +781,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: annualRows,
+      totals,
+      forecast: null,
       comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
       summary: {
         title: `Comparación Anual Acumulada ${currentYear} vs ${previousYear ?? 'anterior'}`,
@@ -932,6 +1142,91 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
   }, [historyQuery.data, targetsQuery.data, type, scenario]);
 
   const [chartType, setChartType] = useState('line');
+  const [showTrend, setShowTrend] = useState(false);
+
+  const hasForecast = Boolean(analytics?.forecast?.rows?.length);
+
+  useEffect(() => {
+    setShowTrend(false);
+  }, [indicator?.id]);
+
+  useEffect(() => {
+    if (!hasForecast) {
+      setShowTrend(false);
+    }
+  }, [hasForecast]);
+
+  const detailRows = useMemo(() => {
+    if (!analytics?.rows?.length) {
+      return [];
+    }
+
+    const rows = analytics.rows.map(row => ({ ...row, rowType: 'history' }));
+
+    if (analytics?.totals) {
+      rows.push({
+        period: 'Total',
+        currentValue: analytics.totals.currentValue,
+        comparisonValue: analytics.totals.comparisonValue,
+        diff: analytics.totals.diff,
+        pct: analytics.totals.pct,
+        rowType: 'history-total'
+      });
+    }
+
+    if (showTrend && analytics.forecast?.rows?.length) {
+      const forecastRows = analytics.forecast.rows.map(row => ({ ...row, rowType: 'forecast' }));
+      rows.push(...forecastRows);
+
+      if (analytics.forecast?.totals) {
+        rows.push({
+          period: 'Total tendencia',
+          currentValue: analytics.forecast.totals.currentValue,
+          comparisonValue: analytics.forecast.totals.comparisonValue,
+          diff: analytics.forecast.totals.diff,
+          pct: analytics.forecast.totals.pct,
+          rowType: 'forecast-total'
+        });
+      }
+    }
+
+    return rows;
+  }, [analytics, showTrend]);
+
+  const chartDataForDisplay = useMemo(() => {
+    if (!analytics?.chartData) {
+      return [];
+    }
+    if (showTrend && analytics.forecast?.chartPoints?.length) {
+      const baseData = analytics.chartData.map((item, index, array) => {
+        if (index === array.length - 1) {
+          return { ...item, trend: item.current ?? null };
+        }
+        return { ...item };
+      });
+      return [...baseData, ...analytics.forecast.chartPoints];
+    }
+    return analytics.chartData;
+  }, [analytics, showTrend]);
+
+  const chartSeriesForDisplay = useMemo(() => {
+    if (!analytics?.chartSeries) {
+      return [];
+    }
+    if (showTrend && analytics.forecast?.series) {
+      return [...analytics.chartSeries, analytics.forecast.series];
+    }
+    return analytics.chartSeries;
+  }, [analytics, showTrend]);
+
+  const formatPctValue = value => {
+    if (analytics?.type === 'scenario') {
+      return value !== null && value !== undefined
+        ? `${formatNumber(value * 100, { decimals: 1 })}%`
+        : '—';
+    }
+    return formatPercentage(value);
+  };
 
   useEffect(() => {
     const handleKey = event => {
@@ -1003,14 +1298,13 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
             analytics?.rows?.length ? (
               <div className="mt-6 space-y-6">
                 <section className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-widest text-slate-400">Último mes con datos</p>
                       <p className="text-sm font-semibold text-slate-700">
                         {formatMonth(analytics.currentYear, analytics.latestMonth)}
                       </p>
                     </div>
-                    <ChartTypeToggle value={chartType} onChange={setChartType} />
                   </div>
                 </section>
 
@@ -1055,9 +1349,38 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                         Visualice el comportamiento mensual de {analytics.currentYear} comparado con {analytics.comparisonLabel}.
                       </p>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label
+                        className={classNames(
+                          'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition',
+                          showTrend && hasForecast
+                            ? 'border-violet-300 bg-violet-50 text-violet-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600',
+                          hasForecast ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:border-slate-200 hover:text-slate-500'
+                        )}
+                        title={hasForecast ? 'Mostrar tendencia proyectada' : 'Sin datos suficientes para proyectar'}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                          checked={showTrend}
+                          disabled={!hasForecast}
+                          onChange={event => {
+                            if (hasForecast) {
+                              setShowTrend(event.target.checked);
+                            }
+                          }}
+                        />
+                        Tendencia
+                      </label>
+                      {!hasForecast ? (
+                        <span className="text-xs font-medium text-slate-400">Sin datos suficientes</span>
+                      ) : null}
+                      <ChartTypeToggle value={chartType} onChange={setChartType} />
+                    </div>
                   </header>
                   <div className="h-72 w-full">
-                    <ChartRenderer chartType={chartType} data={analytics.chartData} series={analytics.chartSeries} />
+                    <ChartRenderer chartType={chartType} data={chartDataForDisplay} series={chartSeriesForDisplay} />
                   </div>
                 </section>
 
@@ -1081,27 +1404,68 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {analytics.rows.map((row, index) => (
-                          <tr key={`${row.period}-${index}`} className="hover:bg-slate-50/60">
-                            <td className="px-4 py-2 text-left text-slate-700">{row.period}</td>
-                            <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(row.currentValue, { decimals: 0 })}
-                            </td>
-                            <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(row.comparisonValue, { decimals: 0 })}
-                            </td>
-                            <td className={`px-4 py-2 text-right text-slate-900 ${getTrendTextClass(row.diff)}`}>
-                              {formatSignedNumber(row.diff)}
-                            </td>
-                            <td className="px-4 py-2 text-right text-slate-500">
-                              {analytics.type === 'scenario'
-                                ? row.pct != null
-                                  ? `${formatNumber(row.pct * 100, { decimals: 1 })}%`
-                                  : '—'
-                                : formatPercentage(row.pct)}
-                            </td>
-                          </tr>
-                        ))}
+                        {detailRows.map((row, index) => {
+                          const isForecastRow = row.rowType === 'forecast' || row.rowType === 'forecast-total';
+                          const isTotalRow = row.rowType === 'history-total' || row.rowType === 'forecast-total';
+                          const key = `${row.rowType ?? 'history'}-${row.period ?? index}-${index}`;
+                          return (
+                            <tr
+                              key={key}
+                              className={classNames(
+                                'hover:bg-slate-50/60',
+                                isForecastRow ? 'bg-violet-50/40' : '',
+                                isTotalRow ? 'bg-slate-50/80 font-semibold' : ''
+                              )}
+                            >
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-left text-slate-700',
+                                  isForecastRow ? 'text-violet-800' : '',
+                                  isTotalRow && !isForecastRow ? 'text-slate-900' : ''
+                                )}
+                              >
+                                {row.period}
+                                {isForecastRow ? (
+                                  <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-xs font-semibold text-violet-700">
+                                    Tendencia
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  isForecastRow ? 'text-violet-800' : 'text-slate-900'
+                                )}
+                              >
+                                {formatNumber(row.currentValue, { decimals: 0 })}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  isForecastRow ? 'text-violet-700' : 'text-slate-900'
+                                )}
+                              >
+                                {formatNumber(row.comparisonValue, { decimals: 0 })}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  isForecastRow ? 'text-violet-700' : getTrendTextClass(row.diff)
+                                )}
+                              >
+                                {formatSignedNumber(row.diff)}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  isForecastRow ? 'text-violet-700' : 'text-slate-500'
+                                )}
+                              >
+                                {formatPctValue(row.pct)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1121,6 +1485,8 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
 }
 
 function ChartRenderer({ chartType, data, series }) {
+  const resolvedSeries = Array.isArray(series) ? series : [];
+
   if (!data?.length) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-500">
@@ -1141,9 +1507,39 @@ function ChartRenderer({ chartType, data, series }) {
             labelFormatter={label => label}
           />
           <Legend />
-          {series.map(item => (
-            <RechartsBar key={item.key} dataKey={item.key} name={item.name} fill={item.color} radius={[4, 4, 0, 0]} />
-          ))}
+          {resolvedSeries.map(item => {
+            const renderer = item.renderer ?? 'bar';
+            if (renderer === 'line') {
+              const strokeWidth = item.strokeWidth ?? 2;
+              const strokeOpacity = item.strokeOpacity ?? 1;
+              const dot = item.dot ?? false;
+              const activeDot = item.activeDot ?? false;
+              return (
+                <RechartsLine
+                  key={item.key}
+                  type="monotone"
+                  dataKey={item.key}
+                  name={item.name}
+                  stroke={item.color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={item.strokeDasharray}
+                  strokeOpacity={strokeOpacity}
+                  dot={dot}
+                  activeDot={activeDot}
+                  connectNulls
+                />
+              );
+            }
+            return (
+              <RechartsBar
+                key={item.key}
+                dataKey={item.key}
+                name={item.name}
+                fill={item.color}
+                radius={[4, 4, 0, 0]}
+              />
+            );
+          })}
         </RechartsBarChart>
       </ResponsiveContainer>
     );
@@ -1160,19 +1556,33 @@ function ChartRenderer({ chartType, data, series }) {
           labelFormatter={label => label}
         />
         <Legend />
-        {series.map(item => (
-          <RechartsLine
-            key={item.key}
-            type="monotone"
-            dataKey={item.key}
-            name={item.name}
-            stroke={item.color}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
-            fill="none"
-          />
-        ))}
+        {resolvedSeries.map(item => {
+          const strokeWidth = item.strokeWidth ?? 2;
+          const strokeOpacity = item.strokeOpacity ?? 1;
+          const dot = item.dot === undefined ? { r: 3 } : item.dot;
+          const activeDot =
+            item.activeDot === undefined
+              ? dot === false
+                ? false
+                : { r: 5 }
+              : item.activeDot;
+          return (
+            <RechartsLine
+              key={item.key}
+              type="monotone"
+              dataKey={item.key}
+              name={item.name}
+              stroke={item.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={item.strokeDasharray}
+              strokeOpacity={strokeOpacity}
+              dot={dot}
+              activeDot={activeDot}
+              fill="none"
+              connectNulls
+            />
+          );
+        })}
       </RechartsLineChart>
     </ResponsiveContainer>
   );
