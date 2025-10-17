@@ -229,6 +229,167 @@ function sumValues(values = []) {
   return values.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
 }
 
+function computeTotals(rows = [], { type } = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  const hasCurrent = rows.some(row => Number.isFinite(row?.currentValue));
+  const hasComparison = rows.some(row => Number.isFinite(row?.comparisonValue));
+
+  if (!hasCurrent && !hasComparison) {
+    return null;
+  }
+
+  const currentSum = hasCurrent ? sumValues(rows.map(row => row?.currentValue ?? null)) : null;
+  const comparisonSum = hasComparison ? sumValues(rows.map(row => row?.comparisonValue ?? null)) : null;
+
+  const diff =
+    hasCurrent && hasComparison && comparisonSum !== null
+      ? (currentSum ?? 0) - (comparisonSum ?? 0)
+      : null;
+
+  const canComputePct =
+    hasComparison && comparisonSum !== null && comparisonSum !== 0 && hasCurrent;
+
+  const pct = canComputePct
+    ? type === 'scenario'
+      ? (currentSum ?? 0) / comparisonSum
+      : diff / comparisonSum
+    : null;
+
+  return {
+    currentValue: hasCurrent ? currentSum : null,
+    comparisonValue: hasComparison ? comparisonSum : null,
+    diff,
+    pct
+  };
+}
+
+function forecastArima(values = [], steps = 6) {
+  const series = values.map(value => Number(value)).filter(value => Number.isFinite(value));
+
+  if (series.length < 4 || steps <= 0) {
+    return [];
+  }
+
+  const diffs = [];
+  for (let index = 1; index < series.length; index += 1) {
+    diffs.push(series[index] - series[index - 1]);
+  }
+
+  if (diffs.length < 2) {
+    return [];
+  }
+
+  const meanDiff = diffs.reduce((total, value) => total + value, 0) / diffs.length;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 1; index < diffs.length; index += 1) {
+    const prev = diffs[index - 1] - meanDiff;
+    const current = diffs[index] - meanDiff;
+    numerator += prev * current;
+    denominator += prev * prev;
+  }
+
+  let phi = denominator !== 0 ? numerator / denominator : 0;
+  // Limitar el parámetro para mantener estabilidad en la proyección.
+  if (!Number.isFinite(phi)) {
+    phi = 0;
+  } else {
+    const LIMIT = 0.99;
+    phi = Math.max(-LIMIT, Math.min(LIMIT, phi));
+  }
+
+  const predictions = [];
+  let lastValue = series[series.length - 1];
+  let lastDiff = diffs[diffs.length - 1];
+
+  for (let step = 0; step < steps; step += 1) {
+    const forecastDiff = meanDiff + phi * (lastDiff - meanDiff);
+    lastValue += forecastDiff;
+    predictions.push(lastValue);
+    lastDiff = forecastDiff;
+  }
+
+  return predictions;
+}
+
+function addMonths(year, month, offset) {
+  const date = new Date(Number(year) || 2000, (Number(month) || 1) - 1, 1);
+  date.setMonth(date.getMonth() + offset);
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1
+  };
+}
+
+function formatTrendLabel(year, month) {
+  const short = MONTH_SHORT_LABELS[(month - 1 + 12) % 12] ?? monthName(month);
+  const shortYear = `${year}`.slice(-2);
+  return `${short} '${shortYear} · T`;
+}
+
+function computeForecast({ type, history = [], latestRecord, periods = 6 }) {
+  if (type !== 'monthly' && type !== 'scenario') {
+    return null;
+  }
+
+  const series = history
+    .map(item => toNumber(item?.valor))
+    .filter(value => Number.isFinite(value));
+
+  if (series.length < 6) {
+    return null;
+  }
+
+  const predictions = forecastArima(series, periods);
+  if (!predictions.length) {
+    return null;
+  }
+
+  const baseYear = Number(latestRecord?.anio) || new Date().getFullYear();
+  const baseMonth = Number(latestRecord?.mes ?? 12) || 12;
+
+  const rows = predictions.map((value, index) => {
+    const { year, month } = addMonths(baseYear, baseMonth, index + 1);
+    return {
+      period: formatMonth(year, month),
+      label: formatTrendLabel(year, month),
+      currentValue: value,
+      comparisonValue: null,
+      diff: null,
+      pct: null,
+      isForecast: true
+    };
+  });
+
+  const totals = computeTotals(rows, { type });
+
+  return {
+    rows,
+    totals,
+    chartPoints: rows.map(item => ({
+      period: item.label,
+      current: null,
+      comparison: null,
+      trend: item.currentValue,
+      fullPeriod: item.period,
+      isForecast: true
+    })),
+    series: {
+      key: 'trend',
+      name: 'Tendencia',
+      color: '#7c3aed',
+      renderer: 'line',
+      strokeDasharray: '6 4',
+      strokeWidth: 2,
+      dot: false
+    }
+  };
+}
+
 function buildYearMonthIndex(history = []) {
   const index = new Map();
   history.forEach(item => {
@@ -442,6 +603,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
     const targetsIndex = buildScenarioTargetsIndex(targets);
     const scenarioTargets = targetsIndex.get(scenario) ?? new Map();
     const rows = computeScenarioRows({ currentYear, latestMonth, currentYearMonths, scenarioTargets });
+    const totals = computeTotals(rows, { type });
+    const forecast = computeForecast({ type, history: sortedHistory, latestRecord, periods: 6 });
     if (!rows.length) {
       return {
         type,
@@ -451,6 +614,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
         latestMonth,
         latestRecord,
         rows,
+        totals,
+        forecast,
         comparisonLabel: formatScenarioLabel(scenario)
       };
     }
@@ -463,6 +628,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows,
+      totals,
+      forecast,
       comparisonLabel: formatScenarioLabel(scenario),
       summary: {
         title: `Comparativo Real vs Meta – ${formatScenarioLabel(scenario).replace('Meta ', '')}`,
@@ -504,6 +671,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
   }
 
   if (type === 'monthly') {
+    const totals = computeTotals(monthlyRows, { type });
+    const forecast = computeForecast({ type, history: sortedHistory, latestRecord, periods: 6 });
     return {
       type,
       currentYear,
@@ -511,6 +680,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: monthlyRows,
+      totals,
+      forecast,
       comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
       summary: {
         title: `Comparación Mensual ${currentYear} vs ${previousYear ?? 'anterior'}`,
@@ -535,6 +706,7 @@ function computeAnalytics({ type, scenario, history, targets }) {
       previousYear
     });
     const lastQuarterRow = quarterRows[quarterRows.length - 1];
+    const totals = computeTotals(quarterRows, { type });
     return {
       type,
       currentYear,
@@ -542,6 +714,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: quarterRows,
+      totals,
+      forecast: null,
       comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
       summary: {
         title: `Comparación Trimestral ${currentYear} vs ${previousYear ?? 'anterior'}`,
@@ -566,6 +740,7 @@ function computeAnalytics({ type, scenario, history, targets }) {
       previousYear
     });
     const annualRow = annualRows[0];
+    const totals = computeTotals(annualRows, { type });
     return {
       type,
       currentYear,
@@ -573,6 +748,8 @@ function computeAnalytics({ type, scenario, history, targets }) {
       latestMonth,
       latestRecord,
       rows: annualRows,
+      totals,
+      forecast: null,
       comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
       summary: {
         title: `Comparación Anual Acumulada ${currentYear} vs ${previousYear ?? 'anterior'}`,
@@ -932,6 +1109,69 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
   }, [historyQuery.data, targetsQuery.data, type, scenario]);
 
   const [chartType, setChartType] = useState('line');
+  const [showTrend, setShowTrend] = useState(false);
+
+  const hasForecast = Boolean(analytics?.forecast?.rows?.length);
+
+  useEffect(() => {
+    setShowTrend(false);
+  }, [indicator?.id]);
+
+  useEffect(() => {
+    if (!hasForecast) {
+      setShowTrend(false);
+    }
+  }, [hasForecast]);
+
+  const detailRows = useMemo(() => {
+    if (!analytics?.rows) {
+      return [];
+    }
+    const baseRows = analytics.rows.map(row => ({ ...row, isForecast: false }));
+    if (showTrend && analytics.forecast?.rows?.length) {
+      const forecastRows = analytics.forecast.rows.map(row => ({ ...row, isForecast: true }));
+      return [...baseRows, ...forecastRows];
+    }
+    return baseRows;
+  }, [analytics, showTrend]);
+
+  const chartDataForDisplay = useMemo(() => {
+    if (!analytics?.chartData) {
+      return [];
+    }
+    if (showTrend && analytics.forecast?.chartPoints?.length) {
+      const baseData = analytics.chartData.map((item, index, array) => {
+        if (index === array.length - 1) {
+          return { ...item, trend: item.current ?? null };
+        }
+        return { ...item };
+      });
+      return [...baseData, ...analytics.forecast.chartPoints];
+    }
+    return analytics.chartData;
+  }, [analytics, showTrend]);
+
+  const chartSeriesForDisplay = useMemo(() => {
+    if (!analytics?.chartSeries) {
+      return [];
+    }
+    if (showTrend && analytics.forecast?.series) {
+      return [...analytics.chartSeries, analytics.forecast.series];
+    }
+    return analytics.chartSeries;
+  }, [analytics, showTrend]);
+
+  const totals = analytics?.totals ?? null;
+  const forecastTotals = analytics?.forecast?.totals ?? null;
+
+  const formatPctValue = value => {
+    if (analytics?.type === 'scenario') {
+      return value !== null && value !== undefined
+        ? `${formatNumber(value * 100, { decimals: 1 })}%`
+        : '—';
+    }
+    return formatPercentage(value);
+  };
 
   useEffect(() => {
     const handleKey = event => {
@@ -1003,14 +1243,13 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
             analytics?.rows?.length ? (
               <div className="mt-6 space-y-6">
                 <section className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-widest text-slate-400">Último mes con datos</p>
                       <p className="text-sm font-semibold text-slate-700">
                         {formatMonth(analytics.currentYear, analytics.latestMonth)}
                       </p>
                     </div>
-                    <ChartTypeToggle value={chartType} onChange={setChartType} />
                   </div>
                 </section>
 
@@ -1055,9 +1294,30 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                         Visualice el comportamiento mensual de {analytics.currentYear} comparado con {analytics.comparisonLabel}.
                       </p>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {hasForecast ? (
+                        <label
+                          className={classNames(
+                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition',
+                            showTrend
+                              ? 'border-violet-300 bg-violet-50 text-violet-700'
+                              : 'border-slate-200 bg-white text-slate-500 hover:border-violet-200 hover:text-violet-600'
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            checked={showTrend}
+                            onChange={event => setShowTrend(event.target.checked)}
+                          />
+                          Tendencia
+                        </label>
+                      ) : null}
+                      <ChartTypeToggle value={chartType} onChange={setChartType} />
+                    </div>
                   </header>
                   <div className="h-72 w-full">
-                    <ChartRenderer chartType={chartType} data={analytics.chartData} series={analytics.chartSeries} />
+                    <ChartRenderer chartType={chartType} data={chartDataForDisplay} series={chartSeriesForDisplay} />
                   </div>
                 </section>
 
@@ -1081,28 +1341,104 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {analytics.rows.map((row, index) => (
-                          <tr key={`${row.period}-${index}`} className="hover:bg-slate-50/60">
-                            <td className="px-4 py-2 text-left text-slate-700">{row.period}</td>
+                        {detailRows.map((row, index) => {
+                          const key = row.isForecast ? `forecast-${index}` : `${row.period}-${index}`;
+                          return (
+                            <tr
+                              key={key}
+                              className={classNames(
+                                'hover:bg-slate-50/60',
+                                row.isForecast ? 'bg-violet-50/40' : ''
+                              )}
+                            >
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-left text-slate-700',
+                                  row.isForecast ? 'text-violet-800' : ''
+                                )}
+                              >
+                                {row.period}
+                                {row.isForecast ? (
+                                  <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-xs font-semibold text-violet-700">
+                                    Tendencia
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  row.isForecast ? 'text-violet-800' : 'text-slate-900'
+                                )}
+                              >
+                                {formatNumber(row.currentValue, { decimals: 0 })}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  row.isForecast ? 'text-violet-700' : 'text-slate-900'
+                                )}
+                              >
+                                {formatNumber(row.comparisonValue, { decimals: 0 })}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  row.isForecast ? 'text-violet-700' : getTrendTextClass(row.diff)
+                                )}
+                              >
+                                {formatSignedNumber(row.diff)}
+                              </td>
+                              <td
+                                className={classNames(
+                                  'px-4 py-2 text-right',
+                                  row.isForecast ? 'text-violet-700' : 'text-slate-500'
+                                )}
+                              >
+                                {formatPctValue(row.pct)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-50 text-sm font-semibold text-slate-800">
+                        {totals ? (
+                          <tr>
+                            <td className="px-4 py-2 text-left text-slate-700">Total</td>
                             <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(row.currentValue, { decimals: 0 })}
+                              {formatNumber(totals.currentValue, { decimals: 0 })}
                             </td>
                             <td className="px-4 py-2 text-right text-slate-900">
-                              {formatNumber(row.comparisonValue, { decimals: 0 })}
+                              {formatNumber(totals.comparisonValue, { decimals: 0 })}
                             </td>
-                            <td className={`px-4 py-2 text-right text-slate-900 ${getTrendTextClass(row.diff)}`}>
-                              {formatSignedNumber(row.diff)}
+                            <td className={classNames('px-4 py-2 text-right', getTrendTextClass(totals.diff))}>
+                              {formatSignedNumber(totals.diff)}
                             </td>
-                            <td className="px-4 py-2 text-right text-slate-500">
-                              {analytics.type === 'scenario'
-                                ? row.pct != null
-                                  ? `${formatNumber(row.pct * 100, { decimals: 1 })}%`
-                                  : '—'
-                                : formatPercentage(row.pct)}
+                            <td className="px-4 py-2 text-right text-slate-500">{formatPctValue(totals.pct)}</td>
+                          </tr>
+                        ) : null}
+                        {showTrend && forecastTotals ? (
+                          <tr className="text-violet-800">
+                            <td className="px-4 py-2 text-left">
+                              Total tendencia
+                              <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-2 text-xs font-semibold text-violet-700">
+                                Tendencia
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              {formatNumber(forecastTotals.currentValue, { decimals: 0 })}
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              {formatNumber(forecastTotals.comparisonValue, { decimals: 0 })}
+                            </td>
+                            <td className="px-4 py-2 text-right text-violet-700">
+                              {formatSignedNumber(forecastTotals.diff)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-violet-700">
+                              {formatPctValue(forecastTotals.pct)}
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
+                        ) : null}
+                      </tfoot>
                     </table>
                   </div>
                 </section>
@@ -1121,6 +1457,8 @@ function IndicatorAnalyticsModal({ entry, onClose }) {
 }
 
 function ChartRenderer({ chartType, data, series }) {
+  const resolvedSeries = Array.isArray(series) ? series : [];
+
   if (!data?.length) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-500">
@@ -1141,9 +1479,39 @@ function ChartRenderer({ chartType, data, series }) {
             labelFormatter={label => label}
           />
           <Legend />
-          {series.map(item => (
-            <RechartsBar key={item.key} dataKey={item.key} name={item.name} fill={item.color} radius={[4, 4, 0, 0]} />
-          ))}
+          {resolvedSeries.map(item => {
+            const renderer = item.renderer ?? 'bar';
+            if (renderer === 'line') {
+              const strokeWidth = item.strokeWidth ?? 2;
+              const strokeOpacity = item.strokeOpacity ?? 1;
+              const dot = item.dot ?? false;
+              const activeDot = item.activeDot ?? false;
+              return (
+                <RechartsLine
+                  key={item.key}
+                  type="monotone"
+                  dataKey={item.key}
+                  name={item.name}
+                  stroke={item.color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={item.strokeDasharray}
+                  strokeOpacity={strokeOpacity}
+                  dot={dot}
+                  activeDot={activeDot}
+                  connectNulls
+                />
+              );
+            }
+            return (
+              <RechartsBar
+                key={item.key}
+                dataKey={item.key}
+                name={item.name}
+                fill={item.color}
+                radius={[4, 4, 0, 0]}
+              />
+            );
+          })}
         </RechartsBarChart>
       </ResponsiveContainer>
     );
@@ -1160,19 +1528,33 @@ function ChartRenderer({ chartType, data, series }) {
           labelFormatter={label => label}
         />
         <Legend />
-        {series.map(item => (
-          <RechartsLine
-            key={item.key}
-            type="monotone"
-            dataKey={item.key}
-            name={item.name}
-            stroke={item.color}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
-            fill="none"
-          />
-        ))}
+        {resolvedSeries.map(item => {
+          const strokeWidth = item.strokeWidth ?? 2;
+          const strokeOpacity = item.strokeOpacity ?? 1;
+          const dot = item.dot === undefined ? { r: 3 } : item.dot;
+          const activeDot =
+            item.activeDot === undefined
+              ? dot === false
+                ? false
+                : { r: 5 }
+              : item.activeDot;
+          return (
+            <RechartsLine
+              key={item.key}
+              type="monotone"
+              dataKey={item.key}
+              name={item.name}
+              stroke={item.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={item.strokeDasharray}
+              strokeOpacity={strokeOpacity}
+              dot={dot}
+              activeDot={activeDot}
+              fill="none"
+              connectNulls
+            />
+          );
+        })}
       </RechartsLineChart>
     </ResponsiveContainer>
   );
