@@ -131,11 +131,6 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
       codes: ['SMS-03B-L'],
       keywords: ['disponibilidad', '04l'],
       fallbackTitle: 'Índice de Disponibilidad (%) - Pista 04L-22R'
-    },
-    {
-      codes: ['SMS-04'],
-      keywords: ['luces', 'operativas', 'pista'],
-      fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
     }
   ]
 },
@@ -3489,7 +3484,8 @@ function buildDirectionSectionsMarkup(tree) {
 }
 
 function buildSmsObjective2ModalMarkup(indicatorsData, config) {
-  const title = 'Objetivo 2 - Índice de Confiabilidad y Disponibilidad de Pistas';
+  const title = 'Indicador 2.1 y 2.2';
+  const subtitle = 'Índice de confiabilidad y disponibilidad de pista';
   
   return `
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -3497,9 +3493,7 @@ function buildSmsObjective2ModalMarkup(indicatorsData, config) {
         <header class="flex items-center justify-between p-6 border-b border-slate-200">
           <div>
             <h2 class="text-xl font-semibold text-slate-900">${title}</h2>
-            <p class="text-sm text-slate-500 mt-1">
-              Comparativo mensual por indicador con niveles de alerta
-            </p>
+            <p class="text-sm text-slate-500 mt-1">${subtitle}</p>
           </div>
           <button type="button" data-close-modal class="text-slate-400 hover:text-slate-600">
             <i class="fa-solid fa-times text-xl"></i>
@@ -3507,40 +3501,68 @@ function buildSmsObjective2ModalMarkup(indicatorsData, config) {
         </header>
         
         <div class="flex-1 p-6 overflow-auto">
+          <!-- Indicadores de niveles de alerta -->
           <div class="bg-slate-50 rounded-lg p-4 mb-6">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div class="text-center">
-                <div class="w-4 h-4 bg-green-600 mx-auto mb-1 rounded"></div>
+              <div class="flex items-center justify-center space-x-2">
+                <div class="w-4 h-1 bg-green-600 rounded"></div>
                 <span class="font-medium">Objetivo: 90%</span>
               </div>
-              <div class="text-center">
-                <div class="w-4 h-4 bg-yellow-500 mx-auto mb-1 rounded"></div>
-                <span class="font-medium">Alerta 1: 87%</span>
+              <div class="flex items-center justify-center space-x-2">
+                <div class="w-4 h-1 bg-yellow-500 rounded"></div>
+                <span class="font-medium">Nivel de alerta 1: 87%</span>
               </div>
-              <div class="text-center">
-                <div class="w-4 h-4 bg-orange-500 mx-auto mb-1 rounded"></div>
-                <span class="font-medium">Alerta 2: 83%</span>
+              <div class="flex items-center justify-center space-x-2">
+                <div class="w-4 h-1 bg-orange-500 rounded"></div>
+                <span class="font-medium">Nivel de alerta 2: 83%</span>
               </div>
-              <div class="text-center">
-                <div class="w-4 h-4 bg-red-600 mx-auto mb-1 rounded"></div>
-                <span class="font-medium">Alerta 3: 80%</span>
+              <div class="flex items-center justify-center space-x-2">
+                <div class="w-4 h-1 bg-red-600 rounded"></div>
+                <span class="font-medium">Nivel de alerta 3: 80%</span>
               </div>
             </div>
           </div>
           
+          <!-- Gráfico principal -->
           <div class="bg-white border border-slate-200 rounded-lg p-4">
-            <canvas data-chart class="w-full" style="height: 400px;"></canvas>
+            <canvas data-chart class="w-full" style="height: 450px;"></canvas>
           </div>
           
-          <div class="mt-6 text-xs text-slate-500">
-            <p><strong>Nota:</strong> Los valores mostrados son promedios de ambas pistas (04C-22C y 04L-22R). 
-            Pase el cursor sobre las barras para ver los valores detallados por pista.</p>
+          <!-- Leyenda personalizada adicional (opcional) -->
+          <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <h4 class="font-medium text-blue-700 mb-2">Índice de Confiabilidad (%)</h4>
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="w-3 h-3 bg-blue-500 rounded"></div>
+                  <span>04C-22C</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="w-3 h-3 bg-blue-700 rounded"></div>
+                  <span>04L-22R</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="font-medium text-orange-700 mb-2">Índice de Disponibilidad (%)</h4>
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <div class="w-3 h-3 bg-orange-500 rounded"></div>
+                  <span>04C-22C</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <div class="w-3 h-3 bg-orange-700 rounded"></div>
+                  <span>04L-22R</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   `;
 }
+
 
 function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
   if (!indicatorsData || indicatorsData.length < 4) {
@@ -3574,35 +3596,11 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
     return values;
   }
 
-  // Procesar datos de cada indicador
+  // Procesar datos de cada indicador POR SEPARADO
   const confCValues = processIndicatorData(confC);
   const confLValues = processIndicatorData(confL);
   const dispCValues = processIndicatorData(dispC);
   const dispLValues = processIndicatorData(dispL);
-
-  // Calcular promedios combinados para la visualización principal
-  const confiabilidadPromedio = Array(12).fill(null);
-  const disponibilidadPromedio = Array(12).fill(null);
-
-  for (let i = 0; i < 12; i++) {
-    // Promedio de confiabilidad (04C-22C + 04L-22R)
-    if (confCValues[i] !== null && confLValues[i] !== null) {
-      confiabilidadPromedio[i] = (confCValues[i] + confLValues[i]) / 2;
-    } else if (confCValues[i] !== null) {
-      confiabilidadPromedio[i] = confCValues[i];
-    } else if (confLValues[i] !== null) {
-      confiabilidadPromedio[i] = confLValues[i];
-    }
-
-    // Promedio de disponibilidad (04C-22C + 04L-22R)
-    if (dispCValues[i] !== null && dispLValues[i] !== null) {
-      disponibilidadPromedio[i] = (dispCValues[i] + dispLValues[i]) / 2;
-    } else if (dispCValues[i] !== null) {
-      disponibilidadPromedio[i] = dispCValues[i];
-    } else if (dispLValues[i] !== null) {
-      disponibilidadPromedio[i] = dispLValues[i];
-    }
-  }
 
   // Configuración de niveles de alerta
   const alertLevels = {
@@ -3617,20 +3615,42 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
     data: {
       labels: MONTHS.map(month => month.short),
       datasets: [
+        // Dataset 1: Confiabilidad 04C-22C (azul claro)
         {
-          label: 'Índice de Confiabilidad (%)',
-          data: confiabilidadPromedio,
-          backgroundColor: 'rgba(59, 130, 246, 0.8)',
+          label: 'Índice de Confiabilidad (%) - 04C-22C',
+          data: confCValues,
+          backgroundColor: 'rgba(59, 130, 246, 0.8)', // Azul
           borderColor: '#3b82f6',
           borderWidth: 1,
           barPercentage: 0.8,
           categoryPercentage: 0.9
         },
+        // Dataset 2: Confiabilidad 04L-22R (azul más oscuro)
         {
-          label: 'Índice de Disponibilidad (%)',
-          data: disponibilidadPromedio,
-          backgroundColor: 'rgba(249, 115, 22, 0.8)',
+          label: 'Índice de Confiabilidad (%) - 04L-22R',
+          data: confLValues,
+          backgroundColor: 'rgba(37, 99, 235, 0.8)', // Azul más oscuro
+          borderColor: '#2563eb',
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        },
+        // Dataset 3: Disponibilidad 04C-22C (naranja claro)
+        {
+          label: 'Índice de Disponibilidad (%) - 04C-22C',
+          data: dispCValues,
+          backgroundColor: 'rgba(249, 115, 22, 0.8)', // Naranja
           borderColor: '#f97316',
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        },
+        // Dataset 4: Disponibilidad 04L-22R (naranja más oscuro)
+        {
+          label: 'Índice de Disponibilidad (%) - 04L-22R',
+          data: dispLValues,
+          backgroundColor: 'rgba(234, 88, 12, 0.8)', // Naranja más oscuro
+          borderColor: '#ea580c',
           borderWidth: 1,
           barPercentage: 0.8,
           categoryPercentage: 0.9
@@ -3649,6 +3669,10 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
           stacked: false,
           grid: {
             display: false
+          },
+          title: {
+            display: true,
+            text: '2025'
           }
         },
         y: {
@@ -3659,9 +3683,13 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
           grid: {
             color: 'rgba(0, 0, 0, 0.1)'
           },
+          title: {
+            display: true,
+            text: 'Porcentaje'
+          },
           ticks: {
             callback: function(value) {
-              return value.toFixed(1) + '%';
+              return value.toFixed(0) + '%';
             },
             stepSize: 2
           }
@@ -3672,9 +3700,9 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
           position: 'bottom',
           labels: {
             usePointStyle: true,
-            padding: 20,
+            padding: 15,
             font: {
-              size: 12
+              size: 11
             }
           }
         },
@@ -3686,25 +3714,6 @@ function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
             label: function(context) {
               const value = context.parsed.y;
               return context.dataset.label + ': ' + value.toFixed(2) + '%';
-            },
-            afterBody: function(context) {
-              const monthIndex = context[0].dataIndex;
-              const details = [];
-              
-              if (confCValues[monthIndex] !== null) {
-                details.push(`Confiabilidad 04C-22C: ${confCValues[monthIndex].toFixed(2)}%`);
-              }
-              if (confLValues[monthIndex] !== null) {
-                details.push(`Confiabilidad 04L-22R: ${confLValues[monthIndex].toFixed(2)}%`);
-              }
-              if (dispCValues[monthIndex] !== null) {
-                details.push(`Disponibilidad 04C-22C: ${dispCValues[monthIndex].toFixed(2)}%`);
-              }
-              if (dispLValues[monthIndex] !== null) {
-                details.push(`Disponibilidad 04L-22R: ${dispLValues[monthIndex].toFixed(2)}%`);
-              }
-              
-              return details;
             }
           }
         },
