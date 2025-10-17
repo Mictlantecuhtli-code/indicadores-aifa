@@ -108,14 +108,21 @@ const SMS_OBJECTIVE_BLUEPRINTS = [
   {
     id: 'objective-2',
     title: 'Objetivo 2',
-    description:
-      'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+    description: 'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
     iconClass: 'fa-solid fa-lightbulb',
+    isGroupedVisualization: true, // Nuevo flag para indicar visualización agrupada
     indicatorMatchers: [
       {
-        codes: ['SMS-03'],
-        keywords: ['confiabilidad', 'disponibilidad', 'pista'],
-        fallbackTitle: 'Índice de confiabilidad y disponibilidad de pista'
+        codes: ['SMS-03A'],
+        keywords: ['confiabilidad'],
+        fallbackTitle: 'Índice de Confiabilidad (%)',
+        chartColor: '#3b82f6' // Azul para confiabilidad
+      },
+      {
+        codes: ['SMS-03B'],
+        keywords: ['disponibilidad'],
+        fallbackTitle: 'Índice de Disponibilidad (%)',
+        chartColor: '#f97316' // Naranja para disponibilidad
       },
       {
         codes: ['SMS-04'],
@@ -266,6 +273,7 @@ const SMS_KEYWORDS = [
   'sistema de gestion de seguridad',
   'safety management system'
 ];
+
 
 function isSmsDirection(node) {
   const name = normalizeMatchText(node?.nombre);
@@ -2344,21 +2352,30 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
 // Función buildChartConfig corregida
 // CAMBIO: Ahora acepta los parámetros showHistorical y showTrend para controlar histórico extendido y tendencia proyectada
 
-function buildChartConfig(realData, type, scenario, chartType = 'line', options = {}) {
+function buildChartConfig(realData, type, scenario, chartType = 'line', showHistorical = false) {
+  // NUEVA LÓGICA PARA OBJETIVO 2 SMS
+  if (Array.isArray(realData) && realData.length > 1) {
+    // Verificar si es el objetivo 2 (ambos indicadores SMS-03A y SMS-03B)
+    const hasConfiabilidad = realData.some(data => data.indicator?.clave === 'SMS-03A');
+    const hasDisponibilidad = realData.some(data => data.indicator?.clave === 'SMS-03B');
+    
+    if (hasConfiabilidad && hasDisponibilidad) {
+      return buildSmsObjective2ChartConfig(realData, 'bar'); // Forzar barras para esta visualización
+    }
+  }
+  
+  // CONTINÚA CON LA LÓGICA EXISTENTE...
   if (!realData) return null;
-
-  const { showHistorical = false, showTrend = false, forecastData = null } = options;
-
+  
   if (type === 'monthly') {
-    return buildMonthlyChartConfig(realData, chartType, showHistorical, { showTrend, forecastData });
+    return buildMonthlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'quarterly') {
     return buildQuarterlyChartConfig(realData, chartType, showHistorical);
   } else if (type === 'annual') {
     return buildAnnualChartConfig(realData, chartType, showHistorical);
+  } else {
+    return buildScenarioChartConfig(realData, scenario, chartType);
   }
-
-  // Los escenarios no usan el histórico de 4 años
-  return buildScenarioChartConfig(realData, scenario, chartType, { showTrend, forecastData });
 }
 
 // Función buildChartTypeToggle corregida
@@ -3457,6 +3474,186 @@ function buildDirectionSectionsMarkup(tree) {
   return directions.map(buildDirectionSection).join('');
 }
 
+function buildSmsObjective2ChartConfig(indicatorsData, chartType = 'bar') {
+  if (!indicatorsData || indicatorsData.length < 2) {
+    return null;
+  }
+
+  // Buscar los datos de SMS-03A y SMS-03B
+  const confiabilidadData = indicatorsData.find(data => 
+    data.indicator?.clave === 'SMS-03A'
+  );
+  const disponibilidadData = indicatorsData.find(data => 
+    data.indicator?.clave === 'SMS-03B'
+  );
+
+  if (!confiabilidadData || !disponibilidadData) {
+    return null;
+  }
+
+  const currentYear = CURRENT_YEAR;
+
+  // Obtener datos por mes para ambos indicadores
+  const confiabilidadValues = Array(12).fill(null);
+  const disponibilidadValues = Array(12).fill(null);
+
+  // Procesar datos de confiabilidad
+  const confData = getDataByYear(confiabilidadData.history, currentYear);
+  confData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12) {
+      const numericValue = Number(item.valor);
+      if (Number.isFinite(numericValue)) {
+        confiabilidadValues[item.mes - 1] = numericValue;
+      }
+    }
+  });
+
+  // Procesar datos de disponibilidad
+  const dispData = getDataByYear(disponibilidadData.history, currentYear);
+  dispData.forEach(item => {
+    if (item.mes >= 1 && item.mes <= 12) {
+      const numericValue = Number(item.valor);
+      if (Number.isFinite(numericValue)) {
+        disponibilidadValues[item.mes - 1] = numericValue;
+      }
+    }
+  });
+
+  // Obtener metas/niveles de alerta
+  const alertLevels = {
+    objetivo: 90.0,    // MEDIO en la base de datos
+    alerta1: 87.0,     // Nivel de alerta 1
+    alerta2: 83.0,     // Nivel de alerta 2  
+    alerta3: 80.0      // BAJO en la base de datos
+  };
+
+  const config = {
+    type: chartType,
+    data: {
+      labels: MONTHS.map(month => month.short),
+      datasets: [
+        {
+          label: 'Índice de Confiabilidad (%)',
+          data: confiabilidadValues,
+          backgroundColor: 'rgba(59, 130, 246, 0.8)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        },
+        {
+          label: 'Índice de Disponibilidad (%)',
+          data: disponibilidadValues,
+          backgroundColor: 'rgba(249, 115, 22, 0.8)',
+          borderColor: '#f97316',
+          borderWidth: 1,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: false
+        },
+        y: {
+          beginAtZero: false,
+          min: 75, // Empezar desde 75% para mejor visualización
+          max: 105,
+          stacked: false,
+          ticks: {
+            callback: function(value) {
+              return value.toFixed(1) + '%';
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            padding: 20
+          }
+        },
+        annotation: {
+          annotations: {
+            objetivo: {
+              type: 'line',
+              yMin: alertLevels.objetivo,
+              yMax: alertLevels.objetivo,
+              borderColor: '#059669',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              label: {
+                enabled: true,
+                content: 'Objetivo 90%',
+                position: 'end',
+                backgroundColor: '#059669',
+                color: 'white',
+                padding: 4
+              }
+            },
+            alerta1: {
+              type: 'line',
+              yMin: alertLevels.alerta1,
+              yMax: alertLevels.alerta1,
+              borderColor: '#fbbf24',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 1: 87%',
+                position: 'start',
+                backgroundColor: '#fbbf24',
+                color: 'white',
+                padding: 4
+              }
+            },
+            alerta2: {
+              type: 'line',
+              yMin: alertLevels.alerta2,
+              yMax: alertLevels.alerta2,
+              borderColor: '#f97316',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 2: 83%',
+                position: 'start',
+                backgroundColor: '#f97316',
+                color: 'white',
+                padding: 4
+              }
+            },
+            alerta3: {
+              type: 'line',
+              yMin: alertLevels.alerta3,
+              yMax: alertLevels.alerta3,
+              borderColor: '#dc2626',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              label: {
+                enabled: true,
+                content: 'Nivel de alerta 3: 80%',
+                position: 'start',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                padding: 4
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  return config;
+}
+
 async function renderDirections(container) {
   if (!container) return;
   renderLoading(container, 'Cargando direcciones...');
@@ -3473,6 +3670,8 @@ async function renderDirections(container) {
     renderError(container, error);
   }
 }
+
+
 
 async function openFaunaCaptureModal(title) {
   try {
