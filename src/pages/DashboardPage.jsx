@@ -484,51 +484,6 @@ function buildYearMonthIndex(history = []) {
   return index;
 }
 
-function buildValueTimeline(history = []) {
-  return history
-    .map(item => ({
-      year: Number(item?.anio),
-      month: Number(item?.mes ?? 0),
-      value: toNumber(item?.valor)
-    }))
-    .filter(item => Number.isFinite(item.year) && Number.isFinite(item.month) && item.value !== null)
-    .sort((a, b) => {
-      if (a.year === b.year) {
-        return a.month - b.month;
-      }
-      return a.year - b.year;
-    });
-}
-
-function buildTimelineIndex(timeline = []) {
-  const map = new Map();
-  timeline.forEach((entry, index) => {
-    const key = `${entry.year}-${entry.month}`;
-    if (!map.has(key)) {
-      map.set(key, index);
-    }
-  });
-  return map;
-}
-
-function findPreviousTimelineEntry(timeline = [], indexMap = new Map(), year, month) {
-  const key = `${Number(year)}-${Number(month)}`;
-  if (!indexMap.has(key)) {
-    return null;
-  }
-
-  let pointer = indexMap.get(key) - 1;
-  while (pointer >= 0) {
-    const candidate = timeline[pointer];
-    if (candidate && candidate.value !== null) {
-      return candidate;
-    }
-    pointer -= 1;
-  }
-
-  return null;
-}
-
 function sortHistory(records = []) {
   return [...records]
     .filter(Boolean)
@@ -589,27 +544,26 @@ function formatScenarioLabel(scenario) {
 
 function computeMonthlyRows({
   currentYear,
+  previousYear,
   latestMonth,
   currentYearMonths,
-  timeline,
-  timelineIndex
+  previousYearMonths
 }) {
   const rows = [];
   for (let month = 1; month <= latestMonth; month += 1) {
     const currentValue = currentYearMonths.get(month) ?? null;
     if (currentValue === null) continue;
 
-    const previousEntry = findPreviousTimelineEntry(timeline, timelineIndex, currentYear, month);
-    const previousValue = previousEntry ? previousEntry.value : null;
+    const comparisonValue = previousYear ? previousYearMonths.get(month) ?? null : null;
     const diff =
-      currentValue !== null && previousValue !== null ? currentValue - previousValue : null;
-    const pct = diff !== null && previousValue ? diff / previousValue : null;
+      currentValue !== null && comparisonValue !== null ? currentValue - comparisonValue : null;
+    const pct = diff !== null && comparisonValue ? diff / comparisonValue : null;
     rows.push({
       period: formatMonth(currentYear, month),
-      comparisonPeriod: previousEntry ? formatMonth(previousEntry.year, previousEntry.month) : null,
+      comparisonPeriod: previousYear ? formatMonth(previousYear, month) : null,
       label: MONTH_SHORT_LABELS[month - 1] ?? String(month),
       currentValue,
-      comparisonValue: previousValue,
+      comparisonValue,
       diff,
       pct
     });
@@ -632,8 +586,8 @@ function computeQuarterRows({ currentYear, latestMonth, currentYearMonths, previ
     const diff = currentSum - previousSum;
     const pct = previousSum ? diff / previousSum : null;
     rows.push({
-      period: `Trimestre ${quarter}`,
-      comparisonPeriod: previousYear ? `Trimestre ${quarter}` : null,
+      period: `Trimestre ${quarter} ${currentYear}`,
+      comparisonPeriod: previousYear ? `Trimestre ${quarter} ${previousYear}` : null,
       currentValue: currentSum,
       comparisonValue: previousSum,
       diff,
@@ -719,9 +673,6 @@ function computeAnalytics({ type, scenario, history, targets }) {
   const index = buildYearMonthIndex(sortedHistory);
   const currentYearMonths = index.get(currentYear) ?? new Map();
   const previousYearMonths = previousYear ? index.get(previousYear) ?? new Map() : new Map();
-  const timeline = buildValueTimeline(sortedHistory);
-  const timelineIndex = buildTimelineIndex(timeline);
-
   if (!currentYearMonths.size) {
     return null;
   }
@@ -777,10 +728,10 @@ function computeAnalytics({ type, scenario, history, targets }) {
 
   const monthlyRows = computeMonthlyRows({
     currentYear,
+    previousYear,
     latestMonth,
     currentYearMonths,
-    timeline,
-    timelineIndex
+    previousYearMonths
   });
 
   if (!monthlyRows.length) {
@@ -793,7 +744,11 @@ function computeAnalytics({ type, scenario, history, targets }) {
   const chartSeries = [{ key: 'current', name: `${currentYear}`, color: '#2563eb' }];
   const hasComparisonSeries = monthlyRows.some(row => row.comparisonValue !== null);
   if (hasComparisonSeries) {
-    chartSeries.push({ key: 'comparison', name: 'Mes anterior', color: '#10b981' });
+    chartSeries.push({
+      key: 'comparison',
+      name: previousYear ? `${previousYear}` : 'Año anterior',
+      color: '#10b981'
+    });
   }
 
   if (type === 'monthly') {
@@ -808,11 +763,11 @@ function computeAnalytics({ type, scenario, history, targets }) {
       rows: monthlyRows,
       totals,
       forecast,
-      comparisonLabel: 'Mes anterior',
+      comparisonLabel: 'Mismo mes año anterior',
       summary: {
         title: `Variación mensual ${currentYear}`,
         currentLabel: lastMonthlyRow.period,
-        comparisonLabel: lastMonthlyRow.comparisonPeriod ?? 'Mes anterior',
+        comparisonLabel: lastMonthlyRow.comparisonPeriod ?? 'Mismo mes año anterior',
         currentValue: lastMonthlyRow.currentValue,
         comparisonValue: lastMonthlyRow.comparisonValue,
         diff: lastMonthlyRow.diff,
@@ -831,6 +786,9 @@ function computeAnalytics({ type, scenario, history, targets }) {
       previousYearMonths,
       previousYear
     });
+    if (!quarterRows.length) {
+      return null;
+    }
     const lastQuarterRow = quarterRows[quarterRows.length - 1];
     const totals = computeTotals(quarterRows, { type });
     return {
@@ -842,11 +800,11 @@ function computeAnalytics({ type, scenario, history, targets }) {
       rows: quarterRows,
       totals,
       forecast: null,
-      comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
+      comparisonLabel: previousYear ? `${previousYear}` : 'Año anterior',
       summary: {
-        title: `Comparación Trimestral ${currentYear} vs ${previousYear ?? 'anterior'}`,
+        title: `Comparación Trimestral ${currentYear} vs ${previousYear ?? 'año anterior'}`,
         currentLabel: lastQuarterRow?.period ?? '',
-        comparisonLabel: lastQuarterRow?.comparisonPeriod ?? '',
+        comparisonLabel: lastQuarterRow?.comparisonPeriod ?? 'Mismo trimestre año anterior',
         currentValue: lastQuarterRow?.currentValue ?? null,
         comparisonValue: lastQuarterRow?.comparisonValue ?? null,
         diff: lastQuarterRow?.diff ?? null,
@@ -876,11 +834,11 @@ function computeAnalytics({ type, scenario, history, targets }) {
       rows: annualRows,
       totals,
       forecast: null,
-      comparisonLabel: previousYear ? `${previousYear}` : 'Periodo anterior',
+      comparisonLabel: previousYear ? `${previousYear}` : 'Año anterior',
       summary: {
-        title: `Comparación Anual Acumulada ${currentYear} vs ${previousYear ?? 'anterior'}`,
+        title: `Comparación Anual Acumulada ${currentYear} vs ${previousYear ?? 'año anterior'}`,
         currentLabel: annualRow?.period ?? '',
-        comparisonLabel: annualRow?.comparisonPeriod ?? '',
+        comparisonLabel: annualRow?.comparisonPeriod ?? 'Año anterior',
         currentValue: annualRow?.currentValue ?? null,
         comparisonValue: annualRow?.comparisonValue ?? null,
         diff: annualRow?.diff ?? null,

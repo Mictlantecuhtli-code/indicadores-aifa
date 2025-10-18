@@ -824,21 +824,18 @@ function buildTimelineIndex(timeline = []) {
 }
 
 function findPreviousTimelineEntry(timeline = [], indexMap = new Map(), year, month) {
-  const key = `${Number(year)}-${Number(month)}`;
+  const comparisonYear = Number(year) - 1;
+  const comparisonMonth = Number(month);
+  if (!Number.isFinite(comparisonYear) || !Number.isFinite(comparisonMonth)) {
+    return null;
+  }
+
+  const key = `${comparisonYear}-${comparisonMonth}`;
   if (!indexMap.has(key)) {
     return null;
   }
 
-  let pointer = indexMap.get(key) - 1;
-  while (pointer >= 0) {
-    const candidate = timeline[pointer];
-    if (candidate && candidate.value !== null) {
-      return candidate;
-    }
-    pointer -= 1;
-  }
-
-  return null;
+  return timeline[indexMap.get(key)] ?? null;
 }
 
 function computeTotals(rows = []) {
@@ -1313,7 +1310,7 @@ function buildSummary(realData, type, scenario) {
       currentLabel: `${month.label} ${latestYear}`,
       comparisonLabel: comparisonEntry
         ? formatMonthLabel(comparisonEntry.year, comparisonEntry.month)
-        : 'Mes anterior',
+        : 'Mismo mes año anterior',
       currentValue: current,
       comparisonValue: comparison,
       diff,
@@ -1432,11 +1429,11 @@ function buildTableContent(realData, type, scenario, options = {}) {
   }
 
   if (!hasHistoricalYears) {
-    headerCells.push('<th class="px-4 py-2 text-right">Mes anterior</th>');
+    headerCells.push('<th class="px-4 py-2 text-right">Mismo mes año anterior</th>');
   }
 
   const variationNote =
-    '<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">vs. mes anterior</div>';
+    '<div class="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">vs. mismo mes año anterior</div>';
 
   headerCells.push(
     hasHistoricalYears
@@ -1490,6 +1487,8 @@ function buildTableContent(realData, type, scenario, options = {}) {
 
   if (type === 'monthly') {
     const currentData = getDataByYear(history, currentYear);
+    const previousYear = currentYear - 1;
+    const previousYearData = getDataByYear(history, previousYear);
     const toNumeric = value => {
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : null;
@@ -1500,6 +1499,14 @@ function buildTableContent(realData, type, scenario, options = {}) {
       const numeric = toNumeric(item.valor);
       if (numeric != null) {
         currentMap.set(item.mes, numeric);
+      }
+    });
+
+    const previousMap = new Map();
+    previousYearData.forEach(item => {
+      const numeric = toNumeric(item.valor);
+      if (numeric != null) {
+        previousMap.set(item.mes, numeric);
       }
     });
 
@@ -1526,8 +1533,7 @@ function buildTableContent(realData, type, scenario, options = {}) {
         return null;
       }
 
-      const previousEntry = findPreviousTimelineEntry(timeline, timelineIndex, currentYear, monthNumber);
-      const comparison = previousEntry ? previousEntry.value : null;
+      const comparison = previousMap.has(monthNumber) ? previousMap.get(monthNumber) : null;
       const diff = current != null && comparison != null ? current - comparison : null;
       const pct = diff !== null && comparison !== null && comparison !== 0 ? diff / comparison : null;
 
