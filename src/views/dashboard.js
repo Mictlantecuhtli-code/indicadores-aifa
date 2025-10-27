@@ -13,6 +13,7 @@ import {
   IMPACTOS_FAUNA_MODAL_ID,
   buildImpactosFaunaChartView,
   buildImpactosFaunaCsv,
+  buildImpactosFaunaDetailTable,
   buildImpactosFaunaModalMarkup,
   buildImpactosFaunaSummary
 } from './modals/modalImpactosFauna.js';
@@ -4390,8 +4391,9 @@ async function openImpactosFaunaModal() {
       cleanup();
       const { config, filteredRecords } = buildImpactosFaunaChartView(records, { showHistorical });
       const summary = buildImpactosFaunaSummary(filteredRecords);
+      const table = buildImpactosFaunaDetailTable(records, { showHistorical });
 
-      root.innerHTML = buildImpactosFaunaModalMarkup({ showHistorical, summary });
+      root.innerHTML = buildImpactosFaunaModalMarkup({ showHistorical, summary, table });
 
       const overlay = root.querySelector('[data-modal-overlay]');
       const closeButtons = root.querySelectorAll('[data-modal-close]');

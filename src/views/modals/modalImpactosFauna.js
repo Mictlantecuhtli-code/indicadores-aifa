@@ -41,19 +41,7 @@ const IMPACT_RATE_THRESHOLDS = [
   }
 ];
 
-function computeImpactRate(record) {
-  const impactos = Number(record?.impactos);
-  const operaciones = Number(record?.total_operaciones);
-
-  if (Number.isFinite(impactos) && Number.isFinite(operaciones) && operaciones > 0) {
-    return (impactos / operaciones) * 100;
-  }
-
-  const tasa = Number(record?.tasa);
-  return Number.isFinite(tasa) ? tasa : 0;
-}
-
-export function filterImpactosFaunaRecords(records, { showHistorical = false } = {}) {
+function normalizeImpactosFaunaRecords(records) {
   if (!Array.isArray(records)) {
     return [];
   }
@@ -68,16 +56,34 @@ export function filterImpactosFaunaRecords(records, { showHistorical = false } =
     }))
     .filter(record => record.anio > 0 && record.mes >= 1 && record.mes <= 12);
 
-  if (!normalized.length) {
-    return [];
-  }
-
   normalized.sort((a, b) => {
     if (a.anio !== b.anio) {
       return a.anio - b.anio;
     }
     return a.mes - b.mes;
   });
+
+  return normalized;
+}
+
+function computeImpactRate(record) {
+  const impactos = Number(record?.impactos);
+  const operaciones = Number(record?.total_operaciones);
+
+  if (Number.isFinite(impactos) && Number.isFinite(operaciones) && operaciones > 0) {
+    return (impactos / operaciones) * 100;
+  }
+
+  const tasa = Number(record?.tasa);
+  return Number.isFinite(tasa) ? tasa : 0;
+}
+
+export function filterImpactosFaunaRecords(records, { showHistorical = false } = {}) {
+  const normalized = normalizeImpactosFaunaRecords(records);
+
+  if (!normalized.length) {
+    return [];
+  }
 
   const availableYears = Array.from(new Set(normalized.map(record => record.anio))).sort((a, b) => b - a);
   const selectedYears = showHistorical ? availableYears.slice(0, 4) : availableYears.slice(0, 1);
@@ -91,6 +97,9 @@ const operationsLabelsPlugin = {
   afterDatasetsDraw(chart, args, pluginOptions) {
     const { ctx, chartArea } = chart;
     const operations = pluginOptions?.operations ?? [];
+    const labelVisibility = Array.isArray(pluginOptions?.labelVisibility)
+      ? pluginOptions.labelVisibility
+      : null;
     const meta = chart.getDatasetMeta(0);
 
     if (!meta) {
@@ -109,6 +118,10 @@ const operationsLabelsPlugin = {
         return;
       }
 
+      if (labelVisibility && labelVisibility[index] === false) {
+        return;
+      }
+
       const text = `${formatNumber(value, { decimals: 0 })} Ops.`;
       const { x, base } = element;
       const y = Math.min(chartArea.bottom - 14, (base ?? chartArea.bottom) + 6);
@@ -124,6 +137,19 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
 
   if (!filtered.length) {
     return { config: null, filteredRecords: [] };
+  }
+
+  const labelStride = showHistorical
+    ? filtered.length >= 36
+      ? 4
+      : filtered.length >= 24
+      ? 3
+      : 2
+    : 1;
+  const labelVisibility = filtered.map((_, index) => (labelStride <= 1 ? true : index % labelStride === 0));
+  if (labelVisibility.length) {
+    labelVisibility[0] = true;
+    labelVisibility[labelVisibility.length - 1] = true;
   }
 
   const labels = filtered.map(record => {
@@ -150,7 +176,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
     pointHoverRadius: 0,
     fill: false,
     yAxisID: 'tasa',
-    order: 0,
+    order: -20,
     segment: {
       borderDash: threshold.borderDash ?? []
     },
@@ -174,7 +200,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           borderRadius: 8,
           maxBarThickness: 40,
           yAxisID: 'impactos',
-          order: 1
+          order: -10
         },
         {
           type: 'line',
@@ -189,7 +215,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           pointBorderColor: '#1d4ed8',
           fill: false,
           yAxisID: 'tasa',
-          order: 4
+          order: 10
         },
         ...thresholdDatasets
       ]
@@ -218,7 +244,19 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
             color: '#475569',
             maxRotation: 0,
             minRotation: 0,
-            autoSkip: false
+            autoSkip: false,
+            callback(value, index) {
+              if (labelVisibility[index] === false) {
+                return '';
+              }
+
+              const label = this?.getLabelForValue?.(value);
+              if (Array.isArray(label)) {
+                return label;
+              }
+
+              return label ?? value;
+            }
           }
         },
         impactos: {
@@ -309,14 +347,15 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           }
         },
         operationsLabels: {
-          operations: operationsData
+          operations: operationsData,
+          labelVisibility
         }
       }
     },
     plugins: [operationsLabelsPlugin]
   };
 
-  return { config, filteredRecords: filtered };
+  return { config, filteredRecords: filtered, labelVisibility };
 }
 
 export function buildImpactosFaunaSummary(records = []) {
@@ -335,7 +374,200 @@ export function buildImpactosFaunaSummary(records = []) {
   };
 }
 
-export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary = null } = {}) {
+function renderRateValue(rate, { emphasize = false } = {}) {
+  if (!Number.isFinite(rate)) {
+    return '<span class="text-slate-400">—</span>';
+  }
+
+  const formatted = formatPercentage(rate, { decimals: 4, scale: 'percentage' });
+  const emphasisClass = emphasize ? 'font-semibold text-slate-900' : 'text-slate-600';
+  return `<span class="${emphasisClass}">${formatted}</span>`;
+}
+
+function renderVariationValue(value, { decimals = 4 } = {}) {
+  if (!Number.isFinite(value)) {
+    return '<span class="text-slate-400">—</span>';
+  }
+
+  const formatted = formatPercentage(Math.abs(value), { decimals, scale: 'percentage' });
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const colorClass = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : 'text-slate-500';
+
+  return `<span class="${colorClass} font-semibold">${sign}${formatted}</span>`;
+}
+
+function renderVariationPercent(value, { decimals = 2 } = {}) {
+  if (!Number.isFinite(value)) {
+    return '<span class="text-slate-400">—</span>';
+  }
+
+  const formatted = formatPercentage(Math.abs(value), { decimals, scale: 'percentage' });
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const colorClass = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : 'text-slate-500';
+
+  return `<span class="${colorClass} font-semibold">${sign}${formatted}</span>`;
+}
+
+export function buildImpactosFaunaDetailTable(records, { showHistorical = false } = {}) {
+  const normalized = normalizeImpactosFaunaRecords(records);
+
+  if (!normalized.length) {
+    return `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        No hay datos históricos suficientes para mostrar el detalle del periodo.
+      </div>
+    `;
+  }
+
+  const availableYearsDesc = Array.from(new Set(normalized.map(record => record.anio))).sort((a, b) => b - a);
+  const currentYear = availableYearsDesc[0];
+  const selectedYearsDesc = showHistorical
+    ? availableYearsDesc.slice(0, Math.min(4, availableYearsDesc.length))
+    : availableYearsDesc.slice(0, Math.min(2, availableYearsDesc.length));
+
+  if (!selectedYearsDesc.length) {
+    return `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        No hay datos históricos suficientes para mostrar el detalle del periodo.
+      </div>
+    `;
+  }
+
+  const selectedYearsAsc = [...selectedYearsDesc].sort((a, b) => a - b);
+  const previousComparisonYear = selectedYearsAsc.length >= 2 ? selectedYearsAsc[selectedYearsAsc.length - 2] : null;
+
+  const ratesByYear = new Map();
+  normalized.forEach(record => {
+    if (!selectedYearsAsc.includes(record.anio)) {
+      return;
+    }
+
+    const rate = computeImpactRate(record);
+    if (!ratesByYear.has(record.anio)) {
+      ratesByYear.set(record.anio, new Map());
+    }
+    ratesByYear.get(record.anio).set(record.mes, rate);
+  });
+
+  const referenceMonths = ratesByYear.get(currentYear)
+    ? Array.from(ratesByYear.get(currentYear).keys())
+    : Array.from(new Set(normalized.map(record => record.mes)));
+
+  const months = referenceMonths.sort((a, b) => a - b);
+
+  if (!months.length) {
+    return `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        No hay datos históricos suficientes para mostrar el detalle del periodo.
+      </div>
+    `;
+  }
+
+  const rows = months
+    .map(month => {
+      const monthLabel = monthName(month) || `Mes ${month}`;
+      const currentRate = ratesByYear.get(currentYear)?.get(month);
+      const previousRate = previousComparisonYear ? ratesByYear.get(previousComparisonYear)?.get(month) : Number.NaN;
+      const variation = Number.isFinite(currentRate) && Number.isFinite(previousRate) ? currentRate - previousRate : Number.NaN;
+      const variationPercent =
+        Number.isFinite(variation) && Number.isFinite(previousRate) && previousRate !== 0
+          ? (variation / previousRate) * 100
+          : Number.NaN;
+
+      if (showHistorical) {
+        const yearCells = selectedYearsAsc
+          .map(year => {
+            const rate = ratesByYear.get(year)?.get(month);
+            const emphasize = year === currentYear;
+            return `<td class="whitespace-nowrap px-4 py-3 text-right">${renderRateValue(rate, { emphasize })}</td>`;
+          })
+          .join('');
+
+        return `
+          <tr>
+            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-600">${monthLabel}</td>
+            ${yearCells}
+            <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationValue(variation)}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationPercent(variationPercent)}</td>
+          </tr>
+        `;
+      }
+
+      const realCell = renderRateValue(currentRate, { emphasize: true });
+      const previousCell = renderRateValue(previousRate, { emphasize: false });
+
+      return `
+        <tr>
+          <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-600">${monthLabel}</td>
+          <td class="whitespace-nowrap px-4 py-3 text-right">${realCell}</td>
+          <td class="whitespace-nowrap px-4 py-3 text-right">${previousCell}</td>
+          <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationValue(variation)}</td>
+          <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationPercent(variationPercent)}</td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  if (!rows.trim()) {
+    return `
+      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+        No hay datos históricos suficientes para mostrar el detalle del periodo.
+      </div>
+    `;
+  }
+
+  const historicalHeaders = showHistorical
+    ? selectedYearsAsc
+        .map(
+          year => `
+            <th scope="col" class="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              ${year}
+            </th>
+          `
+        )
+        .join('')
+    : '';
+
+  const comparisonColumnLabel = showHistorical ? 'Variación (año actual vs. previo)' : 'Variación';
+  const comparisonPercentLabel = showHistorical
+    ? '% Variación (año actual vs. previo)'
+    : '% Variación';
+
+  return `
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50">
+          <tr>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Periodo
+            </th>
+            ${
+              showHistorical
+                ? historicalHeaders
+                : `
+                    <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Real (${currentYear})
+                    </th>
+                    <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Mismo mes año anterior${previousComparisonYear ? ` (${previousComparisonYear})` : ''}
+                    </th>
+                  `
+            }
+            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+              ${comparisonColumnLabel}
+            </th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+              ${comparisonPercentLabel}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary = null, table = '' } = {}) {
   const toggleLabel = showHistorical ? 'Mostrar año en curso' : 'Mostrar últimos 4 años';
   const toggleIcon = showHistorical ? 'fa-solid fa-calendar-day' : 'fa-solid fa-clock-rotate-left';
   const summarySection = summary
@@ -368,6 +600,14 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
     : `
         <div class="mt-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
           No hay valores mensuales disponibles para mostrar.
+        </div>
+      `;
+
+  const detailTable = table
+    ? table
+    : `
+        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+          No hay datos históricos suficientes para mostrar el detalle del periodo.
         </div>
       `;
 
@@ -421,6 +661,34 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
             <div class="h-96">
               <canvas id="chartImpactosFauna" data-impactos-fauna-chart></canvas>
             </div>
+            <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-slate-500">
+              <span class="flex items-center gap-2">
+                <span class="h-2.5 w-8 rounded-full bg-[#93c5fd]"></span>
+                Impactos · Eje izquierdo
+              </span>
+              <span class="flex items-center gap-2">
+                <span class="flex h-2.5 w-2.5 items-center justify-center">
+                  <span class="h-2.5 w-2.5 rounded-full border-2 border-[#1d4ed8] bg-white"></span>
+                </span>
+                Tasa de impactos · Eje derecho
+              </span>
+            </div>
+          </section>
+
+          <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Detalle del periodo</h3>
+                <p class="text-xs text-slate-500">
+                  ${
+                    showHistorical
+                      ? 'Tasa de impactos por año (hasta los últimos cuatro años disponibles).'
+                      : 'Comparativo del año en curso contra el mismo mes del año anterior.'
+                  }
+                </p>
+              </div>
+            </div>
+            ${detailTable}
           </section>
         </div>
 
