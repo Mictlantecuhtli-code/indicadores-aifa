@@ -1,7 +1,20 @@
 
-import { getAreas, getIndicators, getIndicatorHistory, getIndicatorTargets, getCapturasFauna } from '../services/supabaseClient.js';
+import {
+  getAreas,
+  getIndicators,
+  getIndicatorHistory,
+  getIndicatorTargets,
+  getCapturasFauna,
+  getImpactosFauna
+} from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
+import {
+  IMPACTOS_FAUNA_MODAL_ID,
+  buildImpactosFaunaChartView,
+  buildImpactosFaunaCsv,
+  buildImpactosFaunaModalMarkup
+} from './modals/modalImpactosFauna.js';
 
 const OPTION_BLUEPRINTS = [
   {
@@ -198,6 +211,10 @@ const SMS_SECTION_OBJECTIVES = [
     ]
   }
 ];
+
+const SMS_INDICATOR_MODAL_ROUTES = {
+  'sms-indicator-1-1': () => openImpactosFaunaModal()
+};
 
 function buildSmsSectionContent() {
   const objectivesMarkup = SMS_SECTION_OBJECTIVES.map(objective => {
@@ -3898,6 +3915,13 @@ function initSmsIndicatorLinks(container) {
     const name = link.dataset.smsIndicatorName || 'Indicador SMS';
     const subtitle = link.dataset.smsIndicatorSubtitle || '';
     const code = link.dataset.smsIndicatorCode || '';
+    const indicatorId = link.dataset.smsIndicatorId || '';
+
+    const handler = indicatorId ? SMS_INDICATOR_MODAL_ROUTES[indicatorId] : null;
+    if (typeof handler === 'function') {
+      handler({ link, name, subtitle, code });
+      return;
+    }
 
     openDirectionIndicatorPlaceholderModal({ name, subtitle, code });
   });
@@ -4292,6 +4316,199 @@ async function renderDirections(container) {
   } catch (error) {
     console.error(error);
     renderError(container, error);
+  }
+}
+
+async function openImpactosFaunaModal() {
+  try {
+    const root = ensureModalContainer();
+    document.body.classList.add('overflow-hidden');
+
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${IMPACTOS_FAUNA_MODAL_ID}">
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full">
+          <div class="text-center space-y-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            <p class="text-sm text-slate-600">Cargando datos del indicador...</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const records = await getImpactosFauna();
+
+    if (!records || !records.length) {
+      root.innerHTML = `
+        <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${IMPACTOS_FAUNA_MODAL_ID}">
+          <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full text-center space-y-4">
+            <i class="fa-solid fa-chart-simple text-4xl text-slate-300"></i>
+            <div class="space-y-1">
+              <h3 class="text-lg font-semibold text-slate-900">Sin datos disponibles</h3>
+              <p class="text-sm text-slate-600">No se encontraron registros en la tabla de impactos con fauna.</p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
+              data-modal-close
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      `;
+
+      const overlay = root.querySelector('[data-modal-overlay]');
+      const closeButtons = root.querySelectorAll('[data-modal-close]');
+      const handleClose = () => {
+        closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+        overlay?.removeEventListener('click', overlayListener);
+        document.removeEventListener('keydown', escListener);
+        closeIndicatorModal();
+      };
+      const overlayListener = event => {
+        if (event.target === overlay) {
+          handleClose();
+        }
+      };
+      const escListener = event => {
+        if (event.key === 'Escape') {
+          handleClose();
+        }
+      };
+
+      overlay?.addEventListener('click', overlayListener);
+      closeButtons.forEach(button => button.addEventListener('click', handleClose));
+      document.addEventListener('keydown', escListener);
+      return;
+    }
+
+    let showHistorical = false;
+    let cleanup = () => {};
+
+    const renderModal = () => {
+      cleanup();
+      root.innerHTML = buildImpactosFaunaModalMarkup({ showHistorical });
+
+      const overlay = root.querySelector('[data-modal-overlay]');
+      const closeButtons = root.querySelectorAll('[data-modal-close]');
+      const toggleButton = root.querySelector('[data-impactos-fauna-toggle]');
+      const exportButton = root.querySelector('[data-impactos-fauna-export]');
+      const canvas = root.querySelector('#chartImpactosFauna');
+
+      const { config } = buildImpactosFaunaChartView(records, { showHistorical });
+
+      const handleClose = () => {
+        cleanup();
+        closeIndicatorModal();
+      };
+
+      const overlayListener = event => {
+        if (event.target === overlay) {
+          handleClose();
+        }
+      };
+
+      const escListener = event => {
+        if (event.key === 'Escape') {
+          handleClose();
+        }
+      };
+
+      overlay?.addEventListener('click', overlayListener);
+      closeButtons.forEach(button => button.addEventListener('click', handleClose));
+      document.addEventListener('keydown', escListener);
+
+      cleanup = () => {
+        overlay?.removeEventListener('click', overlayListener);
+        closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+        document.removeEventListener('keydown', escListener);
+      };
+
+      if (config && canvas) {
+        renderModalChart(canvas, config);
+      } else if (canvas) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500';
+        emptyState.textContent = 'Sin datos disponibles para el periodo seleccionado.';
+        canvas.replaceWith(emptyState);
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          showHistorical = !showHistorical;
+          renderModal();
+        });
+      }
+
+      if (exportButton) {
+        const csv = buildImpactosFaunaCsv(records, { showHistorical });
+        exportButton.disabled = !csv;
+        exportButton.classList.toggle('opacity-50', !csv);
+        exportButton.classList.toggle('pointer-events-none', !csv);
+
+        if (csv) {
+          exportButton.addEventListener('click', () => {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const suffix = showHistorical ? 'ultimos-4-anos' : 'anio-actual';
+            link.href = url;
+            link.download = `impactos-fauna-${suffix}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+        }
+      }
+    };
+
+    renderModal();
+  } catch (error) {
+    console.error('Error al abrir modal de impactos de fauna:', error);
+    const root = ensureModalContainer();
+    document.body.classList.add('overflow-hidden');
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${IMPACTOS_FAUNA_MODAL_ID}">
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full text-center space-y-4">
+          <i class="fa-solid fa-circle-exclamation text-4xl text-red-500"></i>
+          <div class="space-y-1">
+            <h3 class="text-lg font-semibold text-slate-900">Error al cargar datos</h3>
+            <p class="text-sm text-slate-600">${escapeHtml(error?.message || 'Ocurrió un error inesperado al consultar Supabase.')}</p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
+            data-modal-close
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    `;
+
+    const overlay = root.querySelector('[data-modal-overlay]');
+    const closeButtons = root.querySelectorAll('[data-modal-close]');
+    const handleClose = () => {
+      closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+      overlay?.removeEventListener('click', overlayListener);
+      document.removeEventListener('keydown', escListener);
+      closeIndicatorModal();
+    };
+    const overlayListener = event => {
+      if (event.target === overlay) {
+        handleClose();
+      }
+    };
+    const escListener = event => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    overlay?.addEventListener('click', overlayListener);
+    closeButtons.forEach(button => button.addEventListener('click', handleClose));
+    document.addEventListener('keydown', escListener);
   }
 }
 
