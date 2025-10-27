@@ -177,6 +177,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
     fill: false,
     yAxisID: 'tasa',
     order: -20,
+    z: -20,
     segment: {
       borderDash: threshold.borderDash ?? []
     },
@@ -190,6 +191,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
     data: {
       labels,
       datasets: [
+        ...thresholdDatasets,
         {
           type: 'bar',
           label: 'Impactos',
@@ -200,7 +202,8 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           borderRadius: 8,
           maxBarThickness: 40,
           yAxisID: 'impactos',
-          order: -10
+          order: -10,
+          z: 0
         },
         {
           type: 'line',
@@ -215,9 +218,9 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           pointBorderColor: '#1d4ed8',
           fill: false,
           yAxisID: 'tasa',
-          order: 10
-        },
-        ...thresholdDatasets
+          order: 10,
+          z: 20
+        }
       ]
     },
     options: {
@@ -315,10 +318,28 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
             usePointStyle: true,
             boxHeight: 8,
             boxWidth: 8,
-            color: '#334155'
+            color: '#334155',
+            sort(a, b) {
+              const priority = {
+                Impactos: 0,
+                'Tasa de Impactos (%)': 1
+              };
+              const aPriority = priority[a.text] ?? 10;
+              const bPriority = priority[b.text] ?? 10;
+
+              if (aPriority !== bPriority) {
+                return aPriority - bPriority;
+              }
+
+              return a.datasetIndex - b.datasetIndex;
+            }
           }
         },
         tooltip: {
+          filter(context) {
+            const label = context.dataset?.label ?? '';
+            return label === 'Impactos' || label === 'Tasa de Impactos (%)';
+          },
           callbacks: {
             title(items) {
               const item = items?.[0];
@@ -384,30 +405,6 @@ function renderRateValue(rate, { emphasize = false } = {}) {
   return `<span class="${emphasisClass}">${formatted}</span>`;
 }
 
-function renderVariationValue(value, { decimals = 4 } = {}) {
-  if (!Number.isFinite(value)) {
-    return '<span class="text-slate-400">—</span>';
-  }
-
-  const formatted = formatPercentage(Math.abs(value), { decimals, scale: 'percentage' });
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  const colorClass = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : 'text-slate-500';
-
-  return `<span class="${colorClass} font-semibold">${sign}${formatted}</span>`;
-}
-
-function renderVariationPercent(value, { decimals = 2 } = {}) {
-  if (!Number.isFinite(value)) {
-    return '<span class="text-slate-400">—</span>';
-  }
-
-  const formatted = formatPercentage(Math.abs(value), { decimals, scale: 'percentage' });
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
-  const colorClass = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : 'text-slate-500';
-
-  return `<span class="${colorClass} font-semibold">${sign}${formatted}</span>`;
-}
-
 export function buildImpactosFaunaDetailTable(records, { showHistorical = false } = {}) {
   const normalized = normalizeImpactosFaunaRecords(records);
 
@@ -468,11 +465,6 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
       const monthLabel = monthName(month) || `Mes ${month}`;
       const currentRate = ratesByYear.get(currentYear)?.get(month);
       const previousRate = previousComparisonYear ? ratesByYear.get(previousComparisonYear)?.get(month) : Number.NaN;
-      const variation = Number.isFinite(currentRate) && Number.isFinite(previousRate) ? currentRate - previousRate : Number.NaN;
-      const variationPercent =
-        Number.isFinite(variation) && Number.isFinite(previousRate) && previousRate !== 0
-          ? (variation / previousRate) * 100
-          : Number.NaN;
 
       if (showHistorical) {
         const yearCells = selectedYearsAsc
@@ -487,8 +479,6 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
           <tr>
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-600">${monthLabel}</td>
             ${yearCells}
-            <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationValue(variation)}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationPercent(variationPercent)}</td>
           </tr>
         `;
       }
@@ -501,8 +491,6 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
           <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-600">${monthLabel}</td>
           <td class="whitespace-nowrap px-4 py-3 text-right">${realCell}</td>
           <td class="whitespace-nowrap px-4 py-3 text-right">${previousCell}</td>
-          <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationValue(variation)}</td>
-          <td class="whitespace-nowrap px-4 py-3 text-right">${renderVariationPercent(variationPercent)}</td>
         </tr>
       `;
     })
@@ -528,11 +516,6 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
         .join('')
     : '';
 
-  const comparisonColumnLabel = showHistorical ? 'Variación (año actual vs. previo)' : 'Variación';
-  const comparisonPercentLabel = showHistorical
-    ? '% Variación (año actual vs. previo)'
-    : '% Variación';
-
   return `
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -553,12 +536,6 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
                     </th>
                   `
             }
-            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
-              ${comparisonColumnLabel}
-            </th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
-              ${comparisonPercentLabel}
-            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">${rows}</tbody>
