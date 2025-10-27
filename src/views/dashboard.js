@@ -114,6 +114,74 @@ function getVisualizationOrder(value) {
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
+const SMS_SECTION_OBJECTIVES = [
+  {
+    title: 'Objetivo 1',
+    description:
+      'Mantener la tasa de impactos de fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
+    indicators: [
+      'Indicador 1.1 Tasa de Impactos con fauna dentro del aeropuerto.',
+      'Indicador 1.2 Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre.'
+    ]
+  },
+  {
+    title: 'Objetivo 2',
+    description:
+      'Mantener el porcentaje de disponibilidad y el índice de confuabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+    indicators: [
+      'Indicador 2.1 Porcentaje de disponibilidad del sistema de iluminación de ayudas visuales en pista.',
+      'Indicador 2.2 Indice de confiabilidad del sistema de iluminación de ayudas visuales en pista.',
+      'Indicador 2.3 Porcentaje de luces operativas del sistema de ayudas visuales en pista'
+    ]
+  },
+  {
+    title: 'Objetivo 3',
+    description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
+    indicators: [
+      'Indicador 3.1 PCI* (Indice de condiciones del pavimento).',
+      'Indicador 3.2 Porcentaje de mantenimientos programados a pavimentos,',
+      'Indicador 3.3 Porcentaje de disponibilidad de pistas'
+    ]
+  },
+  {
+    title: 'Objetivo 4',
+    description:
+      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA',
+    indicators: [
+      'Indicador 4.1 Porcentaje de capacitaciones realizadas al año',
+      'Indicador 4.2 Porcentaje de supervisiones realizadas al año'
+    ]
+  }
+];
+
+function buildSmsSectionContent() {
+  const objectivesMarkup = SMS_SECTION_OBJECTIVES.map(objective => {
+    const indicatorsMarkup = objective.indicators
+      .map(
+        indicator => `
+          <li>${escapeHtml(indicator)}</li>
+        `
+      )
+      .join('');
+
+    return `
+      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 class="text-base font-semibold text-slate-900">${escapeHtml(objective.title)}</h3>
+        <p class="mt-2 text-sm text-slate-600">${escapeHtml(objective.description)}</p>
+        <ul class="mt-3 list-inside list-disc space-y-1 text-sm text-slate-600">
+          ${indicatorsMarkup}
+        </ul>
+      </article>
+    `;
+  }).join('');
+
+  return `
+    <div class="space-y-4">
+      ${objectivesMarkup}
+    </div>
+  `;
+}
+
 const BASE_ACCORDION_SECTIONS = [
   {
     id: 'operativos',
@@ -121,6 +189,13 @@ const BASE_ACCORDION_SECTIONS = [
     title: 'Indicadores Operativos',
     iconClass: 'fa-solid fa-gauge-high',
     groupIds: ['operations', 'passengers', 'cargo-operations', 'cargo-weight']
+  },
+  {
+    id: 'sms',
+    type: 'static',
+    title: 'SMS',
+    iconClass: 'fa-solid fa-shield-halved',
+    buildContent: buildSmsSectionContent
   },
   {
     id: 'fbo',
@@ -3461,6 +3536,14 @@ function buildGroupMarkup(groupId, rootId) {
 }
 
 function buildIndicatorSectionContent(section) {
+  if (typeof section.buildContent === 'function') {
+    return section.buildContent(section);
+  }
+
+  if (typeof section.content === 'string') {
+    return section.content;
+  }
+
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
 
@@ -3478,13 +3561,18 @@ function composeAccordionSections() {
   }));
 
   const operationsSection = baseSections.find(section => section.id === 'operativos') ?? null;
+  const smsSection = baseSections.find(section => section.id === 'sms') ?? null;
   const fboSection = baseSections.find(section => section.id === 'fbo') ?? null;
-  const remainingSections = baseSections.filter(section => !['operativos', 'fbo'].includes(section.id));
+  const remainingSections = baseSections.filter(section => !['operativos', 'sms', 'fbo'].includes(section.id));
 
   const sections = [];
 
   if (operationsSection) {
     sections.push(operationsSection);
+  }
+
+  if (smsSection) {
+    sections.push(smsSection);
   }
 
   if (fboSection) {
