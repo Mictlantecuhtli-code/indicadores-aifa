@@ -602,7 +602,7 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
 
         <div class="space-y-6 p-6">
           <header class="space-y-2">
-            <h2 class="text-2xl font-semibold text-slate-900">Impactos con fauna vs Tasa de impactos con fauna 2022–2025</h2>
+            <h2 class="text-2xl font-semibold text-slate-900">Impactos con fauna vs Tasa de impactos con fauna</h2>
             <p class="text-sm text-slate-600">Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.</p>
           </header>
 
