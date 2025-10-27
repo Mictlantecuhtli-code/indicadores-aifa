@@ -4548,8 +4548,7 @@ async function openPgpaFsModal() {
       activeTab: 'pgpafs',
       hasData: Boolean(chartView.config),
       summary,
-      periodLabel: summary?.periodLabel ?? '',
-      thresholds: chartView.thresholds
+      periodLabel: summary?.periodLabel ?? ''
     });
 
     const overlay = root.querySelector('[data-modal-overlay]');

@@ -26,6 +26,8 @@ export const PGPAFS_THRESHOLDS = [
   }
 ];
 
+const PGPAFS_MONTHLY_PARTS = 15;
+
 const STACK_COLOR_PALETTE = [
   '#1d4ed8',
   '#0ea5e9',
@@ -113,6 +115,24 @@ function clampPercentage(value) {
 
   if (numeric > 100) {
     return 100;
+  }
+
+  return numeric;
+}
+
+function clampUnit(value) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  if (numeric < 0) {
+    return 0;
+  }
+
+  if (numeric > 1) {
+    return 1;
   }
 
   return numeric;
@@ -269,7 +289,7 @@ function buildMonthEntries(records) {
     }
 
     const current = entry.documents.get(docName) ?? 0;
-    const nextValue = clampPercentage(current + record.porcentaje);
+    const nextValue = Math.min(1, current + clampUnit(record?.porcentaje));
     entry.documents.set(docName, nextValue);
   });
 
@@ -281,8 +301,10 @@ function buildMonthEntries(records) {
   });
 
   entries.forEach(entry => {
-    const total = Array.from(entry.documents.values()).reduce((sum, value) => sum + value, 0);
-    entry.total = clampPercentage(total);
+    const totalUnits = Array.from(entry.documents.values()).reduce((sum, value) => sum + value, 0);
+    const normalized = PGPAFS_MONTHLY_PARTS > 0 ? totalUnits / PGPAFS_MONTHLY_PARTS : 0;
+    entry.totalRatio = Math.min(normalized, 1);
+    entry.total = clampPercentage(entry.totalRatio * 100);
   });
 
   return { entries, documentOrder };
@@ -389,7 +411,11 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
     return {
       type: 'bar',
       label: name,
-      data: entries.map(entry => entry.documents.get(name) ?? 0),
+      data: entries.map(entry => {
+        const value = entry.documents.get(name) ?? 0;
+        const normalized = PGPAFS_MONTHLY_PARTS > 0 ? (value / PGPAFS_MONTHLY_PARTS) * 100 : 0;
+        return clampPercentage(normalized);
+      }),
       backgroundColor: color,
       borderColor: color,
       borderWidth: 1,
@@ -486,7 +512,12 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
             usePointStyle: true,
             pointStyle: 'rectRounded',
             boxWidth: 12,
-            padding: 12
+            padding: 12,
+            filter(item, chart) {
+              const dataset =
+                item?.datasetIndex != null ? chart?.data?.datasets?.[item.datasetIndex] ?? null : null;
+              return dataset?.type !== 'line';
+            }
           }
         },
         tooltip: {
@@ -543,7 +574,10 @@ export function buildPgpaFsSummary(entries = []) {
   const totals = entries.map(entry => {
     const total = Number.isFinite(entry.total)
       ? entry.total
-      : clampPercentage(Array.from(entry.documents?.values?.() ?? []).reduce((sum, value) => sum + Number(value || 0), 0));
+      : clampPercentage(
+          ((Array.from(entry.documents?.values?.() ?? []).reduce((sum, value) => sum + Number(value || 0), 0) /
+            PGPAFS_MONTHLY_PARTS) || 0) * 100
+        );
 
     return {
       year: entry.year,
@@ -572,8 +606,7 @@ export function buildPgpaFsModalMarkup({
   activeTab = 'pgpafs',
   hasData = false,
   summary = null,
-  periodLabel = '',
-  thresholds = PGPAFS_THRESHOLDS
+  periodLabel = ''
 } = {}) {
   const pgpafsActive = activeTab === 'pgpafs';
   const capturesActive = activeTab === 'captures';
@@ -614,26 +647,6 @@ export function buildPgpaFsModalMarkup({
         </div>
       `;
 
-  const thresholdLegend = Array.isArray(thresholds) && thresholds.length
-    ? thresholds
-        .map(
-          threshold => `
-              <span class="flex items-center gap-2 whitespace-nowrap">
-                <span class="relative flex h-3 w-8 items-center justify-center">
-                  <span class="h-0.5 w-full rounded-full" style="background-color: ${escapeHtml(
-                    threshold.color ?? '#64748b'
-                  )};"></span>
-                </span>
-                ${escapeHtml(threshold.label)} (${formatPercentage(threshold.value, {
-            decimals: 0,
-            scale: 'percentage'
-          })})
-              </span>
-            `
-        )
-        .join('')
-    : '';
-
   const chartContent = hasData
     ? `
         <div class="h-96">
@@ -644,7 +657,6 @@ export function buildPgpaFsModalMarkup({
             <span class="h-2.5 w-8 rounded-full bg-slate-400"></span>
             Cumplimiento mensual (barras apiladas)
           </span>
-          ${thresholdLegend}
         </div>
       `
     : `
@@ -682,11 +694,7 @@ export function buildPgpaFsModalMarkup({
               </div>
               <p class="text-sm text-slate-600">Valores mensuales${effectivePeriod ? ` (${escapeHtml(effectivePeriod)})` : ''}</p>
             </div>
-            ${summaryMarkup}
-          </section>
-
-          <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-wrap items-center gap-3" role="tablist">
+            <div class="mt-4 flex flex-wrap items-center gap-3" role="tablist">
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -708,14 +716,19 @@ export function buildPgpaFsModalMarkup({
                 Capturas realizadas por especie
               </button>
             </div>
+            ${summaryMarkup}
+          </section>
 
-            <div class="mt-6 space-y-6" data-pgpafs-panel="pgpafs" ${pgpafsActive ? '' : 'hidden'}>
-              ${chartContent}
-            </div>
+          <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="space-y-6">
+              <div class="space-y-6" data-pgpafs-panel="pgpafs" ${pgpafsActive ? '' : 'hidden'}>
+                ${chartContent}
+              </div>
 
-            <div class="mt-6" data-pgpafs-panel="captures" ${capturesActive ? '' : 'hidden'}>
-              <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                Esta sección estará disponible próximamente.
+              <div data-pgpafs-panel="captures" ${capturesActive ? '' : 'hidden'}>
+                <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                  Esta sección estará disponible próximamente.
+                </div>
               </div>
             </div>
           </section>
