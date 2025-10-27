@@ -1,7 +1,6 @@
 
 import { getAreas, getIndicators, getIndicatorHistory, getIndicatorTargets, getCapturasFauna } from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
-import { isFaunaImpactRateIndicator } from '../utils/smsIndicators.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
 
 const OPTION_BLUEPRINTS = [
@@ -39,139 +38,6 @@ const OPTION_BLUEPRINTS = [
     scenario: 'ALTO',
     buildLabel: entity =>
       `Mensual del año en curso vs. proyección de meta escenario Alto (PMD)`
-  }
-];
-
-const SMS_OPTION_BLUEPRINTS = [
-  {
-    ...OPTION_BLUEPRINTS[0],
-    id: 'sms-monthly-yoy',
-    buildLabel: () => 'Comparativo mensual (real vs. año anterior)'
-  },
-  {
-    ...OPTION_BLUEPRINTS[1],
-    id: 'sms-quarterly-yoy',
-    buildLabel: () => 'Comparativo trimestral (real vs. año anterior)'
-  },
-  {
-    id: 'sms-scenario-objective',
-    type: 'scenario',
-    scenario: 'OBJETIVO',
-    buildLabel: () => 'Seguimiento vs. objetivo institucional'
-  },
-  {
-    id: 'sms-scenario-alert1',
-    type: 'scenario',
-    scenario: 'ALERTA 1',
-    buildLabel: () => 'Seguimiento vs. nivel de alerta 1'
-  },
-  {
-    id: 'sms-scenario-alert2',
-    type: 'scenario',
-    scenario: 'ALERTA 2',
-    buildLabel: () => 'Seguimiento vs. nivel de alerta 2'
-  },
-  {
-    id: 'sms-scenario-alert3',
-    type: 'scenario',
-    scenario: 'ALERTA 3',
-    buildLabel: () => 'Seguimiento vs. nivel de alerta 3'
-  }
-];
-
-const SMS_OBJECTIVE_BLUEPRINTS = [
-  {
-    id: 'objective-1',
-    title: 'Objetivo 1',
-    description:
-      'Mantener la tasa de impactos con fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
-    indicatorMatchers: [
-      {
-        codes: ['SMS-01'],
-        keywords: ['tasa', 'impactos', 'fauna'],
-        fallbackTitle: 'Tasa de Impactos con Fauna dentro del Aeropuerto'
-      },
-      {
-        codes: ['SMS-02'],
-        keywords: ['cumplimiento', 'programa', 'gestion', 'peligro', 'aviario', 'fauna'],
-        fallbackTitle: 'Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre'
-      }
-    ]
-  },
-{
-  id: 'objective-2',
-  title: 'Objetivo 2',
-  description: 'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
-  indicatorMatchers: [
-    {
-      codes: ['SMS-03'],
-      keywords: [],
-      fallbackTitle: 'Porcentaje de disponibilidad del sistema de iluminación de ayudas visuales en pista'
-    },
-    {
-      codes: ['SMS-03A'],
-      keywords: [],
-      fallbackTitle: 'Índice de confiabilidad del sistema de iluminación de ayudas visuales en pista'
-    },
-    // AGREGAR ESTE:
-    {
-      codes: ['SMS-03B'],
-      keywords: [],
-      fallbackTitle: 'Índice de disponibilidad del sistema de iluminación de ayudas visuales en pista'
-    },
-    {
-      codes: ['SMS-04'],
-      keywords: [],
-      fallbackTitle: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista'
-    }
-  ]
-},
-
-// Objetivo 3 - Combinar los PCI y corregir orden
-{
-  id: 'objective-3',
-  title: 'Objetivo 3',
-  description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
-  indicatorMatchers: [
-    {
-      codes: ['SMS-05A'],
-      keywords: [],
-      fallbackTitle: 'PCI (Índice de condiciones del pavimento)'
-    },
-    {
-      codes: ['SMS-05B'],
-      keywords: [],
-      fallbackTitle: 'PCI (Índice de condiciones del pavimento)'
-    },
-    {
-      codes: ['SMS-06'],
-      keywords: [],
-      fallbackTitle: 'Porcentaje de mantenimientos programados a pavimentos'
-    },
-    {
-      codes: ['SMS-07'],
-      keywords: [],
-      fallbackTitle: 'Porcentaje de disponibilidad de pistas'
-    }
-  ]
-},
-  {
-    id: 'objective-4',
-    title: 'Objetivo 4',
-    description:
-      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA.',
-    indicatorMatchers: [
-      {
-        codes: ['SMS-08'],
-        keywords: [],
-        fallbackTitle: 'Porcentaje de capacitaciones realizadas al año'
-      },
-      {
-        codes: ['SMS-09'],
-        keywords: [],
-        fallbackTitle: 'Porcentaje de supervisiones realizadas al año'
-      }
-    ]
   }
 ];
 
@@ -229,30 +95,9 @@ const GROUP_DEFINITIONS = {
 };
 
 const DIRECT_INDICATOR_PREFIX = 'indicator:';
-const SMS_GROUP_PREFIX = 'sms-';
-const SMS_SECTION_ID = 'sms';
-const SMS_SECTION_ICON_CLASS = 'fa-solid fa-shield-halved';
 const DIRECTION_GROUP_PREFIX = 'direction-indicator-';
 
 let cachedIndicators = null;
-
-function registerGroupDefinition(definition) {
-  if (!definition || !definition.id) {
-    return;
-  }
-
-  GROUP_DEFINITIONS[definition.id] = definition;
-}
-
-function removeGroupDefinitionsByPrefix(prefix) {
-  if (!prefix) return;
-
-  Object.keys(GROUP_DEFINITIONS).forEach(key => {
-    if (key.startsWith(prefix)) {
-      delete GROUP_DEFINITIONS[key];
-    }
-  });
-}
 
 function normalizeMatchText(text) {
   return (text || '')
@@ -264,233 +109,9 @@ function normalizeMatchText(text) {
     .trim();
 }
 
-const SMS_KEYWORDS = [
-  'sms',
-  'seguridad operacional',
-  'sistema de gestion de seguridad',
-  'safety management system'
-];
-
-function isSmsDirection(node) {
-  const name = normalizeMatchText(node?.nombre);
-  const key = normalizeMatchText(node?.clave);
-
-  if (!name && !key) return false;
-
-  return name.includes('sms') || key === 'sms';
-}
-
-function getRegisteredSmsGroupIds() {
-  return Object.keys(GROUP_DEFINITIONS).filter(id => id.startsWith(SMS_GROUP_PREFIX));
-}
-
-function isSmsIndicator(indicator) {
-  if (!indicator) return false;
-
-  const parts = [
-    indicator.clave,
-    indicator.nombre,
-    indicator.descripcion,
-    indicator.area_nombre,
-    indicator.area_clave,
-    indicator.direccion_nombre,
-    indicator.direccion_clave
-  ];
-
-  const normalized = normalizeMatchText(parts.filter(Boolean).join(' '));
-  if (!normalized) return false;
-
-  if (typeof indicator.clave === 'string' && indicator.clave.toUpperCase().startsWith('SMS-')) {
-    return true;
-  }
-
-  return SMS_KEYWORDS.some(keyword => normalized.includes(keyword));
-}
-
 function getVisualizationOrder(value) {
   const order = Number(value);
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
-}
-
-function buildIndicatorSearchText(indicator) {
-  const parts = [
-    indicator?.clave,
-    indicator?.nombre,
-    indicator?.descripcion,
-    indicator?.area_nombre,
-    indicator?.area_clave,
-    indicator?.direccion_nombre,
-    indicator?.direccion_clave
-  ];
-
-  return normalizeMatchText(parts.filter(Boolean).join(' '));
-}
-
-function matchesIndicatorCode(indicator, code) {
-  if (!indicator || !code) return false;
-  const normalizedCode = code.toString().trim().toUpperCase();
-  if (!normalizedCode) return false;
-
-  const indicatorCode = (indicator?.clave ?? '').toString().trim().toUpperCase();
-  return indicatorCode === normalizedCode;
-}
-
-function findSmsIndicatorMatch(indicators, matcher, usedIndicatorIds) {
-  if (!Array.isArray(indicators) || !matcher) return null;
-
-  const codes = [];
-  if (Array.isArray(matcher.codes)) {
-    codes.push(...matcher.codes);
-  }
-  if (matcher.code) {
-    codes.push(matcher.code);
-  }
-
-  for (const code of codes) {
-    const candidate = indicators.find(
-      indicator => !usedIndicatorIds.has(indicator.id) && matchesIndicatorCode(indicator, code)
-    );
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  const keywords = Array.isArray(matcher.keywords)
-    ? matcher.keywords.map(keyword => normalizeMatchText(keyword)).filter(Boolean)
-    : [];
-
-  if (!keywords.length) return null;
-
-  return (
-    indicators.find(indicator => {
-      if (usedIndicatorIds.has(indicator.id)) return false;
-      const text = buildIndicatorSearchText(indicator);
-      if (!text) return false;
-      return keywords.every(keyword => text.includes(keyword));
-    }) ?? null
-  );
-}
-
-function createSmsIndicatorDefinition(indicator, matcher = {}) {
-  if (!indicator) return null;
-
-  const title = indicator?.nombre ?? matcher.fallbackTitle ?? 'Indicador SMS';
-  const subtitle = indicator?.area_nombre ?? matcher.fallbackSubtitle ?? null;
-
-  return {
-    id: `${SMS_GROUP_PREFIX}${indicator.id}`,
-    title,
-    subtitle,
-    entity: title,
-    dataKey: `${DIRECT_INDICATOR_PREFIX}${indicator.id}`,
-    iconClass: SMS_SECTION_ICON_CLASS,
-    indicatorId: indicator.id,
-    optionBlueprints: SMS_OPTION_BLUEPRINTS
-  };
-}
-
-function createSmsPlaceholderDefinition(objectiveId, matcher = {}, index = 0) {
-  const title = matcher.fallbackTitle ?? 'Indicador SMS';
-  const subtitle = matcher.fallbackSubtitle ?? 'Indicador no configurado';
-
-  return {
-    id: `${SMS_GROUP_PREFIX}${objectiveId}-placeholder-${index}`,
-    title,
-    subtitle,
-    entity: title,
-    dataKey: null,
-    iconClass: 'fa-solid fa-circle-info',
-    indicatorId: null,
-    optionBlueprints: [],
-    isPlaceholder: true
-  };
-}
-
-function buildSmsGroupDefinitions(indicators = []) {
-  // Filtrar indicadores SMS y excluir capturas individuales de especies
-  const smsIndicators = indicators.filter(indicator => {
-    if (!isSmsIndicator(indicator)) return false;
-    
-    // Excluir SOLO indicadores individuales de capturas de especies específicas
-    const searchText = buildIndicatorSearchText(indicator);
-    const excludePatterns = [
-      'capturas de aves realizadas',
-      'capturas de mamiferos realizadas', 
-      'capturas de reptiles realizadas'
-    ];
-    
-    // Solo excluir si coincide exactamente con estos patrones específicos
-    // y NO es el indicador de cumplimiento del programa
-    const shouldExclude = excludePatterns.some(pattern => {
-      const normalizedPattern = normalizeMatchText(pattern);
-      const normalizedSearch = normalizeMatchText(searchText);
-      return normalizedSearch.includes(normalizedPattern) && 
-             !normalizedSearch.includes('programa') && 
-             !normalizedSearch.includes('cumplimiento') &&
-             !normalizedSearch.includes('gestion');
-    });
-    
-    return !shouldExclude;
-  });
-
-  smsIndicators.sort((a, b) => {
-    const orderDiff = getVisualizationOrder(a?.orden_visualizacion) - getVisualizationOrder(b?.orden_visualizacion);
-    if (orderDiff !== 0) return orderDiff;
-    const nameA = a?.nombre ?? '';
-    const nameB = b?.nombre ?? '';
-    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
-  });
-  const usedIndicatorIds = new Set();
-  const objectiveDefinitions = [];
-  SMS_OBJECTIVE_BLUEPRINTS.forEach(objective => {
-    const childGroups = [];
-    let placeholderIndex = 1;
-    objective.indicatorMatchers.forEach(matcher => {
-      const matchedIndicator = findSmsIndicatorMatch(smsIndicators, matcher, usedIndicatorIds);
-      if (matchedIndicator) {
-        usedIndicatorIds.add(matchedIndicator.id);
-        const definition = createSmsIndicatorDefinition(matchedIndicator, matcher);
-        if (definition) {
-          childGroups.push(definition);
-        }
-      } else if (matcher?.fallbackTitle) {
-        childGroups.push(createSmsPlaceholderDefinition(objective.id, matcher, placeholderIndex++));
-      }
-    });
-    
-    // Siempre crear el objetivo si tiene childGroups O customViews
-    if (childGroups.length || (objective.customViews && objective.customViews.length > 0)) {
-      objectiveDefinitions.push({
-        id: `${SMS_GROUP_PREFIX}${objective.id}`,
-        title: objective.title,
-        subtitle: objective.description ?? null,
-        entity: objective.title,
-        iconClass: objective.iconClass ?? SMS_SECTION_ICON_CLASS,
-        optionBlueprints: [],
-        childGroups,
-        customViews: objective.customViews || [],
-        type: 'sms-objective'
-      });
-    }
-  });
-  smsIndicators.forEach(indicator => {
-    if (!usedIndicatorIds.has(indicator.id)) {
-      const definition = createSmsIndicatorDefinition(indicator);
-      if (definition) {
-        objectiveDefinitions.push(definition);
-      }
-    }
-  });
-  return objectiveDefinitions;
-}
-
-function registerSmsGroupDefinitions(indicators = []) {
-  removeGroupDefinitionsByPrefix(SMS_GROUP_PREFIX);
-
-  const definitions = buildSmsGroupDefinitions(indicators);
-  definitions.forEach(registerGroupDefinition);
-
-  return definitions.map(definition => definition.id);
 }
 
 const BASE_ACCORDION_SECTIONS = [
@@ -1649,9 +1270,7 @@ function buildSummary(realData, type, scenario) {
   const timeline = buildValueTimeline(history);
   const timelineIndex = buildTimelineIndex(timeline);
 
-  // CAMBIO: Detectar indicador de fauna
   const indicator = realData?.indicator;
-  const isFaunaImpact = isFaunaImpactRateIndicator ? isFaunaImpactRateIndicator(indicator) : false;
   
   if (!lastLoaded) {
     return {
@@ -1674,33 +1293,18 @@ function buildSummary(realData, type, scenario) {
       item => item.anio === latestYear && item.mes === latestMonth
     );
 
-    // CAMBIO: Para fauna, usar meta de escenario bajo en lugar de año anterior
-    let comparisonEntry = null;
-    let comparisonValue = null;
-    let comparisonLabel = '';
-    
-    if (isFaunaImpact) {
-      // Para fauna, comparar contra meta de escenario bajo
-      const { map: targetValues } = buildScenarioTargetValues(realData.targets, 'BAJO', latestYear);
-      comparisonValue = targetValues.get(latestMonth) ?? null;
-      comparisonLabel = 'Meta';
-    } else {
-      // Lógica original para otros indicadores
-      comparisonEntry = findPreviousTimelineEntry(timeline, timelineIndex, latestYear, latestMonth);
-      comparisonValue = comparisonEntry ? comparisonEntry.value : null;
-      comparisonLabel = comparisonEntry
-        ? `${MONTHS[comparisonEntry.month - 1]?.label || comparisonEntry.month} ${comparisonEntry.year}`
-        : 'Mes anterior';
-    }
+    const comparisonEntry = findPreviousTimelineEntry(timeline, timelineIndex, latestYear, latestMonth);
+    const comparisonValue = comparisonEntry ? comparisonEntry.value : null;
+    const comparisonLabel = comparisonEntry
+      ? `${MONTHS[comparisonEntry.month - 1]?.label || comparisonEntry.month} ${comparisonEntry.year}`
+      : 'Mes anterior';
 
     const current = currentItem ? Number(currentItem.valor) : null;
     const diff = current != null && comparisonValue != null ? current - comparisonValue : null;
     const pct = diff != null && comparisonValue ? diff / comparisonValue : null;
 
     return {
-      title: isFaunaImpact 
-        ? `Real vs Meta (${month.label} ${latestYear})`
-        : `Variación mensual (${month.label} ${latestYear})`,
+      title: `Variación mensual (${month.label} ${latestYear})`,
       currentLabel: `${month.label} ${latestYear}`,
       comparisonLabel,
       currentValue: current,
@@ -1752,28 +1356,14 @@ function buildSummary(realData, type, scenario) {
     const currentData = getDataByYear(history, currentYear);
     const previousData = getDataByYear(history, currentYear - 1);
     
-    // CAMBIO: Para fauna, usar promedio en lugar de suma
-    let current, comparison;
-    
-    if (isFaunaImpact) {
-      // Calcular promedio para fauna
-      current = currentData.length ? 
-        currentData.reduce((sum, item) => sum + Number(item.valor || 0), 0) / currentData.length : 0;
-      comparison = previousData.length ? 
-        previousData.reduce((sum, item) => sum + Number(item.valor || 0), 0) / previousData.length : 0;
-    } else {
-      // Suma para otros indicadores
-      current = sum(currentData.map(item => item.valor));
-      comparison = sum(previousData.map(item => item.valor));
-    }
+    const current = sum(currentData.map(item => item.valor));
+    const comparison = sum(previousData.map(item => item.valor));
     
     const diff = current - comparison;
     const pct = comparison ? diff / comparison : null;
     
     return {
-      title: isFaunaImpact ? 
-        `Promedio anual (${currentYear})` : 
-        `Acumulado anual (${currentYear})`,
+      title: `Acumulado anual (${currentYear})`,
       currentLabel: `${currentYear}`,
       comparisonLabel: `${currentYear - 1}`,
       currentValue: current,
@@ -1792,11 +1382,11 @@ function buildSummary(realData, type, scenario) {
     item => item.anio === latestYear && item.mes === latestMonth
   );
 
-  const effectiveScenario = isFaunaImpact ? 'BAJO' : scenario;
+  const effectiveScenario = scenario;
   const scenarioLabel = getIndicatorScenarioLabel(indicator, effectiveScenario);
   const metaOnlyHistory = history.every(item => item?.es_meta);
 
-  if (metaOnlyHistory && !isFaunaImpact) {
+  if (metaOnlyHistory) {
     const normalizedLatestMonth = Number.isFinite(latestMonth) ? latestMonth : 1;
     const normalizedLatestYear = Number.isFinite(latestYear) ? latestYear : currentYear;
     const quarterIndex = Math.max(
@@ -1893,7 +1483,7 @@ function buildSummary(realData, type, scenario) {
   const diff = current != null && comparison != null ? current - comparison : null;
   const pct = diff != null && comparison ? diff / comparison : null;
 
-  const comparisonLabel = isFaunaImpact ? 'Meta' : scenarioLabel || 'Meta';
+  const comparisonLabel = scenarioLabel || 'Meta';
   const titleLabel = scenarioLabel || 'Meta';
 
   return {
@@ -1912,7 +1502,6 @@ function buildTableContent(realData, type, scenario, options = {}) {
   const { showHistorical = false, showTrend = false, forecastData = null } = options;
   const currentYear = CURRENT_YEAR;
   const indicator = realData?.indicator ?? null;
-  const isSms = isSmsIndicator(indicator);
   const invertScenarioDiff = type === 'scenario' && indicatorPrefersLowerValues(indicator);
   const scenarioLabel = type === 'scenario' ? getIndicatorScenarioLabel(indicator, scenario) : null;
   const comparisonHeaderLabel = type === 'scenario' ? scenarioLabel || 'Meta' : 'Mismo mes año anterior';
@@ -1985,13 +1574,11 @@ function buildTableContent(realData, type, scenario, options = {}) {
         : `<th class="px-4 py-2 text-right">Variación${variationNote}</th>`
     );
 
-    if (!isSms) {
-      headerCells.push(
-        hasHistoricalYears
-          ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
-          : `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
-      );
-    }
+    headerCells.push(
+      hasHistoricalYears
+        ? `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
+        : `<th class="px-4 py-2 text-right">% Variación${variationNote}</th>`
+    );
   }
 
   const totalColumns = headerCells.length;
@@ -2010,7 +1597,7 @@ function buildTableContent(realData, type, scenario, options = {}) {
   const timelineIndex = buildTimelineIndex(timeline);
   const unit = indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSms ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatUnit = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
@@ -2398,7 +1985,7 @@ function buildTableContent(realData, type, scenario, options = {}) {
       } else if (row.diff != null && !Number.isNaN(Number(row.diff))) {
         const numericDiff = Number(row.diff);
         if (numericDiff !== 0) {
-          const invertDiff = isSms || invertScenarioDiff;
+          const invertDiff = invertScenarioDiff;
           if (numericDiff > 0) {
             variationClass = invertDiff ? 'text-rose-600' : 'text-emerald-600';
           } else {
@@ -2411,11 +1998,9 @@ function buildTableContent(realData, type, scenario, options = {}) {
         row.diff
       )}</div></td>`;
 
-      const pctCell = isSms
-        ? ''
-        : `<td class="px-4 py-2 text-right text-sm ${
-            isForecast ? 'text-violet-700' : 'text-slate-600'
-          }"><div>${formatPercentage(row.pct)}</div></td>`;
+      const pctCell = `<td class="px-4 py-2 text-right text-sm ${
+        isForecast ? 'text-violet-700' : 'text-slate-600'
+      }"><div>${formatPercentage(row.pct)}</div></td>`;
 
       return `<tr class="${rowClassName}">${labelCell}${historicalCells}${comparisonCell}${variationCell}${pctCell}</tr>`;
     })
@@ -2582,7 +2167,7 @@ function buildMonthlyChartConfig(realData, chartType = 'line', showHistorical = 
 
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatTick = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -2688,7 +2273,7 @@ function buildQuarterlyChartConfig(realData, chartType = 'bar', showHistorical =
   
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatTick = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -2809,7 +2394,7 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line', option
         if (datasets.length) {
           const unit = realData?.indicator?.unidad_medida ?? null;
           const numberDigits = resolveNumberDigitsByUnit(unit);
-          const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+          const percentageScale = 'auto';
           const formatTick = value =>
             formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -2881,7 +2466,7 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line', option
 
     const unit = realData?.indicator?.unidad_medida ?? null;
     const numberDigits = resolveNumberDigitsByUnit(unit);
-    const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+    const percentageScale = 'auto';
     const formatTick = value =>
       formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -3004,7 +2589,7 @@ function buildScenarioChartConfig(realData, scenario, chartType = 'line', option
 
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatTick = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -3100,7 +2685,7 @@ function buildAnnualChartConfig(realData, chartType = 'bar', showHistorical = fa
   
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSmsIndicator(realData?.indicator) ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatTick = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
 
@@ -3248,12 +2833,11 @@ function buildModalMarkup({
     forecastData
   });
   const indicator = realData?.indicator ?? null;
-  const isSms = isSmsIndicator(indicator);
   const metaOnlyScenario =
     type === 'scenario' && Array.isArray(realData?.history) &&
     realData.history.length > 0 &&
     realData.history.every(item => item?.es_meta);
-  const invertTrend = isSms || (type === 'scenario' && indicatorPrefersLowerValues(indicator));
+  const invertTrend = type === 'scenario' && indicatorPrefersLowerValues(indicator);
   const trendClasses = getTrendColorClasses(summary.diff ?? 0, { invert: invertTrend });
   const activeScenarioValue = type === 'scenario' ? normalizeScenarioValue(scenario) : null;
   const scenarioLabel = type === 'scenario'
@@ -3264,7 +2848,7 @@ function buildModalMarkup({
   const chartToggle = buildChartTypeToggle(chartType, type);
   const unit = realData?.indicator?.unidad_medida ?? null;
   const numberDigits = resolveNumberDigitsByUnit(unit);
-  const percentageScale = isSms ? 'percentage' : 'auto';
+  const percentageScale = 'auto';
   const formatUnit = value =>
     formatUnitValue(value, unit, { numberDigits, percentageDigits: 3, percentageScale });
   const formatSignedUnit = value =>
@@ -3275,10 +2859,8 @@ function buildModalMarkup({
     });
   const formattedDiff = formatSignedUnit(summary.diff);
   const formattedPct = formatPercentage(summary.pct);
-  const variationValueMarkup = isSms
-    ? `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedDiff}</p>`
-    : `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedPct}</p>`;
-  const variationDetailMarkup = isSms ? '' : `<p class="mt-1 text-sm text-slate-600">(${formattedDiff})</p>`;
+  const variationValueMarkup = `<p class="mt-2 text-2xl font-semibold ${trendClasses.text}">${formattedPct}</p>`;
+  const variationDetailMarkup = `<p class="mt-1 text-sm text-slate-600">(${formattedDiff})</p>`;
   const normalizedScenarioOptions = Array.isArray(scenarioOptions)
     ? scenarioOptions
         .map(option => {
@@ -3809,128 +3391,11 @@ function resolveOptionBlueprints(definition) {
     return [];
   }
 
-  const isSmsGroup = typeof definition?.id === 'string' && definition.id.startsWith(SMS_GROUP_PREFIX);
-  if (isSmsGroup) {
-    const smsFiltered = baseBlueprints.filter(blueprint => blueprint.id === 'sms-monthly-yoy');
-    return smsFiltered.length ? smsFiltered : baseBlueprints.slice(0, 1);
-  }
-
   return baseBlueprints;
 }
-
-function buildSmsIndicatorItem(definition) {
-  if (!definition) return '';
-
-  if (definition.isPlaceholder) {
-    return `
-      <li class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-        <div class="flex items-start gap-3">
-          <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-            <i class="${definition.iconClass} h-4 w-4"></i>
-          </span>
-          <div>
-            <p class="font-semibold text-slate-600">${escapeHtml(definition.title)}</p>
-            ${definition.subtitle ? `<p class="mt-1 text-xs font-medium text-slate-400">${escapeHtml(definition.subtitle)}</p>` : ''}
-            <p class="mt-2 text-xs font-medium text-slate-400">Indicador no disponible.</p>
-          </div>
-        </div>
-      </li>
-    `;
-  }
-
-  // Hacer el indicador directamente clickeable sin opciones intermedias
-  return `
-    <li>
-      <button
-        type="button"
-        class="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
-        data-option-button
-        data-option-id="${definition.id}-direct"
-        data-option-type="monthly"
-        data-option-scenario=""
-        data-option-label="${escapeHtml(definition.title)}"
-        data-option-datakey="${definition.dataKey ?? ''}"
-      >
-        <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-          <i class="${definition.iconClass} h-4 w-4"></i>
-        </span>
-        <div>
-          <p class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</p>
-          ${definition.subtitle ? `<p class="mt-0.5 text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</p>` : ''}
-        </div>
-      </button>
-    </li>
-  `;
-}
-
-function buildSmsObjectiveGroupMarkup(definition, rootId) {
-  const childGroups = Array.isArray(definition.childGroups) ? definition.childGroups : [];
-  const customViews = Array.isArray(definition.customViews) ? definition.customViews : [];
-  
-  // Si no hay ni childGroups ni customViews, no mostrar nada
-  if (!childGroups.length && !customViews.length) return '';
-  
-  const childMarkup = childGroups.map(buildSmsIndicatorItem).join('');
-  
-  // Soporte para vistas personalizadas
-  const customViewsMarkup = customViews.map(view => `
-    <li>
-      <button
-        type="button"
-        class="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
-        data-custom-view-button
-        data-view-type="${view.type}"
-        data-view-id="${view.id}"
-        data-view-title="${escapeHtml(view.title)}"
-      >
-        <span class="mt-0.5 text-slate-500">
-          <i class="fa-solid fa-chart-column h-4 w-4"></i>
-        </span>
-        <div>
-          <span class="font-medium">${escapeHtml(view.title)}</span>
-          <p class="mt-1 text-xs text-slate-500">${escapeHtml(view.description || '')}</p>
-        </div>
-      </button>
-    </li>
-  `).join('');
-  
-  return `
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
-        data-group-button
-        data-group-root="${rootId}"
-        data-group-id="${definition.id}"
-        aria-expanded="false"
-      >
-        <span class="flex items-center gap-3">
-          <span class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-            <i class="${definition.iconClass ?? SMS_SECTION_ICON_CLASS} h-5 w-5"></i>
-          </span>
-          <span class="flex flex-col">
-            <span class="text-sm font-semibold text-slate-800">${escapeHtml(definition.title)}</span>
-            ${definition.subtitle ? `<span class="text-xs font-medium text-slate-500">${escapeHtml(definition.subtitle)}</span>` : ''}
-          </span>
-        </span>
-        <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-group-chevron></i>
-      </button>
-      <div class="border-t border-slate-100 bg-slate-50/60 px-5 py-4" data-group-panel="${definition.id}" hidden>
-        <ul class="space-y-3">
-          ${childMarkup}
-          ${customViewsMarkup}
-        </ul>
-      </div>
-    </div>
-  `;
-}
-
 function buildGroupMarkup(groupId, rootId) {
   const definition = GROUP_DEFINITIONS[groupId];
   if (!definition) return '';
-  if (Array.isArray(definition.childGroups) && definition.childGroups.length) {
-    return buildSmsObjectiveGroupMarkup(definition, rootId);
-  }
   const blueprints = resolveOptionBlueprints(definition);
   const options = blueprints.map(blueprint => ({
     id: `${definition.id}-${blueprint.id}`,
@@ -4006,7 +3471,7 @@ function buildIndicatorSectionContent(section) {
   `;
 }
 
-function composeAccordionSections({ smsGroupIds } = {}) {
+function composeAccordionSections() {
   const baseSections = BASE_ACCORDION_SECTIONS.map(section => ({
     ...section,
     groupIds: Array.isArray(section.groupIds) ? [...section.groupIds] : []
@@ -4020,16 +3485,6 @@ function composeAccordionSections({ smsGroupIds } = {}) {
 
   if (operationsSection) {
     sections.push(operationsSection);
-  }
-
-  if (Array.isArray(smsGroupIds) && smsGroupIds.length) {
-    sections.push({
-      id: SMS_SECTION_ID,
-      type: 'indicators',
-      title: 'Indicadores SMS',
-      iconClass: SMS_SECTION_ICON_CLASS,
-      groupIds: [...smsGroupIds]
-    });
   }
 
   if (fboSection) {
@@ -4247,7 +3702,6 @@ function getDirectionPriority(node) {
   const normalized = normalizeDirectionName(node?.nombre);
   if (!normalized) return 100;
 
-  const isSms = isSmsDirection(node);
   const normalizedKey = normalizeMatchText(node?.clave);
   const isOperational =
     normalized.includes('indicadores operacionales') ||
@@ -4260,8 +3714,7 @@ function getDirectionPriority(node) {
     normalizedKey === 'fbo';
 
   if (isOperational) return 0;
-  if (isSms) return 1;
-  if (isFbo) return 2;
+  if (isFbo) return 1;
   return 100;
 }
 
@@ -4351,7 +3804,6 @@ function normalizeDirectionKey(direction) {
 
 function indicatorMatchesDirection(indicator, direction, areaIds) {
   if (!indicator || !direction) return false;
-  if (isSmsIndicator(indicator)) return false;
 
   if (indicatorBelongsToAreaIds(indicator, areaIds)) {
     return true;
@@ -4526,44 +3978,16 @@ function extractDirectionRoots(tree) {
 
 function shouldHideDirection(direction) {
   if (!direction) return false;
-  
+
   const name = direction?.nombre?.toLowerCase?.() ?? '';
   const key = direction?.clave?.toLowerCase?.() ?? '';
-  
-  // Ocultar direcciones SMS y Sin Asignar
-  if (name === 'sms' || key === 'sms') return true;
+
   if (name === 'sin asignar' || name.includes('sin asignar')) return true;
-  
+
   return false;
 }
 
 function buildDirectionPanelContent(direction, rootId) {
-  if (isSmsDirection(direction)) {
-    const groupIds = getRegisteredSmsGroupIds();
-
-    if (groupIds.length) {
-      const groupsMarkup = groupIds.map(groupId => buildGroupMarkup(groupId, rootId)).join('');
-
-      return `
-        <div class="space-y-3">
-          <p class="text-sm font-medium text-slate-700">Indicadores SMS</p>
-          <div class="space-y-3">
-            ${groupsMarkup}
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="space-y-3">
-        <p class="text-sm font-medium text-slate-700">Indicadores SMS</p>
-        <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-          No hay indicadores SMS registrados.
-        </div>
-      </div>
-    `;
-  }
-
   const sections = [];
 
   const indicatorsMarkup = buildDirectionIndicatorsMarkup(direction, rootId);
@@ -4809,7 +4233,7 @@ function buildFaunaCaptureModalMarkup(title, captureData, chartType = 'bar', sho
   const diff = currentYearTotal - previousYearTotal;
   const pct = previousYearTotal > 0 ? diff / previousYearTotal : null;
   
-  const trendClasses = getTrendColorClasses(diff, { invert: true }); // SMS inverso
+  const trendClasses = getTrendColorClasses(diff, { invert: true });
   const formattedDiff = formatSignedNumber(diff);
   const formattedPct = formatPercentage(pct);
   
@@ -4835,7 +4259,7 @@ function buildFaunaCaptureModalMarkup(title, captureData, chartType = 'bar', sho
             <p class="text-xs uppercase tracking-widest text-slate-400">Vista personalizada</p>
             <h2 class="text-2xl font-semibold text-slate-900">${escapeHtml(title)}</h2>
             <div class="flex flex-wrap gap-3 text-sm text-slate-500">
-              <span><strong>Área:</strong> SMS - Gestión del Peligro Aviario</span>
+              <span><strong>Área:</strong> Gestión del Peligro Aviario</span>
               <span><strong>Período:</strong> ${currentYear} vs ${previousYear}</span>
             </div>
           </header>
@@ -5229,8 +4653,7 @@ export async function renderDashboard(container) {
     const indicators = await getIndicators();
     cachedIndicators = Array.isArray(indicators) ? indicators : [];
 
-    const smsGroupIds = registerSmsGroupDefinitions(cachedIndicators);
-    const sections = composeAccordionSections({ smsGroupIds });
+    const sections = composeAccordionSections();
 
     container.innerHTML = buildDashboardMarkup(sections);
 
