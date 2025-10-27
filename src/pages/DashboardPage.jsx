@@ -36,8 +36,6 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
-import SMSIndicatorCard from '../components/indicadores/SMSIndicatorCard.jsx';
-import SMSComparativoPCI from '../components/indicadores/SMSComparativoPCI.jsx';
 
 const TEMPLATE_META = {
   mensual_vs_anterior: { type: 'monthly', icon: LineChartIcon },
@@ -1977,14 +1975,6 @@ export default function DashboardPage() {
     return { smsObjectiveGroups: objectives, smsUnassignedIndicators: leftovers };
   }, [smsIndicators]);
 
-  const sms05A = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05A') ?? null;
-  }, [smsIndicators]);
-
-  const sms05B = useMemo(() => {
-    return smsIndicators.find(item => (item?.clave ?? '').toString().toUpperCase() === 'SMS-05B') ?? null;
-  }, [smsIndicators]);
-
   const activeEntry = activeOptionId ? optionIndex.get(activeOptionId) ?? null : null;
 
   const handleCloseModal = () => setActiveOptionId(null);
@@ -2038,47 +2028,34 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 No se pudieron cargar los indicadores SMS.
               </div>
-            ) : smsObjectiveGroups.length || smsUnassignedIndicators.length ? (
-              <div className="space-y-8">
-                {smsObjectiveGroups.map(objective => (
-                  <section key={objective.id} className="space-y-4">
-                    <header className="space-y-1">
-                      <h3 className="text-base font-semibold text-slate-800">{objective.title}</h3>
-                      {objective.description ? (
-                        <p className="text-sm text-slate-500">{objective.description}</p>
-                      ) : null}
-                    </header>
-                    <div className="space-y-6">
-                      {objective.indicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-
-                {smsUnassignedIndicators.length ? (
-                  <section className="space-y-4">
-                    <header className="space-y-1">
-                      <h3 className="text-base font-semibold text-slate-800">Otros indicadores</h3>
-                      <p className="text-sm text-slate-500">
-                        Indicadores de Seguridad Operacional sin objetivo asignado.
-                      </p>
-                    </header>
-                    <div className="space-y-6">
-                      {smsUnassignedIndicators.map(indicator => (
-                        <SMSIndicatorCard key={indicator.id} indicator={indicator} />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {sms05A && sms05B ? (
-                  <SMSComparativoPCI indicadorA={sms05A} indicadorB={sms05B} meta={70} />
-                ) : null}
-              </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                No hay indicadores SMS configurados.
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+                  <svg
+                    className="h-8 w-8 text-amber-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Módulo en construcción</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Estamos reconstruyendo los indicadores SMS con mejoras significativas. Estarán disponibles
+                  próximamente.
+                </p>
+                {smsObjectiveGroups.length || smsUnassignedIndicators.length ? (
+                  <p className="mt-4 text-xs text-slate-500">
+                    Se detectaron {smsObjectiveGroups.reduce((total, objective) => total + objective.indicators.length, 0) + smsUnassignedIndicators.length}{' '}
+                    indicadores configurados que serán migrados a la nueva experiencia.
+                  </p>
+                ) : null}
               </div>
             )}
           </AccordionSection>
