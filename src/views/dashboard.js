@@ -13,7 +13,8 @@ import {
   IMPACTOS_FAUNA_MODAL_ID,
   buildImpactosFaunaChartView,
   buildImpactosFaunaCsv,
-  buildImpactosFaunaModalMarkup
+  buildImpactosFaunaModalMarkup,
+  buildImpactosFaunaSummary
 } from './modals/modalImpactosFauna.js';
 
 const OPTION_BLUEPRINTS = [
@@ -4387,15 +4388,16 @@ async function openImpactosFaunaModal() {
 
     const renderModal = () => {
       cleanup();
-      root.innerHTML = buildImpactosFaunaModalMarkup({ showHistorical });
+      const { config, filteredRecords } = buildImpactosFaunaChartView(records, { showHistorical });
+      const summary = buildImpactosFaunaSummary(filteredRecords);
+
+      root.innerHTML = buildImpactosFaunaModalMarkup({ showHistorical, summary });
 
       const overlay = root.querySelector('[data-modal-overlay]');
       const closeButtons = root.querySelectorAll('[data-modal-close]');
       const toggleButton = root.querySelector('[data-impactos-fauna-toggle]');
       const exportButton = root.querySelector('[data-impactos-fauna-export]');
       const canvas = root.querySelector('#chartImpactosFauna');
-
-      const { config } = buildImpactosFaunaChartView(records, { showHistorical });
 
       const handleClose = () => {
         cleanup();

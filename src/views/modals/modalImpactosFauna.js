@@ -17,6 +17,30 @@ const MONTH_SHORT_NAMES = [
   'Dic'
 ];
 
+const IMPACT_RATE_THRESHOLDS = [
+  {
+    label: 'Tasa Objetivo',
+    value: 0.06,
+    color: '#22c55e',
+    borderDash: [6, 6]
+  },
+  {
+    label: 'Nivel de Alerta 1',
+    value: 0.134,
+    color: '#facc15'
+  },
+  {
+    label: 'Nivel de Alerta 2',
+    value: 0.214,
+    color: '#fb923c'
+  },
+  {
+    label: 'Nivel de Alerta 3',
+    value: 0.294,
+    color: '#ef4444'
+  }
+];
+
 function computeImpactRate(record) {
   const impactos = Number(record?.impactos);
   const operaciones = Number(record?.total_operaciones);
@@ -111,6 +135,29 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
   const impactosData = filtered.map(record => record.impactos);
   const tasaData = filtered.map(record => computeImpactRate(record));
   const operationsData = filtered.map(record => record.total_operaciones);
+  const thresholdDatasets = IMPACT_RATE_THRESHOLDS.map(threshold => ({
+    type: 'line',
+    label: `${threshold.label} (${threshold.value.toLocaleString('es-MX', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    })}%)`,
+    data: filtered.map(() => threshold.value),
+    borderColor: threshold.color,
+    backgroundColor: threshold.color,
+    borderWidth: 2,
+    borderDash: threshold.borderDash ?? [],
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    fill: false,
+    yAxisID: 'tasa',
+    order: 0,
+    segment: {
+      borderDash: threshold.borderDash ?? []
+    },
+    tooltip: {
+      enabled: false
+    }
+  }));
 
   const config = {
     type: 'bar',
@@ -142,8 +189,9 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           pointBorderColor: '#1d4ed8',
           fill: false,
           yAxisID: 'tasa',
-          order: 0
-        }
+          order: 4
+        },
+        ...thresholdDatasets
       ]
     },
     options: {
@@ -271,9 +319,57 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
   return { config, filteredRecords: filtered };
 }
 
-export function buildImpactosFaunaModalMarkup({ showHistorical = false } = {}) {
+export function buildImpactosFaunaSummary(records = []) {
+  if (!Array.isArray(records) || !records.length) {
+    return null;
+  }
+
+  const latestRecord = records[records.length - 1];
+  const monthLabel = monthName(latestRecord.mes) || `Mes ${latestRecord.mes}`;
+
+  return {
+    periodLabel: `${monthLabel} ${latestRecord.anio}`,
+    operations: Number(latestRecord.total_operaciones) || 0,
+    impacts: Number(latestRecord.impactos) || 0,
+    rate: computeImpactRate(latestRecord)
+  };
+}
+
+export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary = null } = {}) {
   const toggleLabel = showHistorical ? 'Mostrar año en curso' : 'Mostrar últimos 4 años';
   const toggleIcon = showHistorical ? 'fa-solid fa-calendar-day' : 'fa-solid fa-clock-rotate-left';
+  const summarySection = summary
+    ? `
+        <div class="mt-6 grid gap-4 sm:grid-cols-3">
+          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Operaciones</p>
+            <p class="mt-3 text-3xl font-semibold text-slate-900">${formatNumber(summary.operations, {
+              decimals: 0
+            })}</p>
+            <p class="mt-2 text-xs text-slate-500">${summary.periodLabel}</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Impactos</p>
+            <p class="mt-3 text-3xl font-semibold text-slate-900">${formatNumber(summary.impacts, {
+              decimals: 0
+            })}</p>
+            <p class="mt-2 text-xs text-slate-500">${summary.periodLabel}</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Tasa de impactos (%)</p>
+            <p class="mt-3 text-3xl font-semibold text-slate-900">${formatPercentage(summary.rate, {
+              decimals: 4,
+              scale: 'percentage'
+            })}</p>
+            <p class="mt-2 text-xs text-slate-500">${summary.periodLabel}</p>
+          </article>
+        </div>
+      `
+    : `
+        <div class="mt-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+          No hay valores mensuales disponibles para mostrar.
+        </div>
+      `;
 
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${IMPACTOS_FAUNA_MODAL_ID}">
@@ -292,6 +388,20 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false } = {}) {
             <h2 class="text-2xl font-semibold text-slate-900">Impactos con fauna vs Tasa de impactos con fauna 2022–2025</h2>
             <p class="text-sm text-slate-600">Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.</p>
           </header>
+
+          <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="flex flex-col gap-2">
+              <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
+              <h3 class="text-lg font-semibold text-slate-900">Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.</h3>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <span>Área: SMS</span>
+                <span class="hidden sm:inline">·</span>
+                <span>Unidad: Porcentaje</span>
+              </div>
+              <p class="text-sm text-slate-600">Valores mensuales${summary ? ` (${summary.periodLabel})` : ''}</p>
+            </div>
+            ${summarySection}
+          </section>
 
           <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
