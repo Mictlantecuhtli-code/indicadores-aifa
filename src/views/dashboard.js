@@ -5,7 +5,8 @@ import {
   getIndicatorHistory,
   getIndicatorTargets,
   getCapturasFauna,
-  getImpactosFauna
+  getImpactosFauna,
+  getSmsDocuments
 } from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
@@ -17,6 +18,12 @@ import {
   buildImpactosFaunaModalMarkup,
   buildImpactosFaunaSummary
 } from './modals/modalImpactosFauna.js';
+import {
+  PGPAFS_MODAL_ID,
+  buildPgpaFsChartView,
+  buildPgpaFsModalMarkup,
+  buildPgpaFsSummary
+} from './modals/modalPgpaFs.js';
 
 const OPTION_BLUEPRINTS = [
   {
@@ -215,7 +222,8 @@ const SMS_SECTION_OBJECTIVES = [
 ];
 
 const SMS_INDICATOR_MODAL_ROUTES = {
-  'sms-indicator-1-1': () => openImpactosFaunaModal()
+  'sms-indicator-1-1': () => openImpactosFaunaModal(),
+  'sms-indicator-1-2': () => openPgpaFsModal()
 };
 
 function buildSmsSectionContent() {
@@ -4504,6 +4512,199 @@ async function openImpactosFaunaModal() {
         handleClose();
       }
     };
+    const escListener = event => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    overlay?.addEventListener('click', overlayListener);
+    closeButtons.forEach(button => button.addEventListener('click', handleClose));
+    document.addEventListener('keydown', escListener);
+  }
+}
+
+async function openPgpaFsModal() {
+  try {
+    const root = ensureModalContainer();
+    document.body.classList.add('overflow-hidden');
+
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${PGPAFS_MODAL_ID}">
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full">
+          <div class="text-center space-y-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            <p class="text-sm text-slate-600">Cargando datos del indicador...</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const records = await getSmsDocuments();
+    const chartView = buildPgpaFsChartView(records);
+    const summary = buildPgpaFsSummary(chartView.entries);
+
+    root.innerHTML = buildPgpaFsModalMarkup({
+      activeTab: 'pgpafs',
+      hasData: Boolean(chartView.config),
+      summary,
+      periodLabel: summary?.periodLabel ?? '',
+      thresholds: chartView.thresholds
+    });
+
+    const overlay = root.querySelector('[data-modal-overlay]');
+    const closeButtons = root.querySelectorAll('[data-modal-close]');
+    const tabButtons = root.querySelectorAll('[data-pgpafs-tab]');
+    const panels = root.querySelectorAll('[data-pgpafs-panel]');
+    const canvas = root.querySelector('#chartPgpaFs');
+    const baseButtonClass =
+      'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition';
+    const tabHandlers = new Map();
+
+    let activeTab = 'pgpafs';
+    let chartRendered = false;
+    let cleanup = () => {};
+
+    const handleClose = () => {
+      cleanup();
+      closeIndicatorModal();
+    };
+
+    const overlayListener = event => {
+      if (event.target === overlay) {
+        handleClose();
+      }
+    };
+
+    const escListener = event => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    const activateTab = tabId => {
+      if (!tabId) {
+        return;
+      }
+
+      if (tabId === activeTab) {
+        if (tabId === 'pgpafs') {
+          if (chartView.config && canvas && !chartRendered) {
+            renderModalChart(canvas, chartView.config);
+            chartRendered = true;
+          } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
+            activeModalChart.resize();
+          }
+        }
+        return;
+      }
+
+      activeTab = tabId;
+
+      tabButtons.forEach(button => {
+        const target = button.getAttribute('data-pgpafs-tab');
+        const isActive = target === activeTab;
+        button.className = `${baseButtonClass} ${
+          isActive
+            ? 'bg-primary-600 text-white shadow'
+            : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+        }`;
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+
+      panels.forEach(panel => {
+        const target = panel.getAttribute('data-pgpafs-panel');
+        if (target === activeTab) {
+          panel.removeAttribute('hidden');
+        } else {
+          panel.setAttribute('hidden', '');
+        }
+      });
+
+      if (activeTab === 'pgpafs') {
+        if (chartView.config && canvas && !chartRendered) {
+          renderModalChart(canvas, chartView.config);
+          chartRendered = true;
+        } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
+          activeModalChart.resize();
+        }
+      }
+    };
+
+    closeButtons.forEach(button => button.addEventListener('click', handleClose));
+    overlay?.addEventListener('click', overlayListener);
+    document.addEventListener('keydown', escListener);
+
+    tabButtons.forEach(button => {
+      const tabId = button.getAttribute('data-pgpafs-tab');
+      const isActive = tabId === activeTab;
+      button.className = `${baseButtonClass} ${
+        isActive ? 'bg-primary-600 text-white shadow' : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+      }`;
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+      const handler = () => activateTab(tabId);
+      tabHandlers.set(button, handler);
+      button.addEventListener('click', handler);
+    });
+
+    panels.forEach(panel => {
+      const target = panel.getAttribute('data-pgpafs-panel');
+      if (target === activeTab) {
+        panel.removeAttribute('hidden');
+      } else {
+        panel.setAttribute('hidden', '');
+      }
+    });
+
+    cleanup = () => {
+      closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+      overlay?.removeEventListener('click', overlayListener);
+      document.removeEventListener('keydown', escListener);
+      tabHandlers.forEach((handler, button) => button.removeEventListener('click', handler));
+    };
+
+    activateTab(activeTab);
+  } catch (error) {
+    console.error('Error al abrir modal PGPAFS:', error);
+    const root = ensureModalContainer();
+    document.body.classList.add('overflow-hidden');
+
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${PGPAFS_MODAL_ID}">
+        <div class="rounded-2xl bg-white p-8 shadow-2xl max-w-md w-full text-center space-y-4">
+          <i class="fa-solid fa-circle-exclamation text-4xl text-red-500"></i>
+          <div class="space-y-1">
+            <h3 class="text-lg font-semibold text-slate-900">Error al cargar datos</h3>
+            <p class="text-sm text-slate-600">${escapeHtml(error?.message || 'Ocurrió un error inesperado al consultar Supabase.')}</p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
+            data-modal-close
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    `;
+
+    const overlay = root.querySelector('[data-modal-overlay]');
+    const closeButtons = root.querySelectorAll('[data-modal-close]');
+
+    const handleClose = () => {
+      closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+      overlay?.removeEventListener('click', overlayListener);
+      document.removeEventListener('keydown', escListener);
+      closeIndicatorModal();
+    };
+
+    const overlayListener = event => {
+      if (event.target === overlay) {
+        handleClose();
+      }
+    };
+
     const escListener = event => {
       if (event.key === 'Escape') {
         handleClose();

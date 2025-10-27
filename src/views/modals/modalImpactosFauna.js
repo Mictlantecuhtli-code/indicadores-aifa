@@ -395,9 +395,9 @@ export function buildImpactosFaunaSummary(records = []) {
   };
 }
 
-function renderRateValue(rate, { emphasize = false } = {}) {
+function renderRateValue(rate, { emphasize = false, placeholder = '—' } = {}) {
   if (!Number.isFinite(rate)) {
-    return '<span class="text-slate-400">—</span>';
+    return `<span class="text-slate-400">${placeholder}</span>`;
   }
 
   const formatted = formatPercentage(rate, { decimals: 4, scale: 'percentage' });
@@ -450,7 +450,9 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
     ? Array.from(ratesByYear.get(currentYear).keys())
     : Array.from(new Set(normalized.map(record => record.mes)));
 
-  const months = referenceMonths.sort((a, b) => a - b);
+  const months = showHistorical
+    ? Array.from({ length: 12 }, (_, index) => index + 1)
+    : referenceMonths.sort((a, b) => a - b);
 
   if (!months.length) {
     return `
@@ -471,7 +473,10 @@ export function buildImpactosFaunaDetailTable(records, { showHistorical = false 
           .map(year => {
             const rate = ratesByYear.get(year)?.get(month);
             const emphasize = year === currentYear;
-            return `<td class="whitespace-nowrap px-4 py-3 text-right">${renderRateValue(rate, { emphasize })}</td>`;
+            return `<td class="whitespace-nowrap px-4 py-3 text-right">${renderRateValue(rate, {
+              emphasize,
+              placeholder: '--'
+            })}</td>`;
           })
           .join('');
 

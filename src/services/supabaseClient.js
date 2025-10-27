@@ -622,6 +622,34 @@ export async function getImpactosFauna() {
   }
 }
 
+export async function getSmsDocuments({ indicadorId } = {}) {
+  try {
+    let query = supabase
+      .from('sms_documentos')
+      .select(
+        'id, indicador_id, mes, nombre_documento, codigo_documento, proposito_principal, entidad_area, porcentaje, fecha_captura, fecha_validacion, estatus_validacion'
+      )
+      .order('mes', { ascending: true })
+      .order('nombre_documento', { ascending: true });
+
+    if (indicadorId) {
+      query = query.eq('indicador_id', indicadorId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error al obtener documentos SMS:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error en getSmsDocuments:', error);
+    throw error;
+  }
+}
+
 export async function saveMeasurement(payload) {
   const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload, 'PENDIENTE');
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
