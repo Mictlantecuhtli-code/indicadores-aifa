@@ -229,7 +229,7 @@ function buildSmsSectionContent() {
           class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
           data-sms-objective-button
           data-sms-objective-id="${escapeHtml(objective.id)}"
-          data-sms-objective-panel="${escapeHtml(panelId)}"
+          data-sms-objective-panel-target="${escapeHtml(panelId)}"
           aria-expanded="false"
           aria-controls="${escapeHtml(panelId)}"
         >
@@ -3863,7 +3863,7 @@ function initSmsObjectiveAccordions(container) {
     const button = event.target.closest('[data-sms-objective-button]');
     if (!button || !root.contains(button)) return;
 
-    const panelId = button.dataset.smsObjectivePanel;
+    const panelId = button.dataset.smsObjectivePanelTarget;
     if (!panelId) return;
 
     const panel = Array.from(root.querySelectorAll('[data-sms-objective-panel]')).find(
