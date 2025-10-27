@@ -220,19 +220,41 @@ function buildSmsSectionContent() {
       `)
       .join('');
 
+    const panelId = `${objective.id}-panel`;
+
     return `
-      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" id="${escapeHtml(objective.id)}">
-        <h3 class="text-base font-semibold text-slate-900">${escapeHtml(objective.title)}</h3>
-        <p class="mt-2 text-sm text-slate-600">${escapeHtml(objective.description)}</p>
-        <ul class="mt-3 space-y-2">
-          ${indicatorsMarkup}
-        </ul>
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" id="${escapeHtml(objective.id)}">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+          data-sms-objective-button
+          data-sms-objective-id="${escapeHtml(objective.id)}"
+          data-sms-objective-panel="${escapeHtml(panelId)}"
+          aria-expanded="false"
+          aria-controls="${escapeHtml(panelId)}"
+        >
+          <span class="flex-1 text-left">
+            <span class="block text-base font-semibold text-slate-900">${escapeHtml(objective.title)}</span>
+            <span class="mt-1 block text-sm text-slate-600">${escapeHtml(objective.description)}</span>
+          </span>
+          <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-sms-objective-chevron></i>
+        </button>
+        <div
+          id="${escapeHtml(panelId)}"
+          class="border-t border-slate-100 bg-slate-50/60 px-5 py-4"
+          data-sms-objective-panel="${escapeHtml(panelId)}"
+          hidden
+        >
+          <ul class="mt-2 space-y-2">
+            ${indicatorsMarkup}
+          </ul>
+        </div>
       </article>
     `;
   }).join('');
 
   return `
-    <div class="space-y-4">
+    <div class="space-y-4" data-sms-objectives-root>
       ${objectivesMarkup}
     </div>
   `;
@@ -3833,6 +3855,39 @@ function initDirectionIndicatorButtons(container) {
   });
 }
 
+function initSmsObjectiveAccordions(container) {
+  const root = container.querySelector('[data-sms-objectives-root]');
+  if (!root) return;
+
+  root.addEventListener('click', event => {
+    const button = event.target.closest('[data-sms-objective-button]');
+    if (!button || !root.contains(button)) return;
+
+    const panelId = button.dataset.smsObjectivePanel;
+    if (!panelId) return;
+
+    const panel = Array.from(root.querySelectorAll('[data-sms-objective-panel]')).find(
+      element => element.dataset.smsObjectivePanel === panelId
+    );
+    if (!panel) return;
+
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    const nextState = !isExpanded;
+
+    button.setAttribute('aria-expanded', nextState ? 'true' : 'false');
+    if (nextState) {
+      panel.removeAttribute('hidden');
+    } else {
+      panel.setAttribute('hidden', '');
+    }
+
+    const chevron = button.querySelector('[data-sms-objective-chevron]');
+    if (chevron) {
+      chevron.classList.toggle('rotate-180', nextState);
+    }
+  });
+}
+
 function initSmsIndicatorLinks(container) {
   container.addEventListener('click', event => {
     const link = event.target.closest('[data-sms-indicator-link]');
@@ -4818,6 +4873,7 @@ export async function renderDashboard(container) {
 
     initGroupControls(container);
     initOptionModals(container);
+    initSmsObjectiveAccordions(container);
     initSmsIndicatorLinks(container);
 
     const directionsContainer = container.querySelector('[data-direction-sections]');
