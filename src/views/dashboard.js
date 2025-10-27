@@ -114,6 +114,152 @@ function getVisualizationOrder(value) {
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
+const SMS_SECTION_OBJECTIVES = [
+  {
+    id: 'sms-objective-1',
+    title: 'Objetivo 1',
+    description:
+      'Mantener la tasa de impactos de fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
+    indicators: [
+      {
+        id: 'sms-indicator-1-1',
+        name: 'Indicador 1.1',
+        description: 'Tasa de impactos con fauna dentro del aeropuerto.'
+      },
+      {
+        id: 'sms-indicator-1-2',
+        name: 'Indicador 1.2',
+        description:
+          'Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre.'
+      }
+    ]
+  },
+  {
+    id: 'sms-objective-2',
+    title: 'Objetivo 2',
+    description:
+      'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+    indicators: [
+      {
+        id: 'sms-indicator-2-1',
+        name: 'Indicador 2.1',
+        description: 'Porcentaje de disponibilidad del sistema de iluminación de ayudas visuales en pista.'
+      },
+      {
+        id: 'sms-indicator-2-2',
+        name: 'Indicador 2.2',
+        description: 'Índice de confiabilidad del sistema de iluminación de ayudas visuales en pista.'
+      },
+      {
+        id: 'sms-indicator-2-3',
+        name: 'Indicador 2.3',
+        description: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista.'
+      }
+    ]
+  },
+  {
+    id: 'sms-objective-3',
+    title: 'Objetivo 3',
+    description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
+    indicators: [
+      {
+        id: 'sms-indicator-3-1',
+        name: 'Indicador 3.1',
+        description: 'PCI* (Índice de condiciones del pavimento).'
+      },
+      {
+        id: 'sms-indicator-3-2',
+        name: 'Indicador 3.2',
+        description: 'Porcentaje de mantenimientos programados a pavimentos.'
+      },
+      {
+        id: 'sms-indicator-3-3',
+        name: 'Indicador 3.3',
+        description: 'Porcentaje de disponibilidad de pistas.'
+      }
+    ]
+  },
+  {
+    id: 'sms-objective-4',
+    title: 'Objetivo 4',
+    description:
+      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA.',
+    indicators: [
+      {
+        id: 'sms-indicator-4-1',
+        name: 'Indicador 4.1',
+        description: 'Porcentaje de capacitaciones realizadas al año.'
+      },
+      {
+        id: 'sms-indicator-4-2',
+        name: 'Indicador 4.2',
+        description: 'Porcentaje de supervisiones realizadas al año.'
+      }
+    ]
+  }
+];
+
+function buildSmsSectionContent() {
+  const objectivesMarkup = SMS_SECTION_OBJECTIVES.map(objective => {
+    const indicators = Array.isArray(objective.indicators) ? objective.indicators : [];
+    const indicatorsMarkup = indicators
+      .map(indicator => `
+        <li>
+          <a
+            href="#"
+            class="group inline-flex flex-col gap-0.5 text-left text-sm leading-snug text-slate-700 transition hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+            data-sms-indicator-link
+            data-sms-indicator-id="${escapeHtml(indicator.id)}"
+            data-sms-indicator-name="${escapeHtml(indicator.name)}"
+            data-sms-indicator-subtitle="${escapeHtml(indicator.description)}"
+          >
+            <span class="font-semibold text-primary-700 transition group-hover:text-primary-800">${escapeHtml(indicator.name)}</span>
+            <span class="text-slate-600">${escapeHtml(indicator.description)}</span>
+          </a>
+        </li>
+      `)
+      .join('');
+
+    const panelId = `${objective.id}-panel`;
+
+    return `
+      <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" id="${escapeHtml(objective.id)}">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+          data-sms-objective-button
+          data-sms-objective-id="${escapeHtml(objective.id)}"
+          data-sms-objective-panel="${escapeHtml(panelId)}"
+          aria-expanded="false"
+          aria-controls="${escapeHtml(panelId)}"
+        >
+          <span class="flex-1 text-left">
+            <span class="block text-base font-semibold text-slate-900">${escapeHtml(objective.title)}</span>
+            <span class="mt-1 block text-sm text-slate-600">${escapeHtml(objective.description)}</span>
+          </span>
+          <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-sms-objective-chevron></i>
+        </button>
+        <div
+          id="${escapeHtml(panelId)}"
+          class="border-t border-slate-100 bg-slate-50/60 px-5 py-4"
+          data-sms-objective-panel="${escapeHtml(panelId)}"
+          hidden
+        >
+          <ul class="mt-2 space-y-2">
+            ${indicatorsMarkup}
+          </ul>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  return `
+    <div class="space-y-4" data-sms-objectives-root>
+      ${objectivesMarkup}
+    </div>
+  `;
+}
+
 const BASE_ACCORDION_SECTIONS = [
   {
     id: 'operativos',
@@ -121,6 +267,13 @@ const BASE_ACCORDION_SECTIONS = [
     title: 'Indicadores Operativos',
     iconClass: 'fa-solid fa-gauge-high',
     groupIds: ['operations', 'passengers', 'cargo-operations', 'cargo-weight']
+  },
+  {
+    id: 'sms',
+    type: 'static',
+    title: 'Indicadores SMS',
+    iconClass: 'fa-solid fa-shield-halved',
+    buildContent: buildSmsSectionContent
   },
   {
     id: 'fbo',
@@ -3461,6 +3614,14 @@ function buildGroupMarkup(groupId, rootId) {
 }
 
 function buildIndicatorSectionContent(section) {
+  if (typeof section.buildContent === 'function') {
+    return section.buildContent(section);
+  }
+
+  if (typeof section.content === 'string') {
+    return section.content;
+  }
+
   const groups = Array.isArray(section.groupIds) ? section.groupIds : [];
   const groupsMarkup = groups.map(groupId => buildGroupMarkup(groupId, section.id)).join('');
 
@@ -3478,13 +3639,18 @@ function composeAccordionSections() {
   }));
 
   const operationsSection = baseSections.find(section => section.id === 'operativos') ?? null;
+  const smsSection = baseSections.find(section => section.id === 'sms') ?? null;
   const fboSection = baseSections.find(section => section.id === 'fbo') ?? null;
-  const remainingSections = baseSections.filter(section => !['operativos', 'fbo'].includes(section.id));
+  const remainingSections = baseSections.filter(section => !['operativos', 'sms', 'fbo'].includes(section.id));
 
   const sections = [];
 
   if (operationsSection) {
     sections.push(operationsSection);
+  }
+
+  if (smsSection) {
+    sections.push(smsSection);
   }
 
   if (fboSection) {
@@ -3686,6 +3852,54 @@ function initDirectionIndicatorButtons(container) {
 
       openDirectionIndicatorPlaceholderModal({ name, subtitle, code });
     });
+  });
+}
+
+function initSmsObjectiveAccordions(container) {
+  const root = container.querySelector('[data-sms-objectives-root]');
+  if (!root) return;
+
+  root.addEventListener('click', event => {
+    const button = event.target.closest('[data-sms-objective-button]');
+    if (!button || !root.contains(button)) return;
+
+    const panelId = button.dataset.smsObjectivePanel;
+    if (!panelId) return;
+
+    const panel = Array.from(root.querySelectorAll('[data-sms-objective-panel]')).find(
+      element => element.dataset.smsObjectivePanel === panelId
+    );
+    if (!panel) return;
+
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    const nextState = !isExpanded;
+
+    button.setAttribute('aria-expanded', nextState ? 'true' : 'false');
+    if (nextState) {
+      panel.removeAttribute('hidden');
+    } else {
+      panel.setAttribute('hidden', '');
+    }
+
+    const chevron = button.querySelector('[data-sms-objective-chevron]');
+    if (chevron) {
+      chevron.classList.toggle('rotate-180', nextState);
+    }
+  });
+}
+
+function initSmsIndicatorLinks(container) {
+  container.addEventListener('click', event => {
+    const link = event.target.closest('[data-sms-indicator-link]');
+    if (!link) return;
+
+    event.preventDefault();
+
+    const name = link.dataset.smsIndicatorName || 'Indicador SMS';
+    const subtitle = link.dataset.smsIndicatorSubtitle || '';
+    const code = link.dataset.smsIndicatorCode || '';
+
+    openDirectionIndicatorPlaceholderModal({ name, subtitle, code });
   });
 }
 
@@ -4659,6 +4873,8 @@ export async function renderDashboard(container) {
 
     initGroupControls(container);
     initOptionModals(container);
+    initSmsObjectiveAccordions(container);
+    initSmsIndicatorLinks(container);
 
     const directionsContainer = container.querySelector('[data-direction-sections]');
     if (directionsContainer) {
