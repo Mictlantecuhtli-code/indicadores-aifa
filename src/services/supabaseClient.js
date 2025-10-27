@@ -602,6 +602,26 @@ export async function getCapturasFauna() {
   }
 }
 
+export async function getImpactosFauna() {
+  try {
+    const { data, error } = await supabase
+      .from('impactos_fauna')
+      .select('anio, mes, total_operaciones, impactos, tasa')
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de impactos de fauna:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error en getImpactosFauna:', error);
+    throw error;
+  }
+}
+
 export async function saveMeasurement(payload) {
   const sanitized = prepareMeasurementPayload(payload ? { ...payload } : payload, 'PENDIENTE');
   const { data, error } = await supabase.from('mediciones').insert(sanitized).select().single();
