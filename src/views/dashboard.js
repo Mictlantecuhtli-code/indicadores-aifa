@@ -116,59 +116,115 @@ function getVisualizationOrder(value) {
 
 const SMS_SECTION_OBJECTIVES = [
   {
+    id: 'sms-objective-1',
     title: 'Objetivo 1',
     description:
       'Mantener la tasa de impactos de fauna dentro del aeropuerto igual o por debajo del porcentaje del año anterior.',
     indicators: [
-      'Indicador 1.1 Tasa de Impactos con fauna dentro del aeropuerto.',
-      'Indicador 1.2 Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre.'
+      {
+        id: 'sms-indicator-1-1',
+        name: 'Indicador 1.1',
+        description: 'Tasa de impactos con fauna dentro del aeropuerto.'
+      },
+      {
+        id: 'sms-indicator-1-2',
+        name: 'Indicador 1.2',
+        description:
+          'Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre.'
+      }
     ]
   },
   {
+    id: 'sms-objective-2',
     title: 'Objetivo 2',
     description:
-      'Mantener el porcentaje de disponibilidad y el índice de confuabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
+      'Mantener el porcentaje de disponibilidad y el índice de confiabilidad del sistema de iluminación de ayudas visuales dentro de los parámetros establecidos.',
     indicators: [
-      'Indicador 2.1 Porcentaje de disponibilidad del sistema de iluminación de ayudas visuales en pista.',
-      'Indicador 2.2 Indice de confiabilidad del sistema de iluminación de ayudas visuales en pista.',
-      'Indicador 2.3 Porcentaje de luces operativas del sistema de ayudas visuales en pista'
+      {
+        id: 'sms-indicator-2-1',
+        name: 'Indicador 2.1',
+        description: 'Porcentaje de disponibilidad del sistema de iluminación de ayudas visuales en pista.'
+      },
+      {
+        id: 'sms-indicator-2-2',
+        name: 'Indicador 2.2',
+        description: 'Índice de confiabilidad del sistema de iluminación de ayudas visuales en pista.'
+      },
+      {
+        id: 'sms-indicator-2-3',
+        name: 'Indicador 2.3',
+        description: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista.'
+      }
     ]
   },
   {
+    id: 'sms-objective-3',
     title: 'Objetivo 3',
     description: 'Mantener la disponibilidad de pistas dentro de los parámetros establecidos.',
     indicators: [
-      'Indicador 3.1 PCI* (Indice de condiciones del pavimento).',
-      'Indicador 3.2 Porcentaje de mantenimientos programados a pavimentos,',
-      'Indicador 3.3 Porcentaje de disponibilidad de pistas'
+      {
+        id: 'sms-indicator-3-1',
+        name: 'Indicador 3.1',
+        description: 'PCI* (Índice de condiciones del pavimento).'
+      },
+      {
+        id: 'sms-indicator-3-2',
+        name: 'Indicador 3.2',
+        description: 'Porcentaje de mantenimientos programados a pavimentos.'
+      },
+      {
+        id: 'sms-indicator-3-3',
+        name: 'Indicador 3.3',
+        description: 'Porcentaje de disponibilidad de pistas.'
+      }
     ]
   },
   {
+    id: 'sms-objective-4',
     title: 'Objetivo 4',
     description:
-      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA',
+      'Realizar capacitaciones y supervisiones en materia de Seguridad Operacional al personal del AIFA.',
     indicators: [
-      'Indicador 4.1 Porcentaje de capacitaciones realizadas al año',
-      'Indicador 4.2 Porcentaje de supervisiones realizadas al año'
+      {
+        id: 'sms-indicator-4-1',
+        name: 'Indicador 4.1',
+        description: 'Porcentaje de capacitaciones realizadas al año.'
+      },
+      {
+        id: 'sms-indicator-4-2',
+        name: 'Indicador 4.2',
+        description: 'Porcentaje de supervisiones realizadas al año.'
+      }
     ]
   }
 ];
 
 function buildSmsSectionContent() {
   const objectivesMarkup = SMS_SECTION_OBJECTIVES.map(objective => {
-    const indicatorsMarkup = objective.indicators
-      .map(
-        indicator => `
-          <li>${escapeHtml(indicator)}</li>
-        `
-      )
+    const indicators = Array.isArray(objective.indicators) ? objective.indicators : [];
+    const indicatorsMarkup = indicators
+      .map(indicator => `
+        <li>
+          <a
+            href="#"
+            class="group inline-flex flex-col gap-0.5 text-left text-sm leading-snug text-slate-700 transition hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aifa-light focus-visible:ring-offset-2"
+            data-sms-indicator-link
+            data-sms-indicator-id="${escapeHtml(indicator.id)}"
+            data-sms-indicator-name="${escapeHtml(indicator.name)}"
+            data-sms-indicator-subtitle="${escapeHtml(indicator.description)}"
+          >
+            <span class="font-semibold text-primary-700 transition group-hover:text-primary-800">${escapeHtml(indicator.name)}</span>
+            <span class="text-slate-600">${escapeHtml(indicator.description)}</span>
+          </a>
+        </li>
+      `)
       .join('');
 
     return `
-      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" id="${escapeHtml(objective.id)}">
         <h3 class="text-base font-semibold text-slate-900">${escapeHtml(objective.title)}</h3>
         <p class="mt-2 text-sm text-slate-600">${escapeHtml(objective.description)}</p>
-        <ul class="mt-3 list-inside list-disc space-y-1 text-sm text-slate-600">
+        <ul class="mt-3 space-y-2">
           ${indicatorsMarkup}
         </ul>
       </article>
@@ -193,7 +249,7 @@ const BASE_ACCORDION_SECTIONS = [
   {
     id: 'sms',
     type: 'static',
-    title: 'SMS',
+    title: 'Indicadores SMS',
     iconClass: 'fa-solid fa-shield-halved',
     buildContent: buildSmsSectionContent
   },
@@ -3777,6 +3833,21 @@ function initDirectionIndicatorButtons(container) {
   });
 }
 
+function initSmsIndicatorLinks(container) {
+  container.addEventListener('click', event => {
+    const link = event.target.closest('[data-sms-indicator-link]');
+    if (!link) return;
+
+    event.preventDefault();
+
+    const name = link.dataset.smsIndicatorName || 'Indicador SMS';
+    const subtitle = link.dataset.smsIndicatorSubtitle || '';
+    const code = link.dataset.smsIndicatorCode || '';
+
+    openDirectionIndicatorPlaceholderModal({ name, subtitle, code });
+  });
+}
+
 function normalizeDirectionName(value) {
   return (value ?? '')
     .toString()
@@ -4747,6 +4818,7 @@ export async function renderDashboard(container) {
 
     initGroupControls(container);
     initOptionModals(container);
+    initSmsIndicatorLinks(container);
 
     const directionsContainer = container.querySelector('[data-direction-sections]');
     if (directionsContainer) {
