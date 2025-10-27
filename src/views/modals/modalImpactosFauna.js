@@ -17,12 +17,16 @@ const MONTH_SHORT_NAMES = [
   'Dic'
 ];
 
-function toPercentageValue(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return 0;
+function computeImpactRate(record) {
+  const impactos = Number(record?.impactos);
+  const operaciones = Number(record?.total_operaciones);
+
+  if (Number.isFinite(impactos) && Number.isFinite(operaciones) && operaciones > 0) {
+    return (impactos / operaciones) * 100;
   }
-  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+
+  const tasa = Number(record?.tasa);
+  return Number.isFinite(tasa) ? tasa : 0;
 }
 
 export function filterImpactosFaunaRecords(records, { showHistorical = false } = {}) {
@@ -105,7 +109,7 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
   });
 
   const impactosData = filtered.map(record => record.impactos);
-  const tasaData = filtered.map(record => toPercentageValue(record.tasa));
+  const tasaData = filtered.map(record => computeImpactRate(record));
   const operationsData = filtered.map(record => record.total_operaciones);
 
   const config = {
@@ -340,7 +344,7 @@ export function buildImpactosFaunaCsv(records, { showHistorical = false } = {}) 
 
   const header = 'Año,Mes,Operaciones,Impactos,Tasa (%)';
   const rows = filtered.map(record => {
-    const tasaPercent = toPercentageValue(record.tasa).toFixed(4);
+    const tasaPercent = computeImpactRate(record).toFixed(4);
     const monthLabel = monthName(record.mes);
     const safeMonth = monthLabel ? monthLabel.replace(/"/g, '""') : `Mes ${record.mes}`;
     return [
