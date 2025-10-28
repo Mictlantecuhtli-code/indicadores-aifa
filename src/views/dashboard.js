@@ -63,6 +63,10 @@ const OPTION_BLUEPRINTS = [
   }
 ];
 
+const NON_SCENARIO_OPTION_BLUEPRINTS = OPTION_BLUEPRINTS.filter(
+  blueprint => blueprint.type !== 'scenario'
+);
+
 
 const OPTION_ICON_CLASSES = {
   monthly: 'fa-solid fa-chart-line',
@@ -105,14 +109,16 @@ const GROUP_DEFINITIONS = {
     title: 'Operaciones',
     entity: 'Operaciones',
     dataKey: 'fbo-operations',
-    iconClass: 'fa-solid fa-plane'
+    iconClass: 'fa-solid fa-plane',
+    optionBlueprints: NON_SCENARIO_OPTION_BLUEPRINTS
   },
   'fbo-passengers': {
     id: 'fbo-passengers',
     title: 'Pasajeros',
     entity: 'Pasajeros',
     dataKey: 'fbo-passengers',
-    iconClass: 'fa-solid fa-user-group'
+    iconClass: 'fa-solid fa-user-group',
+    optionBlueprints: NON_SCENARIO_OPTION_BLUEPRINTS
   }
 };
 
