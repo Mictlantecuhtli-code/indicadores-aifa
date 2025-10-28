@@ -100,7 +100,12 @@ const operationsLabelsPlugin = {
     const labelVisibility = Array.isArray(pluginOptions?.labelVisibility)
       ? pluginOptions.labelVisibility
       : null;
-    const meta = chart.getDatasetMeta(0);
+    const impactosDatasetIndex = chart.data.datasets.findIndex(dataset => dataset?.yAxisID === 'impactos');
+    if (impactosDatasetIndex < 0) {
+      return;
+    }
+
+    const meta = chart.getDatasetMeta(impactosDatasetIndex);
 
     if (!meta) {
       return;
