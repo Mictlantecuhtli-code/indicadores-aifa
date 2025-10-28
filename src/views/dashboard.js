@@ -63,6 +63,10 @@ const OPTION_BLUEPRINTS = [
   }
 ];
 
+const NON_SCENARIO_OPTION_BLUEPRINTS = OPTION_BLUEPRINTS.filter(
+  blueprint => blueprint.type !== 'scenario'
+);
+
 
 const OPTION_ICON_CLASSES = {
   monthly: 'fa-solid fa-chart-line',
@@ -105,14 +109,16 @@ const GROUP_DEFINITIONS = {
     title: 'Operaciones',
     entity: 'Operaciones',
     dataKey: 'fbo-operations',
-    iconClass: 'fa-solid fa-plane'
+    iconClass: 'fa-solid fa-plane',
+    optionBlueprints: NON_SCENARIO_OPTION_BLUEPRINTS
   },
   'fbo-passengers': {
     id: 'fbo-passengers',
     title: 'Pasajeros',
     entity: 'Pasajeros',
     dataKey: 'fbo-passengers',
-    iconClass: 'fa-solid fa-user-group'
+    iconClass: 'fa-solid fa-user-group',
+    optionBlueprints: NON_SCENARIO_OPTION_BLUEPRINTS
   }
 };
 
@@ -130,6 +136,21 @@ function normalizeMatchText(text) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+function normalizeAreaName(value) {
+  return normalizeMatchText(value);
+}
+
+const EXCLUDED_AREA_NAMES = new Set(
+  [
+    // Ocultamos temporalmente estas direcciones del Panel Directivos.
+    'SMS',
+    'Dirección Comercial y de Servicios',
+    'Dirección de Administración',
+    'Dirección de Operación',
+    'Dirección Jurídica'
+  ].map(normalizeAreaName)
+);
 
 function getVisualizationOrder(value) {
   const order = Number(value);
@@ -363,6 +384,8 @@ const PLANNING_PRIORITY_CODES = [
 const PLANNING_PRIORITY_MAP = new Map(
   PLANNING_PRIORITY_CODES.map((code, index) => [code, index])
 );
+
+const PLANNING_ALLOWED_CODES = new Set(PLANNING_PRIORITY_CODES);
 
 const INDICATOR_CODE_OVERRIDES = {
   'DPE-K053-001': {
@@ -3227,7 +3250,7 @@ function buildModalMarkup({
   `;
 }
 
-async function openIndicatorModal({ label, dataKey, type, scenario }) {
+async function openIndicatorModal({ label, dataKey, type, scenario, defaultChartType }) {
   const root = ensureModalContainer();
   
   root.innerHTML = `
@@ -3308,6 +3331,10 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
     }
 
     let selectedScenario = type === 'scenario' ? normalizeScenarioValue(scenario) : null;
+    const normalizedDefaultChartType = (() => {
+      const normalized = (defaultChartType ?? '').toString().trim().toLowerCase();
+      return normalized === 'bar' || normalized === 'line' ? normalized : null;
+    })();
 
     if (type === 'scenario') {
       const defaultScenario = getIndicatorDefaultScenario(realData?.indicator, scenario);
@@ -3317,7 +3344,8 @@ async function openIndicatorModal({ label, dataKey, type, scenario }) {
     }
 
     // CAMBIO: Agregar estado para el checkbox de histórico y la tendencia
-    let currentChartType = type === 'quarterly' ? 'bar' : 'line';
+    let currentChartType =
+      normalizedDefaultChartType ?? (type === 'quarterly' ? 'bar' : 'line');
     let showHistorical = false;
     let showTrend = false;
 
@@ -3866,13 +3894,15 @@ function initDirectionIndicatorButtons(container) {
       const dataKey = button.dataset.indicatorDatakey || '';
       const type = button.dataset.indicatorType || '';
       const scenarioValue = normalizeScenarioValue(button.dataset.indicatorScenario || null);
+      const defaultChartType = button.dataset.indicatorDefaultChart || '';
 
       if (dataKey) {
         await openIndicatorModal({
           label: name,
           dataKey,
           type: type || 'scenario',
-          scenario: scenarioValue
+          scenario: scenarioValue,
+          defaultChartType: defaultChartType || null
         });
         return;
       }
@@ -3969,8 +3999,28 @@ function getDirectionPriority(node) {
 function buildAreaTree(areas) {
   if (!Array.isArray(areas)) return [];
 
+  const filteredAreas = (areas ?? []).filter(area => {
+    if (!area) return false;
+
+    const normalizedName = normalizeAreaName(area?.nombre);
+
+    if (!normalizedName) {
+      return false;
+    }
+
+    if (normalizedName.includes('sin asignar')) {
+      return false;
+    }
+
+    if (EXCLUDED_AREA_NAMES.has(normalizedName)) {
+      return false;
+    }
+
+    return true;
+  });
+
   const nodes = new Map();
-  areas.forEach(area => {
+  filteredAreas.forEach(area => {
     if (!area) return;
     nodes.set(area.id, { ...area, children: [] });
   });
@@ -4105,7 +4155,16 @@ function getIndicatorsForDirection(direction) {
     }
   });
 
-  matched.sort((a, b) => {
+  let filteredIndicators = matched;
+
+  if (isPlanningDirection) {
+    filteredIndicators = matched.filter(indicator => {
+      const code = getIndicatorCode(indicator);
+      return code ? PLANNING_ALLOWED_CODES.has(code) : false;
+    });
+  }
+
+  filteredIndicators.sort((a, b) => {
     if (isPlanningDirection) {
       const priorityDiff = getPlanningIndicatorPriority(a) - getPlanningIndicatorPriority(b);
       if (priorityDiff !== 0) {
@@ -4122,7 +4181,7 @@ function getIndicatorsForDirection(direction) {
     return (a?.nombre ?? '').localeCompare(b?.nombre ?? '', 'es', { sensitivity: 'base' });
   });
 
-  return matched;
+  return filteredIndicators;
 }
 
 function buildDirectionIndicatorGroupMarkup(indicator, rootId) {
@@ -4130,15 +4189,14 @@ function buildDirectionIndicatorGroupMarkup(indicator, rootId) {
 
   const groupId = `${DIRECTION_GROUP_PREFIX}${indicator.id}`;
   const title = indicator?.nombre ?? 'Indicador sin nombre';
-  const subtitle = indicator?.area_nombre ?? null;
-  const code = indicator?.clave ? indicator.clave.toString().trim() : '';
-  const codeMarkup = code
-    ? `<span class="text-xs font-semibold uppercase tracking-wide text-slate-400">${escapeHtml(code)}</span>`
-    : '';
+  const subtitle = indicator?.direccion_nombre ?? indicator?.area_nombre ?? null;
+  const indicatorCode = getIndicatorCode(indicator);
+  const code = indicatorCode ?? '';
   const hasDashboardData = indicatorHasDashboardData(indicator);
   const defaultScenario = hasDashboardData
     ? normalizeScenarioValue(getIndicatorDefaultScenario(indicator, 'MEDIO'))
     : null;
+  const isPlanningPriority = indicatorCode ? PLANNING_ALLOWED_CODES.has(indicatorCode) : false;
   const datasetAttributes = [];
 
   if (hasDashboardData && indicator?.id) {
@@ -4149,6 +4207,9 @@ function buildDirectionIndicatorGroupMarkup(indicator, rootId) {
     datasetAttributes.push('data-indicator-type="scenario"');
     if (defaultScenario) {
       datasetAttributes.push(`data-indicator-scenario="${escapeHtml(defaultScenario)}"`);
+    }
+    if (isPlanningPriority) {
+      datasetAttributes.push('data-indicator-default-chart="bar"');
     }
   }
 
@@ -4174,7 +4235,6 @@ function buildDirectionIndicatorGroupMarkup(indicator, rootId) {
             <i class="fa-solid fa-chart-line h-5 w-5"></i>
           </span>
           <span class="flex flex-col">
-            ${codeMarkup}
             <span class="text-sm font-semibold text-slate-800">${escapeHtml(title)}</span>
             ${subtitle ? `<span class="text-xs font-medium text-slate-500">${escapeHtml(subtitle)}</span>` : ''}
           </span>
@@ -4227,10 +4287,25 @@ function extractDirectionRoots(tree) {
 function shouldHideDirection(direction) {
   if (!direction) return false;
 
-  const name = direction?.nombre?.toLowerCase?.() ?? '';
-  const key = direction?.clave?.toLowerCase?.() ?? '';
+  const normalizedName = normalizeMatchText(direction?.nombre);
+  const normalizedKey = normalizeMatchText(direction?.clave);
 
-  if (name === 'sin asignar' || name.includes('sin asignar')) return true;
+  if (!normalizedName && !normalizedKey) return false;
+
+  if (normalizedName === 'sin asignar' || normalizedName.includes('sin asignar')) {
+    return true;
+  }
+
+  const condensedName = normalizedName.replace(/[\s-]+/g, '');
+  const condensedKey = normalizedKey.replace(/[\s-]+/g, '');
+
+  if (
+    condensedName.includes('subdireccion') ||
+    condensedKey.includes('subdireccion') ||
+    normalizedName.includes('sub direccion')
+  ) {
+    return true;
+  }
 
   return false;
 }
