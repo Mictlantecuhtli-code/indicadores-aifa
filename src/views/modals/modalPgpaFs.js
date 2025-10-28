@@ -421,6 +421,7 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
       borderWidth: 1,
       stack: 'pgpafs',
       maxBarThickness: 56,
+      yAxisID: 'percentage',
       order: 0
     };
   });
