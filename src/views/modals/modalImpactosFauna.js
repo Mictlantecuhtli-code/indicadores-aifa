@@ -20,23 +20,23 @@ const MONTH_SHORT_NAMES = [
 const IMPACT_RATE_THRESHOLDS = [
   {
     label: 'Tasa Objetivo',
-    value: 0.06,
+    value: 6,
     color: '#22c55e',
     borderDash: [6, 6]
   },
   {
     label: 'Nivel de Alerta 1',
-    value: 0.134,
+    value: 13.4,
     color: '#facc15'
   },
   {
     label: 'Nivel de Alerta 2',
-    value: 0.214,
+    value: 21.4,
     color: '#fb923c'
   },
   {
     label: 'Nivel de Alerta 3',
-    value: 0.294,
+    value: 29.4,
     color: '#ef4444'
   }
 ];
@@ -100,7 +100,12 @@ const operationsLabelsPlugin = {
     const labelVisibility = Array.isArray(pluginOptions?.labelVisibility)
       ? pluginOptions.labelVisibility
       : null;
-    const meta = chart.getDatasetMeta(0);
+    const impactosDatasetIndex = chart.data.datasets.findIndex(dataset => dataset?.yAxisID === 'impactos');
+    if (impactosDatasetIndex < 0) {
+      return;
+    }
+
+    const meta = chart.getDatasetMeta(impactosDatasetIndex);
 
     if (!meta) {
       return;
