@@ -609,7 +609,7 @@ export function buildPgpaFsModalMarkup({
   const summaryMarkup = summary
     ? `
         <div class="mt-6 grid gap-4 sm:grid-cols-3">
-          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Promedio general</p>
             <p class="mt-3 text-3xl font-semibold text-slate-900">${formatPercentage(summary.average, {
               decimals: 2,
@@ -617,7 +617,7 @@ export function buildPgpaFsModalMarkup({
             })}</p>
             <p class="mt-2 text-xs text-slate-500">${effectivePeriod ? escapeHtml(effectivePeriod) : 'Periodo disponible'}</p>
           </article>
-          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Último mes</p>
             <p class="mt-3 text-3xl font-semibold text-slate-900">${formatPercentage(summary.latest?.total, {
               decimals: 2,
@@ -625,7 +625,7 @@ export function buildPgpaFsModalMarkup({
             })}</p>
             <p class="mt-2 text-xs text-slate-500">${escapeHtml(formatMonthYear(summary.latest))}</p>
           </article>
-          <article class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm">
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Mejor mes</p>
             <p class="mt-3 text-3xl font-semibold text-slate-900">${formatPercentage(summary.best?.total, {
               decimals: 2,
@@ -645,12 +645,6 @@ export function buildPgpaFsModalMarkup({
     ? `
         <div class="h-96">
           <canvas id="chartPgpaFs"></canvas>
-        </div>
-        <div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-          <span class="flex items-center gap-2">
-            <span class="h-2.5 w-8 rounded-full bg-slate-400"></span>
-            Cumplimiento mensual (barras apiladas)
-          </span>
         </div>
       `
     : `
@@ -674,22 +668,11 @@ export function buildPgpaFsModalMarkup({
         <div class="space-y-6 p-6">
           <header class="space-y-2">
             <h2 class="text-2xl font-semibold text-slate-900">Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre</h2>
-            <p class="text-sm text-slate-600">Indicador 1.2 · PGPAFS.</p>
+            <p class="text-sm text-slate-600">Indicador 1.2 - PGPAFS</p>
           </header>
 
           <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4">
-              <div class="flex flex-col gap-2">
-                <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
-                <h3 class="text-lg font-semibold text-slate-900">Indicador 1.2 · PGPAFS</h3>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                  <span>Área: SMS</span>
-                  <span class="hidden sm:inline">·</span>
-                  <span>Unidad: Porcentaje</span>
-                </div>
-                <p class="text-sm text-slate-600">Valores mensuales${effectivePeriod ? ` (${escapeHtml(effectivePeriod)})` : ''}</p>
-              </div>
-
               <div class="flex flex-wrap items-center gap-3" role="tablist">
                 <button
                   type="button"
@@ -711,6 +694,17 @@ export function buildPgpaFsModalMarkup({
                 >
                   Capturas realizadas por especie
                 </button>
+              </div>
+
+              <div class="space-y-2">
+                <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
+                <h3 class="text-lg font-semibold text-slate-900">Indicador 1.2 - PGPAFS</h3>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span>Área: SMS</span>
+                  <span class="hidden sm:inline">·</span>
+                  <span>Unidad: Porcentaje</span>
+                </div>
+                <p class="text-sm text-slate-600">Valores mensuales${effectivePeriod ? ` (${escapeHtml(effectivePeriod)})` : ''}</p>
               </div>
             </div>
             ${summaryMarkup}
