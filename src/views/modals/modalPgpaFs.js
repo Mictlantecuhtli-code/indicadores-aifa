@@ -425,33 +425,34 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
     };
   });
 
-  const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => ({
-    type: 'line',
-    label: `${threshold.label} (${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })})`,
-    data: entries.map(() => threshold.value),
-    borderColor: threshold.color,
-    backgroundColor: threshold.color,
-    borderWidth: 2,
-    borderDash: threshold.borderDash ?? [],
-    pointRadius: 0,
-    pointHoverRadius: 0,
-    fill: false,
-    yAxisID: 'percentage',
-    order: -20 - index,
-    z: -20,
-    segment: {
-      borderDash: threshold.borderDash ?? []
-    },
-    tooltip: {
-      enabled: false
-    }
-  }));
+  // Comentado para eliminar las líneas de umbrales de la gráfica
+  // const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => ({
+  //   type: 'line',
+  //   label: `${threshold.label} (${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })})`,
+  //   data: entries.map(() => threshold.value),
+  //   borderColor: threshold.color,
+  //   backgroundColor: threshold.color,
+  //   borderWidth: 2,
+  //   borderDash: threshold.borderDash ?? [],
+  //   pointRadius: 0,
+  //   pointHoverRadius: 0,
+  //   fill: false,
+  //   yAxisID: 'percentage',
+  //   order: -20 - index,
+  //   z: -20,
+  //   segment: {
+  //     borderDash: threshold.borderDash ?? []
+  //   },
+  //   tooltip: {
+  //     enabled: false
+  //   }
+  // }));
 
   const config = {
     type: 'bar',
     data: {
       labels,
-      datasets: [...thresholdDatasets, ...barDatasets]
+      datasets: [...barDatasets] // Eliminado thresholdDatasets
     },
     options: {
       responsive: true,
@@ -506,13 +507,7 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
       },
       plugins: {
         legend: {
-          display: true,
-          labels: {
-            filter(legendItem, chart) {
-              const dataset = chart?.data?.datasets?.[legendItem.datasetIndex];
-              return dataset?.type !== 'line';
-            }
-          }
+          display: true
         },
         tooltip: {
           mode: 'index',
@@ -534,17 +529,10 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
                 return '';
               }
 
-              if (context.dataset.type === 'line') {
-                return context.dataset.label;
-              }
-
               const value = Number(context.parsed?.y);
               const formatted = formatPercentage(value, { decimals: 2, scale: 'percentage' });
               return `${context.dataset.label}: ${formatted}`;
             }
-          },
-          filter(context) {
-            return context.dataset?.type !== 'line';
           }
         }
       }
