@@ -4546,64 +4546,93 @@ async function openPgpaFsModal() {
       getCapturasFauna()
     ]);
     
-    const chartView = buildPgpaFsChartView(smsRecords);
-    const summary = buildPgpaFsSummary(chartView.entries);
-    const capturesView = buildCapturesChartView(capturesRecords);
-
-    root.innerHTML = buildPgpaFsModalMarkup({
-      activeTab: 'pgpafs',
-      hasData: Boolean(chartView.config),
-      hasCapturesData: Boolean(capturesView.config),
-      summary,
-      periodLabel: summary?.periodLabel ?? ''
-    });
-
-    const overlay = root.querySelector('[data-modal-overlay]');
-    const closeButtons = root.querySelectorAll('[data-modal-close]');
-    const tabButtons = root.querySelectorAll('[data-pgpafs-tab]');
-    const panels = root.querySelectorAll('[data-pgpafs-panel]');
-    const canvasPgpafs = root.querySelector('#chartPgpaFs');
-    const canvasCapturas = root.querySelector('#chartCapturas');
-    const baseButtonClass =
-      'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition';
-    const tabHandlers = new Map();
-
+    let showHistorical = false;
     let activeTab = 'pgpafs';
     let pgpafsChartRendered = false;
     let capturesChartRendered = false;
     let cleanup = () => {};
 
-    const handleClose = () => {
-      cleanup();
-      closeIndicatorModal();
-    };
+    const renderModal = () => {
+      const chartView = buildPgpaFsChartView(smsRecords, { showHistorical });
+      const summary = buildPgpaFsSummary(chartView.entries);
+      const capturesView = buildCapturesChartView(capturesRecords, { showHistorical });
 
-    const overlayListener = event => {
-      if (event.target === overlay) {
-        handleClose();
-      }
-    };
+      root.innerHTML = buildPgpaFsModalMarkup({
+        activeTab,
+        hasData: Boolean(chartView.config),
+        hasCapturesData: Boolean(capturesView.config),
+        summary,
+        periodLabel: summary?.periodLabel ?? '',
+        showHistorical
+      });
 
-    const escListener = event => {
-      if (event.key === 'Escape') {
-        handleClose();
-      }
-    };
+      const overlay = root.querySelector('[data-modal-overlay]');
+      const closeButtons = root.querySelectorAll('[data-modal-close]');
+      const tabButtons = root.querySelectorAll('[data-pgpafs-tab]');
+      const panels = root.querySelectorAll('[data-pgpafs-panel]');
+      const canvasPgpafs = root.querySelector('#chartPgpaFs');
+      const canvasCapturas = root.querySelector('#chartCapturas');
+      const pgpafsToggleButton = root.querySelector('[data-pgpafs-toggle]');
+      const capturesToggleButton = root.querySelector('[data-captures-toggle]');
+      const baseButtonClass =
+        'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition';
+      const tabHandlers = new Map();
 
-    const activateTab = tabId => {
-      if (!tabId) {
-        return;
-      }
+      pgpafsChartRendered = false;
+      capturesChartRendered = false;
 
-      if (tabId === activeTab) {
-        if (tabId === 'pgpafs') {
+      const handleClose = () => {
+        cleanup();
+        closeIndicatorModal();
+      };
+
+      const overlayListener = event => {
+        if (event.target === overlay) {
+          handleClose();
+        }
+      };
+
+      const escListener = event => {
+        if (event.key === 'Escape') {
+          handleClose();
+        }
+      };
+
+      const activateTab = tabId => {
+        if (!tabId) {
+          return;
+        }
+
+        activeTab = tabId;
+
+        tabButtons.forEach(button => {
+          const target = button.getAttribute('data-pgpafs-tab');
+          const isActive = target === activeTab;
+          button.className = `${baseButtonClass} ${
+            isActive
+              ? 'bg-primary-600 text-white shadow'
+              : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+          }`;
+          button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        panels.forEach(panel => {
+          const target = panel.getAttribute('data-pgpafs-panel');
+          if (target === activeTab) {
+            panel.removeAttribute('hidden');
+          } else {
+            panel.setAttribute('hidden', '');
+          }
+        });
+
+        if (activeTab === 'pgpafs') {
           if (chartView.config && canvasPgpafs && !pgpafsChartRendered) {
             renderModalChart(canvasPgpafs, chartView.config);
             pgpafsChartRendered = true;
           } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
             activeModalChart.resize();
           }
-        } else if (tabId === 'captures') {
+        } else if (activeTab === 'captures') {
           if (capturesView.config && canvasCapturas && !capturesChartRendered) {
             renderModalChart(canvasCapturas, capturesView.config);
             capturesChartRendered = true;
@@ -4611,20 +4640,23 @@ async function openPgpaFsModal() {
             activeModalChart.resize();
           }
         }
-        return;
-      }
+      };
 
-      activeTab = tabId;
+      closeButtons.forEach(button => button.addEventListener('click', handleClose));
+      overlay?.addEventListener('click', overlayListener);
+      document.addEventListener('keydown', escListener);
 
       tabButtons.forEach(button => {
-        const target = button.getAttribute('data-pgpafs-tab');
-        const isActive = target === activeTab;
+        const tabId = button.getAttribute('data-pgpafs-tab');
+        const isActive = tabId === activeTab;
         button.className = `${baseButtonClass} ${
-          isActive
-            ? 'bg-primary-600 text-white shadow'
-            : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+          isActive ? 'bg-primary-600 text-white shadow' : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
         }`;
         button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+
+        const handler = () => activateTab(tabId);
+        tabHandlers.set(button, handler);
+        button.addEventListener('click', handler);
       });
 
       panels.forEach(panel => {
@@ -4636,57 +4668,40 @@ async function openPgpaFsModal() {
         }
       });
 
-      if (activeTab === 'pgpafs') {
-        if (chartView.config && canvasPgpafs && !pgpafsChartRendered) {
-          renderModalChart(canvasPgpafs, chartView.config);
-          pgpafsChartRendered = true;
-        } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
-          activeModalChart.resize();
-        }
-      } else if (activeTab === 'captures') {
-        if (capturesView.config && canvasCapturas && !capturesChartRendered) {
-          renderModalChart(canvasCapturas, capturesView.config);
-          capturesChartRendered = true;
-        } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
-          activeModalChart.resize();
-        }
+      // Handlers para los botones toggle
+      if (pgpafsToggleButton) {
+        pgpafsToggleButton.addEventListener('click', () => {
+          showHistorical = !showHistorical;
+          if (activeModalChart) {
+            activeModalChart.destroy();
+            activeModalChart = null;
+          }
+          renderModal();
+        });
       }
+
+      if (capturesToggleButton) {
+        capturesToggleButton.addEventListener('click', () => {
+          showHistorical = !showHistorical;
+          if (activeModalChart) {
+            activeModalChart.destroy();
+            activeModalChart = null;
+          }
+          renderModal();
+        });
+      }
+
+      cleanup = () => {
+        closeButtons.forEach(button => button.removeEventListener('click', handleClose));
+        overlay?.removeEventListener('click', overlayListener);
+        document.removeEventListener('keydown', escListener);
+        tabHandlers.forEach((handler, button) => button.removeEventListener('click', handler));
+      };
+
+      activateTab(activeTab);
     };
 
-    closeButtons.forEach(button => button.addEventListener('click', handleClose));
-    overlay?.addEventListener('click', overlayListener);
-    document.addEventListener('keydown', escListener);
-
-    tabButtons.forEach(button => {
-      const tabId = button.getAttribute('data-pgpafs-tab');
-      const isActive = tabId === activeTab;
-      button.className = `${baseButtonClass} ${
-        isActive ? 'bg-primary-600 text-white shadow' : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
-      }`;
-      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-
-      const handler = () => activateTab(tabId);
-      tabHandlers.set(button, handler);
-      button.addEventListener('click', handler);
-    });
-
-    panels.forEach(panel => {
-      const target = panel.getAttribute('data-pgpafs-panel');
-      if (target === activeTab) {
-        panel.removeAttribute('hidden');
-      } else {
-        panel.setAttribute('hidden', '');
-      }
-    });
-
-    cleanup = () => {
-      closeButtons.forEach(button => button.removeEventListener('click', handleClose));
-      overlay?.removeEventListener('click', overlayListener);
-      document.removeEventListener('keydown', escListener);
-      tabHandlers.forEach((handler, button) => button.removeEventListener('click', handler));
-    };
-
-    activateTab(activeTab);
+    renderModal();
   } catch (error) {
     console.error('Error al abrir modal PGPAFS:', error);
     const root = ensureModalContainer();
