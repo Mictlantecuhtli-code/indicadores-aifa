@@ -142,7 +142,6 @@ const EXCLUDED_AREA_NAMES = new Set(
     'Dirección Comercial y de Servicios',
     'Dirección de Administración',
     'Dirección de Operación',
-    'Dirección de Planeación Estratégica',
     'Dirección Jurídica'
   ].map(normalizeAreaName)
 );
@@ -4263,10 +4262,25 @@ function extractDirectionRoots(tree) {
 function shouldHideDirection(direction) {
   if (!direction) return false;
 
-  const name = direction?.nombre?.toLowerCase?.() ?? '';
-  const key = direction?.clave?.toLowerCase?.() ?? '';
+  const normalizedName = normalizeMatchText(direction?.nombre);
+  const normalizedKey = normalizeMatchText(direction?.clave);
 
-  if (name === 'sin asignar' || name.includes('sin asignar')) return true;
+  if (!normalizedName && !normalizedKey) return false;
+
+  if (normalizedName === 'sin asignar' || normalizedName.includes('sin asignar')) {
+    return true;
+  }
+
+  const condensedName = normalizedName.replace(/[\s-]+/g, '');
+  const condensedKey = normalizedKey.replace(/[\s-]+/g, '');
+
+  if (
+    condensedName.includes('subdireccion') ||
+    condensedKey.includes('subdireccion') ||
+    normalizedName.includes('sub direccion')
+  ) {
+    return true;
+  }
 
   return false;
 }
