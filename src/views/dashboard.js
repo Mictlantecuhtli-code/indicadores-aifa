@@ -1,4 +1,3 @@
-
 import {
   getAreas,
   getIndicators,
@@ -22,7 +21,8 @@ import {
   PGPAFS_MODAL_ID,
   buildPgpaFsChartView,
   buildPgpaFsModalMarkup,
-  buildPgpaFsSummary
+  buildPgpaFsSummary,
+  buildCapturesChartView
 } from './modals/modalPgpaFs.js';
 
 const OPTION_BLUEPRINTS = [
@@ -4540,13 +4540,20 @@ async function openPgpaFsModal() {
       </div>
     `;
 
-    const records = await getSmsDocuments();
-    const chartView = buildPgpaFsChartView(records);
+    // Cargar datos de PGPAFS y capturas
+    const [smsRecords, capturesRecords] = await Promise.all([
+      getSmsDocuments(),
+      getCapturasFauna()
+    ]);
+    
+    const chartView = buildPgpaFsChartView(smsRecords);
     const summary = buildPgpaFsSummary(chartView.entries);
+    const capturesView = buildCapturesChartView(capturesRecords);
 
     root.innerHTML = buildPgpaFsModalMarkup({
       activeTab: 'pgpafs',
       hasData: Boolean(chartView.config),
+      hasCapturesData: Boolean(capturesView.config),
       summary,
       periodLabel: summary?.periodLabel ?? ''
     });
@@ -4555,13 +4562,15 @@ async function openPgpaFsModal() {
     const closeButtons = root.querySelectorAll('[data-modal-close]');
     const tabButtons = root.querySelectorAll('[data-pgpafs-tab]');
     const panels = root.querySelectorAll('[data-pgpafs-panel]');
-    const canvas = root.querySelector('#chartPgpaFs');
+    const canvasPgpafs = root.querySelector('#chartPgpaFs');
+    const canvasCapturas = root.querySelector('#chartCapturas');
     const baseButtonClass =
       'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition';
     const tabHandlers = new Map();
 
     let activeTab = 'pgpafs';
-    let chartRendered = false;
+    let pgpafsChartRendered = false;
+    let capturesChartRendered = false;
     let cleanup = () => {};
 
     const handleClose = () => {
@@ -4588,9 +4597,16 @@ async function openPgpaFsModal() {
 
       if (tabId === activeTab) {
         if (tabId === 'pgpafs') {
-          if (chartView.config && canvas && !chartRendered) {
-            renderModalChart(canvas, chartView.config);
-            chartRendered = true;
+          if (chartView.config && canvasPgpafs && !pgpafsChartRendered) {
+            renderModalChart(canvasPgpafs, chartView.config);
+            pgpafsChartRendered = true;
+          } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
+            activeModalChart.resize();
+          }
+        } else if (tabId === 'captures') {
+          if (capturesView.config && canvasCapturas && !capturesChartRendered) {
+            renderModalChart(canvasCapturas, capturesView.config);
+            capturesChartRendered = true;
           } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
             activeModalChart.resize();
           }
@@ -4621,9 +4637,16 @@ async function openPgpaFsModal() {
       });
 
       if (activeTab === 'pgpafs') {
-        if (chartView.config && canvas && !chartRendered) {
-          renderModalChart(canvas, chartView.config);
-          chartRendered = true;
+        if (chartView.config && canvasPgpafs && !pgpafsChartRendered) {
+          renderModalChart(canvasPgpafs, chartView.config);
+          pgpafsChartRendered = true;
+        } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
+          activeModalChart.resize();
+        }
+      } else if (activeTab === 'captures') {
+        if (capturesView.config && canvasCapturas && !capturesChartRendered) {
+          renderModalChart(canvasCapturas, capturesView.config);
+          capturesChartRendered = true;
         } else if (activeModalChart && typeof activeModalChart.resize === 'function') {
           activeModalChart.resize();
         }
