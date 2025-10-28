@@ -131,6 +131,21 @@ function normalizeMatchText(text) {
     .trim();
 }
 
+function normalizeAreaName(value) {
+  return normalizeMatchText(value);
+}
+
+const EXCLUDED_AREA_NAMES = new Set(
+  [
+    // Ocultamos temporalmente estas direcciones del Panel Directivos.
+    'SMS',
+    'Dirección Comercial y de Servicios',
+    'Dirección de Administración',
+    'Dirección de Operación',
+    'Dirección Jurídica'
+  ].map(normalizeAreaName)
+);
+
 function getVisualizationOrder(value) {
   const order = Number(value);
   return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
@@ -3969,8 +3984,28 @@ function getDirectionPriority(node) {
 function buildAreaTree(areas) {
   if (!Array.isArray(areas)) return [];
 
+  const filteredAreas = (areas ?? []).filter(area => {
+    if (!area) return false;
+
+    const normalizedName = normalizeAreaName(area?.nombre);
+
+    if (!normalizedName) {
+      return false;
+    }
+
+    if (normalizedName.includes('sin asignar')) {
+      return false;
+    }
+
+    if (EXCLUDED_AREA_NAMES.has(normalizedName)) {
+      return false;
+    }
+
+    return true;
+  });
+
   const nodes = new Map();
-  areas.forEach(area => {
+  filteredAreas.forEach(area => {
     if (!area) return;
     nodes.set(area.id, { ...area, children: [] });
   });
@@ -4227,10 +4262,25 @@ function extractDirectionRoots(tree) {
 function shouldHideDirection(direction) {
   if (!direction) return false;
 
-  const name = direction?.nombre?.toLowerCase?.() ?? '';
-  const key = direction?.clave?.toLowerCase?.() ?? '';
+  const normalizedName = normalizeMatchText(direction?.nombre);
+  const normalizedKey = normalizeMatchText(direction?.clave);
 
-  if (name === 'sin asignar' || name.includes('sin asignar')) return true;
+  if (!normalizedName && !normalizedKey) return false;
+
+  if (normalizedName === 'sin asignar' || normalizedName.includes('sin asignar')) {
+    return true;
+  }
+
+  const condensedName = normalizedName.replace(/[\s-]+/g, '');
+  const condensedKey = normalizedKey.replace(/[\s-]+/g, '');
+
+  if (
+    condensedName.includes('subdireccion') ||
+    condensedKey.includes('subdireccion') ||
+    normalizedName.includes('sub direccion')
+  ) {
+    return true;
+  }
 
   return false;
 }
