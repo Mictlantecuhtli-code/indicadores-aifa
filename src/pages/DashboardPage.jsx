@@ -998,11 +998,32 @@ function getBadgeStyles(color) {
   };
 }
 
+function normalizeAreaName(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const EXCLUDED_AREA_NAMES = new Set(
+  [
+    // Ocultamos estas direcciones temporalmente del Panel Directivos.
+    'SMS',
+    'Dirección Comercial y de Servicios',
+    'Dirección de Administración',
+    'Dirección de Operación',
+    'Dirección de Planeación Estratégica',
+    'Dirección Jurídica'
+  ].map(normalizeAreaName)
+);
+
 function buildAreaTree(areas) {
   const byParent = new Map();
 
   const filteredAreas = (areas ?? []).filter(area => {
-    const normalizedName = (area?.nombre ?? '').toString().toLowerCase().trim();
+    const normalizedName = normalizeAreaName(area?.nombre);
 
     if (!normalizedName) {
       return false;
@@ -1012,7 +1033,7 @@ function buildAreaTree(areas) {
       return false;
     }
 
-    if (normalizedName === 'sms') {
+    if (EXCLUDED_AREA_NAMES.has(normalizedName)) {
       return false;
     }
 
