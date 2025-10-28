@@ -345,7 +345,7 @@ function formatMonthYear(entry) {
   return `${name}${year}`;
 }
 
-export function buildPgpaFsChartView(records, { indicadorId } = {}) {
+export function buildPgpaFsChartView(records, { indicadorId, showHistorical = false } = {}) {
   const normalized = normalizeSmsDocumentRecords(records);
 
   if (!normalized.length) {
@@ -358,7 +358,13 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
     };
   }
 
-  const grouped = groupByIndicator(normalized);
+  // Filtrar por años
+  const availableYears = Array.from(new Set(normalized.map(record => record.year))).sort((a, b) => b - a);
+  const selectedYears = showHistorical ? availableYears.slice(0, 4) : availableYears.slice(0, 1);
+  const allowedYears = new Set(selectedYears);
+  const filtered = normalized.filter(record => allowedYears.has(record.year));
+
+  const grouped = groupByIndicator(filtered);
   let targetIndicator = indicadorId ?? null;
   let indicatorRecords = [];
 
@@ -590,7 +596,8 @@ export function buildPgpaFsModalMarkup({
   hasData = false,
   hasCapturesData = false,
   summary = null,
-  periodLabel = ''
+  periodLabel = '',
+  showHistorical = false
 } = {}) {
   const pgpafsActive = activeTab === 'pgpafs';
   const capturesActive = activeTab === 'captures';
@@ -703,6 +710,20 @@ export function buildPgpaFsModalMarkup({
           <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="space-y-6">
               <div class="space-y-6" data-pgpafs-panel="pgpafs" ${pgpafsActive ? '' : 'hidden'}>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Visualización PGPAFS</h3>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-full border border-primary-600 px-4 py-2 text-sm font-semibold transition ${
+                      showHistorical ? 'bg-primary-600 text-white shadow' : 'text-primary-600 hover:bg-primary-50'
+                    }"
+                    data-pgpafs-toggle
+                    aria-pressed="${showHistorical ? 'true' : 'false'}"
+                  >
+                    <i class="${showHistorical ? 'fa-solid fa-calendar-day' : 'fa-solid fa-clock-rotate-left'}"></i>
+                    ${showHistorical ? 'Mostrar año en curso' : 'Mostrar últimos 4 años'}
+                  </button>
+                </div>
                 ${chartContent}
               </div>
 
@@ -710,8 +731,24 @@ export function buildPgpaFsModalMarkup({
                 ${
                   hasCapturesData
                     ? `
-                      <div class="h-96">
-                        <canvas id="chartCapturas"></canvas>
+                      <div class="space-y-6">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                          <h3 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Capturas por especie</h3>
+                          <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-full border border-primary-600 px-4 py-2 text-sm font-semibold transition ${
+                              showHistorical ? 'bg-primary-600 text-white shadow' : 'text-primary-600 hover:bg-primary-50'
+                            }"
+                            data-captures-toggle
+                            aria-pressed="${showHistorical ? 'true' : 'false'}"
+                          >
+                            <i class="${showHistorical ? 'fa-solid fa-calendar-day' : 'fa-solid fa-clock-rotate-left'}"></i>
+                            ${showHistorical ? 'Mostrar año en curso' : 'Mostrar últimos 4 años'}
+                          </button>
+                        </div>
+                        <div class="h-96">
+                          <canvas id="chartCapturas"></canvas>
+                        </div>
                       </div>
                     `
                     : `
@@ -818,25 +855,35 @@ const capturesTotalsPlugin = {
   }
 };
 
-export function buildCapturesChartView(records) {
+export function buildCapturesChartView(records, { showHistorical = false } = {}) {
   const normalized = normalizeCapturesRecords(records);
 
   if (!normalized.length) {
     return { config: null, records: [] };
   }
 
-  const labels = normalized.map(record => {
+  // Filtrar por años
+  const availableYears = Array.from(new Set(normalized.map(record => record.year))).sort((a, b) => b - a);
+  const selectedYears = showHistorical ? availableYears.slice(0, 4) : availableYears.slice(0, 1);
+  const allowedYears = new Set(selectedYears);
+  const filtered = normalized.filter(record => allowedYears.has(record.year));
+
+  if (!filtered.length) {
+    return { config: null, records: [] };
+  }
+
+  const labels = filtered.map(record => {
     const monthShort = MONTH_SHORT_NAMES[record.month - 1] || `Mes ${record.month}`;
     return [monthShort, String(record.year)];
   });
 
-  const totals = normalized.map(record => record.total);
+  const totals = filtered.map(record => record.total);
 
   const datasets = [
     {
       type: 'bar',
       label: 'Ave',
-      data: normalized.map(record => record.aves),
+      data: filtered.map(record => record.aves),
       backgroundColor: '#3b82f6',
       borderColor: '#3b82f6',
       borderWidth: 1,
@@ -846,7 +893,7 @@ export function buildCapturesChartView(records) {
     {
       type: 'bar',
       label: 'Mamífero',
-      data: normalized.map(record => record.mamiferos),
+      data: filtered.map(record => record.mamiferos),
       backgroundColor: '#d4b896',
       borderColor: '#d4b896',
       borderWidth: 1,
@@ -856,7 +903,7 @@ export function buildCapturesChartView(records) {
     {
       type: 'bar',
       label: 'Reptil',
-      data: normalized.map(record => record.reptiles),
+      data: filtered.map(record => record.reptiles),
       backgroundColor: '#22c55e',
       borderColor: '#22c55e',
       borderWidth: 1,
@@ -950,7 +997,7 @@ export function buildCapturesChartView(records) {
                 return '';
               }
               const { dataIndex } = items[0];
-              const record = normalized[dataIndex];
+              const record = filtered[dataIndex];
               if (!record) {
                 return '';
               }
@@ -978,5 +1025,5 @@ export function buildCapturesChartView(records) {
     plugins: [capturesTotalsPlugin]
   };
 
-  return { config, records: normalized, totals };
+  return { config, records: filtered, totals };
 }
