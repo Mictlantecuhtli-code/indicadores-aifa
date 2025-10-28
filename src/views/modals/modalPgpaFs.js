@@ -506,19 +506,7 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
       },
       plugins: {
         legend: {
-          position: 'right',
-          align: 'start',
-          labels: {
-            usePointStyle: true,
-            pointStyle: 'rectRounded',
-            boxWidth: 12,
-            padding: 12,
-            filter(item, chart) {
-              const dataset =
-                item?.datasetIndex != null ? chart?.data?.datasets?.[item.datasetIndex] ?? null : null;
-              return dataset?.type !== 'line';
-            }
-          }
+          display: false
         },
         tooltip: {
           mode: 'index',
@@ -678,23 +666,19 @@ export function buildPgpaFsModalMarkup({
         </button>
 
         <div class="space-y-6 p-6">
-          <header class="space-y-2">
-            <h2 class="text-2xl font-semibold text-slate-900">Programa de Gestión del Peligro Aviario y Fauna Silvestre</h2>
-            <p class="text-sm text-slate-600">Indicador 1.2 · Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre.</p>
+          <header class="space-y-3">
+            <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador 1.2 · PGPAFS</p>
+            <h2 class="text-2xl font-semibold text-slate-900">Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre</h2>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              <span>Área: SMS</span>
+              <span class="hidden sm:inline">·</span>
+              <span>Unidad: Porcentaje</span>
+            </div>
+            <p class="text-sm text-slate-600">Valores mensuales${effectivePeriod ? ` (${escapeHtml(effectivePeriod)})` : ''}</p>
           </header>
 
           <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-col gap-2">
-              <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
-              <h3 class="text-lg font-semibold text-slate-900">Indicador 1.2 · PGPAFS</h3>
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                <span>Área: SMS</span>
-                <span class="hidden sm:inline">·</span>
-                <span>Unidad: Porcentaje</span>
-              </div>
-              <p class="text-sm text-slate-600">Valores mensuales${effectivePeriod ? ` (${escapeHtml(effectivePeriod)})` : ''}</p>
-            </div>
-            <div class="mt-4 flex flex-wrap items-center gap-3" role="tablist">
+            <div class="flex flex-wrap items-center gap-3" role="tablist">
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
