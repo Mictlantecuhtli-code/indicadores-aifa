@@ -588,6 +588,7 @@ export function buildPgpaFsSummary(entries = []) {
 export function buildPgpaFsModalMarkup({
   activeTab = 'pgpafs',
   hasData = false,
+  hasCapturesData = false,
   summary = null,
   periodLabel = ''
 } = {}) {
@@ -706,9 +707,19 @@ export function buildPgpaFsModalMarkup({
               </div>
 
               <div data-pgpafs-panel="captures" ${capturesActive ? '' : 'hidden'}>
-                <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                  Esta sección estará disponible próximamente.
-                </div>
+                ${
+                  hasCapturesData
+                    ? `
+                      <div class="h-96">
+                        <canvas id="chartCapturas"></canvas>
+                      </div>
+                    `
+                    : `
+                      <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                        No hay datos de capturas disponibles para mostrar.
+                      </div>
+                    `
+                }
               </div>
             </div>
           </section>
@@ -726,4 +737,246 @@ export function buildPgpaFsModalMarkup({
       </div>
     </div>
   `;
+}
+
+// ============================================================================
+// FUNCIONES PARA CAPTURAS POR ESPECIE
+// ============================================================================
+
+function normalizeCapturesRecords(records) {
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records
+    .map(record => ({
+      year: Number(record?.anio) || 0,
+      month: Number(record?.mes) || 0,
+      aves: Number(record?.aves) || 0,
+      mamiferos: Number(record?.mamiferos || record?.mamife) || 0,
+      reptiles: Number(record?.reptiles) || 0,
+      total: Number(record?.total_mes) || 0
+    }))
+    .filter(record => record.year > 0 && record.month >= 1 && record.month <= 12)
+    .sort((a, b) => {
+      if (a.year !== b.year) {
+        return a.year - b.year;
+      }
+      return a.month - b.month;
+    });
+}
+
+// Plugin para mostrar los totales encima de las barras
+const capturesTotalsPlugin = {
+  id: 'capturesTotalsPlugin',
+  afterDatasetsDraw(chart, args, options) {
+    const { ctx, chartArea, scales } = chart;
+    const totals = options?.totals ?? [];
+
+    if (!totals.length) {
+      return;
+    }
+
+    ctx.save();
+    ctx.font = 'bold 12px "Inter", "Inter var", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    // Obtener el primer dataset de barras para las posiciones X
+    const barDataset = chart.data.datasets.find(ds => ds.type === 'bar');
+    if (!barDataset) {
+      ctx.restore();
+      return;
+    }
+
+    const meta = chart.getDatasetMeta(chart.data.datasets.indexOf(barDataset));
+
+    meta.data.forEach((element, index) => {
+      const total = totals[index];
+      if (total === null || total === undefined || total === 0) {
+        return;
+      }
+
+      const { x } = element;
+      // Calcular la altura total de la barra apilada
+      let stackTotal = 0;
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        if (dataset.type === 'bar') {
+          const value = dataset.data[index] || 0;
+          stackTotal += value;
+        }
+      });
+
+      const yScale = scales['y'];
+      const y = yScale.getPixelForValue(stackTotal);
+
+      ctx.fillText(String(total), x, y - 4);
+    });
+
+    ctx.restore();
+  }
+};
+
+export function buildCapturesChartView(records) {
+  const normalized = normalizeCapturesRecords(records);
+
+  if (!normalized.length) {
+    return { config: null, records: [] };
+  }
+
+  const labels = normalized.map(record => {
+    const monthShort = MONTH_SHORT_NAMES[record.month - 1] || `Mes ${record.month}`;
+    return [monthShort, String(record.year)];
+  });
+
+  const totals = normalized.map(record => record.total);
+
+  const datasets = [
+    {
+      type: 'bar',
+      label: 'Ave',
+      data: normalized.map(record => record.aves),
+      backgroundColor: '#3b82f6',
+      borderColor: '#3b82f6',
+      borderWidth: 1,
+      stack: 'capturas',
+      maxBarThickness: 60
+    },
+    {
+      type: 'bar',
+      label: 'Mamífero',
+      data: normalized.map(record => record.mamiferos),
+      backgroundColor: '#d4b896',
+      borderColor: '#d4b896',
+      borderWidth: 1,
+      stack: 'capturas',
+      maxBarThickness: 60
+    },
+    {
+      type: 'bar',
+      label: 'Reptil',
+      data: normalized.map(record => record.reptiles),
+      backgroundColor: '#22c55e',
+      borderColor: '#22c55e',
+      borderWidth: 1,
+      stack: 'capturas',
+      maxBarThickness: 60
+    }
+  ];
+
+  const config = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: {
+        padding: {
+          top: 32,
+          right: 16,
+          bottom: 16,
+          left: 16
+        }
+      },
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: {
+            display: false,
+            drawBorder: false
+          },
+          ticks: {
+            autoSkip: false,
+            maxRotation: 0,
+            minRotation: 0,
+            font: {
+              size: 11
+            },
+            color: '#475569'
+          }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: {
+            callback: value => Math.round(value),
+            color: '#475569'
+          },
+          title: {
+            display: true,
+            text: 'Número de capturas',
+            color: '#0f172a',
+            font: {
+              size: 12,
+              weight: '600'
+            }
+          },
+          grid: {
+            drawBorder: false,
+            color: 'rgba(148, 163, 184, 0.25)'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: {
+            usePointStyle: true,
+            boxHeight: 8,
+            boxWidth: 8,
+            padding: 12,
+            color: '#334155',
+            font: {
+              size: 11
+            }
+          }
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title(items) {
+              if (!items?.length) {
+                return '';
+              }
+              const { dataIndex } = items[0];
+              const record = normalized[dataIndex];
+              if (!record) {
+                return '';
+              }
+              return `${monthName(record.month)} ${record.year}`;
+            },
+            label(context) {
+              const value = Number(context.parsed?.y) || 0;
+              return `${context.dataset.label}: ${value}`;
+            },
+            footer(items) {
+              if (!items?.length) {
+                return '';
+              }
+              const { dataIndex } = items[0];
+              const total = totals[dataIndex];
+              return `Total: ${total}`;
+            }
+          }
+        },
+        capturesTotals: {
+          totals
+        }
+      }
+    },
+    plugins: [capturesTotalsPlugin]
+  };
+
+  return { config, records: normalized, totals };
 }
