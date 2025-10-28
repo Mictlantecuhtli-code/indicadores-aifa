@@ -508,7 +508,7 @@ export function buildPgpaFsChartView(records, { indicadorId } = {}) {
       },
       plugins: {
         legend: {
-          display: true
+          display: false  // Ocultando la leyenda
         },
         tooltip: {
           mode: 'index',
