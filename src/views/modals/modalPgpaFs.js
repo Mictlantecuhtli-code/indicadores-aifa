@@ -809,6 +809,9 @@ const capturesTotalsPlugin = {
   afterDatasetsDraw(chart, args, options) {
     const { ctx, chartArea, scales } = chart;
     const totals = options?.totals ?? [];
+    const labelVisibility = Array.isArray(options?.labelVisibility)
+      ? options.labelVisibility
+      : null;
 
     if (!totals.length) {
       return;
@@ -832,6 +835,11 @@ const capturesTotalsPlugin = {
     meta.data.forEach((element, index) => {
       const total = totals[index];
       if (total === null || total === undefined || total === 0) {
+        return;
+      }
+
+      // Solo mostrar el total si la etiqueta es visible
+      if (labelVisibility && labelVisibility[index] === false) {
         return;
       }
 
@@ -870,6 +878,20 @@ export function buildCapturesChartView(records, { showHistorical = false } = {})
 
   if (!filtered.length) {
     return { config: null, records: [] };
+  }
+
+  // Control de visibilidad de etiquetas
+  const labelStride = showHistorical
+    ? filtered.length >= 36
+      ? 4
+      : filtered.length >= 24
+      ? 3
+      : 2
+    : 1;
+  const labelVisibility = filtered.map((_, index) => (labelStride <= 1 ? true : index % labelStride === 0));
+  if (labelVisibility.length) {
+    labelVisibility[0] = true;
+    labelVisibility[labelVisibility.length - 1] = true;
   }
 
   const labels = filtered.map(record => {
@@ -944,6 +966,18 @@ export function buildCapturesChartView(records, { showHistorical = false } = {})
             autoSkip: false,
             maxRotation: 0,
             minRotation: 0,
+            callback(value, index) {
+              if (labelVisibility[index] === false) {
+                return '';
+              }
+
+              const label = this?.getLabelForValue?.(value);
+              if (Array.isArray(label)) {
+                return label;
+              }
+
+              return label ?? value;
+            },
             font: {
               size: 11
             },
@@ -1018,7 +1052,8 @@ export function buildCapturesChartView(records, { showHistorical = false } = {})
           }
         },
         capturesTotals: {
-          totals
+          totals,
+          labelVisibility
         }
       }
     },
