@@ -17,6 +17,30 @@ const MONTH_SHORT_NAMES = [
   'Dic'
 ];
 
+const IMPACT_RATE_THRESHOLDS = [
+  {
+    label: 'Tasa Objetivo',
+    value: 6,
+    color: '#22c55e',
+    borderDash: [6, 6]
+  },
+  {
+    label: 'Nivel de Alerta 1',
+    value: 13.4,
+    color: '#facc15'
+  },
+  {
+    label: 'Nivel de Alerta 2',
+    value: 21.4,
+    color: '#fb923c'
+  },
+  {
+    label: 'Nivel de Alerta 3',
+    value: 29.4,
+    color: '#ef4444'
+  }
+];
+
 function normalizeImpactosFaunaRecords(records) {
   if (!Array.isArray(records)) {
     return [];
