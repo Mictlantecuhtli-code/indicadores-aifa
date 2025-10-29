@@ -57,6 +57,12 @@ const SUBSYSTEM_COLORS = [
 
 export const SMS_LUCES_MODAL_ID = 'modal-sms-luces';
 
+const SMS_LUCES_INDICATOR_METADATA = {
+  clave: 'SMS-04',
+  area: 'Área SMS',
+  unidad: 'Porcentaje'
+};
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';
@@ -99,13 +105,39 @@ function round(value, decimals = 2) {
   return Math.round(value * factor) / factor;
 }
 
-function buildLegendBadges() {
+function buildThresholdLegendBadges() {
   return ALERT_LINE_CONFIGS.map(line => `
     <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${line.bgClass} ${line.textClass}">
       <span class="inline-block h-2.5 w-2.5 rounded-full" style="background-color: ${line.color}"></span>
       ${escapeHtml(line.label)}
     </span>
   `).join('');
+}
+
+function buildSubsystemLegend(model) {
+  if (!model?.subsystems?.length) {
+    return '';
+  }
+
+  const items = model.subsystems
+    .map((subsystem, index) => {
+      const colorSet = SUBSYSTEM_COLORS[index % SUBSYSTEM_COLORS.length];
+      const borderStyle = `border: 1px solid ${colorSet.border}`;
+
+      return `
+        <li class="flex items-center gap-2">
+          <span class="inline-block h-2.5 w-2.5 rounded-sm" style="background-color: ${colorSet.bg}; ${borderStyle}"></span>
+          <span class="text-xs font-medium text-slate-700">${escapeHtml(subsystem)}</span>
+        </li>
+      `;
+    })
+    .join('');
+
+  return `
+    <ul class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      ${items}
+    </ul>
+  `;
 }
 
 const monthGroupingPlugin = {
@@ -280,6 +312,9 @@ export function buildSmsLucesChartModel(records) {
 }
 
 export function buildSmsLucesModalMarkup(indicatorName, indicatorSubtitle) {
+  const title = indicatorName || 'Porcentaje de luces operativas del sistema de ayudas visuales en pista';
+  const subtitle = indicatorSubtitle || 'Evaluación mensual del porcentaje de luces operativas en las pistas 04C-22C y 04L-22R.';
+
   return `
     <div
       id="${SMS_LUCES_MODAL_ID}"
@@ -296,12 +331,27 @@ export function buildSmsLucesModalMarkup(indicatorName, indicatorSubtitle) {
       >
         <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
           <div class="flex-1">
-            <h2 id="modal-sms-luces-title" class="text-2xl font-bold text-slate-900">
-              ${escapeHtml(indicatorName)}
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Indicador seleccionado</p>
+            <h2 id="modal-sms-luces-title" class="mt-2 text-2xl font-bold text-slate-900">
+              ${escapeHtml(title)}
             </h2>
-            <p id="modal-sms-luces-description" class="mt-1 text-sm text-slate-600">
-              ${escapeHtml(indicatorSubtitle)}
+            <p id="modal-sms-luces-description" class="mt-2 text-sm text-slate-600">
+              ${escapeHtml(subtitle)}
             </p>
+            <dl class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
+              <div class="flex items-center gap-1">
+                <dt class="font-medium text-slate-600">Clave:</dt>
+                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.clave)}</dd>
+              </div>
+              <div class="flex items-center gap-1">
+                <dt class="font-medium text-slate-600">Área:</dt>
+                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.area)}</dd>
+              </div>
+              <div class="flex items-center gap-1">
+                <dt class="font-medium text-slate-600">Unidad:</dt>
+                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.unidad)}</dd>
+              </div>
+            </dl>
           </div>
           <button
             type="button"
@@ -425,12 +475,16 @@ export function buildSmsLucesSummary(model) {
 
 export function buildSmsLucesChartView(model) {
   const widthPercent = model?.widthPercent ?? 100;
-  const legendBadges = buildLegendBadges();
+  const thresholdLegend = buildThresholdLegendBadges();
+  const subsystemLegend = buildSubsystemLegend(model);
 
   return `
-    <div class="space-y-4">
-      <div class="flex flex-wrap items-center gap-2 text-xs">
-        ${legendBadges}
+    <div class="space-y-6">
+      <div class="flex flex-col gap-3">
+        ${subsystemLegend}
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          ${thresholdLegend}
+        </div>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <div class="overflow-x-auto">
@@ -527,12 +581,7 @@ export function buildSmsLucesChartConfig(model) {
       },
       plugins: {
         legend: {
-          position: 'top',
-          align: 'start',
-          labels: {
-            usePointStyle: true,
-            padding: 18
-          }
+          display: false
         },
         tooltip: {
           callbacks: {

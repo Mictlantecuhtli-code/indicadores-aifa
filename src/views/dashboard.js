@@ -3971,12 +3971,7 @@ function initSmsIndicatorLinks(container) {
       const openModalFn = SMS_INDICATOR_MODAL_ROUTES[indicatorId];
       
       if (openModalFn) {
-        // Llamar la función con los parámetros necesarios
-        if (indicatorId === 'sms-indicator-2-1' || indicatorId === 'sms-indicator-2-2') {
-          openModalFn(indicatorId, indicatorName, indicatorSubtitle);
-        } else {
-          openModalFn();
-        }
+        openModalFn(indicatorId, indicatorName, indicatorSubtitle);
       } else {
         console.warn(`No hay modal configurado para el indicador: ${indicatorId}`);
       }
