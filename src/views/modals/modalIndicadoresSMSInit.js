@@ -238,6 +238,3 @@ function closeModal(modal) {
     modal.remove();
   }, 200);
 }
-
-// Exportar función principal
-export { openSmsPistasModal };
