@@ -593,11 +593,6 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
       { label: 'Unidad de medida', value: IMPACTOS_FAUNA_METADATA.unidad },
       { label: 'Frecuencia', value: IMPACTOS_FAUNA_METADATA.frecuencia }
     ],
-    highlight: {
-      label: 'Meta anual',
-      value: IMPACTOS_FAUNA_METADATA.metaAnual,
-      description: IMPACTOS_FAUNA_METADATA.metaDescripcion
-    },
     closeButtonAttributes: 'data-modal-close'
   });
 

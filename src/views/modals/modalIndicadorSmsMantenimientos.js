@@ -330,62 +330,7 @@ export function buildSmsMantenimientosSummary(model) {
     `;
   }
 
-  const totals = model.months.map(month => month.total);
-  const totalAcumulado = totals.reduce((sum, value) => sum + value, 0);
-  const promedioMensual = totals.length ? totalAcumulado / totals.length : null;
-  const ultimoMes = model.months[model.months.length - 1];
-
-  return `
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="grid gap-6 lg:grid-cols-3">
-        <div class="lg:col-span-2 space-y-4">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador SMS / Objetivo 3 / Indicador 3.2</p>
-            <h3 class="mt-1 text-2xl font-bold text-slate-900">${escapeHtml(INDICATOR_METADATA.nombre)}</h3>
-            <p class="mt-2 text-sm text-slate-600">${escapeHtml(INDICATOR_METADATA.descripcion)}</p>
-          </div>
-          <dl class="grid gap-4 sm:grid-cols-2">
-            <div class="rounded-xl bg-slate-50 p-4">
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Área responsable</dt>
-              <dd class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(INDICATOR_METADATA.area)}</dd>
-            </div>
-            <div class="rounded-xl bg-slate-50 p-4">
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Unidad de medida</dt>
-              <dd class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(model.unit)}</dd>
-            </div>
-            <div class="rounded-xl bg-slate-50 p-4">
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Frecuencia</dt>
-              <dd class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(INDICATOR_METADATA.frecuencia)}</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="space-y-4">
-          <div class="rounded-xl border border-emerald-100 bg-emerald-50/80 p-4">
-            <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Meta anual</div>
-            <div class="mt-1 text-3xl font-bold text-emerald-700">${formatPercentage(INDICATOR_METADATA.metaAnual)}</div>
-            <p class="mt-1 text-xs text-emerald-700/80">Porcentaje mínimo de mantenimientos programados ejecutados.</p>
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="rounded-xl bg-slate-50 p-4 shadow-sm">
-              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Promedio mensual</div>
-              <div class="mt-2 text-xl font-bold text-slate-900">${formatNumber(promedioMensual)}</div>
-              <p class="mt-1 text-xs text-slate-500">Mantenimientos registrados por mes.</p>
-            </div>
-            <div class="rounded-xl bg-slate-50 p-4 shadow-sm">
-              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Último mes reportado</div>
-              <div class="mt-2 text-sm font-semibold text-slate-900">${ultimoMes ? escapeHtml(ultimoMes.label) : '-'}</div>
-              <p class="mt-1 text-xs text-slate-500">Total: ${formatNumber(ultimoMes?.total)}</p>
-            </div>
-            <div class="rounded-xl bg-slate-50 p-4 shadow-sm sm:col-span-2">
-              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Última actualización</div>
-              <div class="mt-2 text-sm font-semibold text-slate-900">${formatDateTime(model.lastCapture)}</div>
-              <p class="mt-1 text-xs text-slate-500">Registros consolidados: ${formatNumber(model.totalRegistros, 0)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
+  return '';
 }
 
 export function buildSmsMantenimientosChartView(model) {
