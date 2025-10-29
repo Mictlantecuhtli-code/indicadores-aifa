@@ -1,3 +1,5 @@
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
+
 const MONTHS = [
   { value: 1, label: 'Enero' },
   { value: 2, label: 'Febrero' },
@@ -177,6 +179,24 @@ const horizontalLinePlugin = {
 };
 
 export function buildSmsMantenimientosModalMarkup(indicatorName, indicatorSubtitle) {
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: 'Indicador SMS / Objetivo 3 / Indicador 3.2',
+    title: indicatorName ?? INDICATOR_METADATA.nombre,
+    subtitle: indicatorSubtitle ?? INDICATOR_METADATA.descripcion,
+    titleId: 'modal-sms-mantenimientos-title',
+    subtitleId: 'modal-sms-mantenimientos-description',
+    infoItems: [
+      { label: 'Área responsable', value: INDICATOR_METADATA.area },
+      { label: 'Unidad de medida', value: INDICATOR_METADATA.unidadMedida },
+      { label: 'Frecuencia', value: INDICATOR_METADATA.frecuencia }
+    ],
+    highlight: {
+      label: 'Meta anual',
+      value: formatPercentage(INDICATOR_METADATA.metaAnual),
+      description: 'Porcentaje mínimo de mantenimientos programados ejecutados.'
+    }
+  });
+
   return `
     <div
       id="${SMS_MANTENIMIENTOS_MODAL_ID}"
@@ -191,25 +211,7 @@ export function buildSmsMantenimientosModalMarkup(indicatorName, indicatorSubtit
         aria-labelledby="modal-sms-mantenimientos-title"
         aria-describedby="modal-sms-mantenimientos-description"
       >
-        <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-          <div class="flex-1">
-            <p class="text-xs font-semibold uppercase tracking-wider text-primary-600">Indicador SMS / Objetivo 3 / Indicador 3.2</p>
-            <h2 id="modal-sms-mantenimientos-title" class="mt-1 text-2xl font-bold text-slate-900">
-              ${escapeHtml(indicatorName)}
-            </h2>
-            <p id="modal-sms-mantenimientos-description" class="mt-1 text-sm text-slate-600">
-              ${escapeHtml(indicatorSubtitle)}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="ml-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
-            data-close-modal
-            aria-label="Cerrar modal"
-          >
-            <i class="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
+        ${headerMarkup}
         <div class="flex-1 overflow-y-auto px-6 py-6" data-modal-body>
           <div class="flex items-center justify-center py-8">
             <div class="flex items-center gap-2 text-slate-400">
@@ -343,10 +345,6 @@ export function buildSmsMantenimientosSummary(model) {
             <p class="mt-2 text-sm text-slate-600">${escapeHtml(INDICATOR_METADATA.descripcion)}</p>
           </div>
           <dl class="grid gap-4 sm:grid-cols-2">
-            <div class="rounded-xl bg-slate-50 p-4">
-              <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Clave del indicador</dt>
-              <dd class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(INDICATOR_METADATA.clave)}</dd>
-            </div>
             <div class="rounded-xl bg-slate-50 p-4">
               <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Área responsable</dt>
               <dd class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(INDICATOR_METADATA.area)}</dd>

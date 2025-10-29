@@ -1,4 +1,5 @@
 import { formatPercentage, monthName } from '../../utils/formatters.js';
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
 
 export const PGPAFS_MODAL_ID = 'modalPgpaFs';
 
@@ -42,6 +43,17 @@ const STACK_COLOR_PALETTE = [
   '#2dd4bf',
   '#ef4444'
 ];
+
+const PGPAFS_METADATA = {
+  breadcrumb: 'Indicador SMS / Objetivo 1 / Indicador 1.2',
+  nombre: 'Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre',
+  descripcion: 'Indicador 1.2 · Programa de Gestión del Peligro Aviario y la Fauna Silvestre (PGPAFS).',
+  area: 'SMS (Seguridad Operacional)',
+  unidad: 'Porcentaje',
+  frecuencia: 'Mensual',
+  metaAnual: 95,
+  metaDescripcion: 'Porcentaje objetivo de cumplimiento del PGPAFS.'
+};
 
 const MONTH_SHORT_NAMES = [
   'Ene',
@@ -650,24 +662,28 @@ export function buildPgpaFsModalMarkup({
         </div>
       `;
 
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: PGPAFS_METADATA.breadcrumb,
+    title: PGPAFS_METADATA.nombre,
+    subtitle: PGPAFS_METADATA.descripcion,
+    infoItems: [
+      { label: 'Área responsable', value: PGPAFS_METADATA.area },
+      { label: 'Unidad de medida', value: PGPAFS_METADATA.unidad },
+      { label: 'Frecuencia', value: PGPAFS_METADATA.frecuencia }
+    ],
+    highlight: {
+      label: 'Meta anual',
+      value: formatPercentage(PGPAFS_METADATA.metaAnual, { scale: 'percentage' }),
+      description: PGPAFS_METADATA.metaDescripcion
+    },
+    closeButtonAttributes: 'data-modal-close'
+  });
+
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${PGPAFS_MODAL_ID}">
       <div class="relative w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl" style="max-height: 90vh; overflow-y: auto;">
-        <button
-          type="button"
-          class="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-          aria-label="Cerrar"
-          data-modal-close
-        >
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-
+        ${headerMarkup}
         <div class="space-y-6 p-6">
-          <header class="space-y-2">
-            <h2 class="text-2xl font-semibold text-slate-900">Porcentaje de cumplimiento del programa de gestión del peligro aviario y la fauna silvestre</h2>
-            <p class="text-sm text-slate-600">Indicador 1.2 - PGPAFS</p>
-          </header>
-
           <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4">
               <div class="flex flex-wrap items-center gap-3" role="tablist">
