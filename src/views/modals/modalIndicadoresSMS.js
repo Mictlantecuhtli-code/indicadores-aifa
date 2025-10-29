@@ -294,18 +294,23 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
     });
 
     const colorSet = pistaColors[pistaIndex % pistaColors.length];
+    
+    // Para líneas: usar colores muy transparentes para el relleno
+    const fillColor = chartType === 'line' 
+      ? colorSet.bg.replace('0.8', '0.15')  // Relleno muy transparente
+      : colorSet.bg;
 
     return {
       label: pista,
       data: values,
-      backgroundColor: chartType === 'bar' ? colorSet.bg : colorSet.bg.replace('0.8', '0.1'), // Muy transparente para líneas
+      backgroundColor: fillColor,
       borderColor: colorSet.border,
       borderWidth: chartType === 'line' ? 3 : 2,
       tension: chartType === 'line' ? 0.4 : 0,
-      fill: chartType === 'line' ? false : false, // Sin relleno para líneas
+      fill: true,  // Siempre con relleno
       pointBackgroundColor: colorSet.border,
       pointBorderColor: '#fff',
-      pointBorderWidth: 2,
+      pointBorderWidth: chartType === 'line' ? 2 : 0,
       pointRadius: chartType === 'line' ? 5 : 0,
       pointHoverRadius: chartType === 'line' ? 7 : 0,
       pointHoverBackgroundColor: colorSet.border,
