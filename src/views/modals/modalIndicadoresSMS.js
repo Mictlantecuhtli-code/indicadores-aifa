@@ -123,9 +123,10 @@ export function buildSmsPistasModalMarkup(indicatorId, indicatorName, indicatorS
  */
 export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = 'sms-indicator-2-1') {
   const indicatorType = indicatorId === 'sms-indicator-2-1' ? 'disponibilidad' : 'confiabilidad';
-  const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'Índice de Disponibilidad (%)' 
+  const fieldName = indicatorId === 'sms-indicator-2-1'
+    ? 'Índice de Disponibilidad (%)'
     : 'Índice de Confiabilidad (%)';
+  const tableSections = buildSmsPistasTableSections(data, fieldName);
   return `
     <div class="space-y-6">
       <!-- Controles -->
@@ -176,14 +177,10 @@ export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = '
         <div class="overflow-x-auto">
           <table class="w-full">
             <thead class="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <th class="px-4 py-3 text-left text-sm font-semibold text-slate-700">Pista</th>
-                <th class="px-4 py-3 text-left text-sm font-semibold text-slate-700">Mes</th>
-                <th class="px-4 py-3 text-right text-sm font-semibold text-slate-700">${escapeHtml(fieldName)}</th>
-              </tr>
+              ${tableSections.header}
             </thead>
             <tbody data-table-body>
-              ${buildSmsPistasTableBody(data, fieldName)}
+              ${tableSections.body}
             </tbody>
           </table>
         </div>
@@ -193,64 +190,116 @@ export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = '
 }
 
 /**
- * Construye el cuerpo de la tabla de datos
+ * Determina las clases de estilo para una celda según el nivel de alerta
  */
-function buildSmsPistasTableBody(data, fieldName) {
-  if (!data || !data.length) {
-    return `
-      <tr>
-        <td colspan="3" class="px-4 py-6 text-center text-slate-400">
-          No hay datos disponibles
-        </td>
-      </tr>
-    `;
+function getAlertCellClasses(valueNum) {
+  if (valueNum == null || isNaN(valueNum)) {
+    return {
+      bgClass: '',
+      textClass: 'text-slate-500'
+    };
   }
 
-  // Ordenar por año, mes y pista
-  const sortedData = [...data].sort((a, b) => {
-    if (a.anio !== b.anio) return b.anio - a.anio;
-    if (a.mes !== b.mes) return a.mes - b.mes;
-    return (a.pista || '').localeCompare(b.pista || '');
+  if (valueNum < ALERT_LINE_CONFIGS[0].value) {
+    return {
+      bgClass: ALERT_LINE_CONFIGS[0].bgClass,
+      textClass: ALERT_LINE_CONFIGS[0].textClass
+    };
+  }
+
+  if (valueNum < ALERT_LINE_CONFIGS[1].value) {
+    return {
+      bgClass: ALERT_LINE_CONFIGS[1].bgClass,
+      textClass: ALERT_LINE_CONFIGS[1].textClass
+    };
+  }
+
+  if (valueNum < ALERT_LINE_CONFIGS[2].value) {
+    return {
+      bgClass: ALERT_LINE_CONFIGS[2].bgClass,
+      textClass: ALERT_LINE_CONFIGS[2].textClass
+    };
+  }
+
+  if (valueNum < ALERT_LINE_CONFIGS[3].value) {
+    return {
+      bgClass: 'bg-amber-50',
+      textClass: 'text-amber-900 font-semibold'
+    };
+  }
+
+  return {
+    bgClass: ALERT_LINE_CONFIGS[3].bgClass,
+    textClass: ALERT_LINE_CONFIGS[3].textClass
+  };
+}
+
+/**
+ * Construye los encabezados y filas de la tabla "Detalle por pista y mes"
+ */
+function buildSmsPistasTableSections(data, fieldName) {
+  if (!data || !data.length) {
+    return {
+      header: `
+        <tr>
+          <th class="px-4 py-3 text-left text-sm font-semibold text-slate-700">Mes</th>
+        </tr>
+      `,
+      body: `
+        <tr>
+          <td class="px-4 py-6 text-center text-slate-400">No hay datos disponibles</td>
+        </tr>
+      `
+    };
+  }
+
+  const pistas = [...new Set(data.map(row => row.pista).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const headerCells = [
+    '<th class="px-4 py-3 text-left text-sm font-semibold text-slate-700">Mes</th>',
+    ...pistas.map(pista => `
+      <th class="px-4 py-3 text-right text-sm font-semibold text-slate-700">
+        <span class="block">${escapeHtml(pista)}</span>
+        <span class="block text-xs font-normal text-slate-500">${escapeHtml(fieldName)}</span>
+      </th>
+    `)
+  ].join('');
+
+  const monthYearPairs = [...new Map(data.map(row => {
+    const key = `${row.anio}-${String(row.mes).padStart(2, '0')}`;
+    return [key, { year: row.anio, month: row.mes }];
+  })).values()].sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    return a.month - b.month;
   });
 
-  return sortedData
-    .map(row => {
-      const month = MONTHS.find(m => m.value === row.mes);
-      const monthLabel = month ? `${month.label} ${row.anio}` : `Mes ${row.mes} ${row.anio}`;
-      const value = row[fieldName];
-      const valueNum = Number(value);
-      
-      // Determinar color según nivel de alerta
-      let bgClass = '';
-      let textClass = 'text-slate-900';
-      if (!isNaN(valueNum)) {
-        if (valueNum < ALERT_LINE_CONFIGS[0].value) {
-          bgClass = ALERT_LINE_CONFIGS[0].bgClass;
-          textClass = ALERT_LINE_CONFIGS[0].textClass;
-        } else if (valueNum < ALERT_LINE_CONFIGS[1].value) {
-          bgClass = ALERT_LINE_CONFIGS[1].bgClass;
-          textClass = ALERT_LINE_CONFIGS[1].textClass;
-        } else if (valueNum < ALERT_LINE_CONFIGS[2].value) {
-          bgClass = ALERT_LINE_CONFIGS[2].bgClass;
-          textClass = ALERT_LINE_CONFIGS[2].textClass;
-        } else if (valueNum < ALERT_LINE_CONFIGS[3].value) {
-          bgClass = 'bg-amber-50';
-          textClass = 'text-amber-900';
-        } else {
-          bgClass = ALERT_LINE_CONFIGS[3].bgClass;
-          textClass = ALERT_LINE_CONFIGS[3].textClass;
-        }
-      }
+  const bodyRows = monthYearPairs.map(({ year, month }) => {
+    const monthInfo = MONTHS.find(m => m.value === month);
+    const monthLabel = monthInfo ? `${monthInfo.label} ${year}` : `Mes ${month} ${year}`;
+
+    const cells = pistas.map(pista => {
+      const record = data.find(row => row.anio === year && row.mes === month && row.pista === pista);
+      const value = record ? record[fieldName] : null;
+      const numericValue = Number(value);
+      const { bgClass, textClass } = getAlertCellClasses(numericValue);
 
       return `
-        <tr class="border-b border-slate-100 ${bgClass} transition hover:bg-slate-50">
-          <td class="px-4 py-3 text-sm ${textClass}">${escapeHtml(row.pista || '-')}</td>
-          <td class="px-4 py-3 text-sm text-slate-700">${escapeHtml(monthLabel)}</td>
-          <td class="px-4 py-3 text-right text-sm ${textClass}">${formatPercentage(value)}</td>
-        </tr>
+        <td class="px-4 py-3 text-right text-sm ${bgClass} ${textClass}">${formatPercentage(value)}</td>
       `;
-    })
-    .join('');
+    }).join('');
+
+    return `
+      <tr class="border-b border-slate-100 transition hover:bg-slate-50">
+        <td class="px-4 py-3 text-sm text-slate-700">${escapeHtml(monthLabel)}</td>
+        ${cells}
+      </tr>
+    `;
+  }).join('');
+
+  return {
+    header: `<tr>${headerCells}</tr>`,
+    body: bodyRows
+  };
 }
 
 /**
