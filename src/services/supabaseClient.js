@@ -2200,6 +2200,30 @@ export async function getSmsLucesOperativasData() {
   }
 }
 
+export async function getSmsPciData() {
+  const INDICATOR_ID = '825fe7c3-652b-4fa5-b6e3-875aa506ae2f';
+
+  try {
+    const { data, error } = await supabase
+      .from('mediciones')
+      .select('id, indicador_id, anio, mes, valor, meta_mensual, observaciones')
+      .eq('indicador_id', INDICATOR_ID)
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .order('observaciones', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos del indicador PCI:', error);
+      throw error;
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Error en getSmsPciData:', error);
+    throw error;
+  }
+}
+
 export async function saveRouteAirlines(routeId, airlines) {
   if (!routeId) {
     throw new Error('No se proporcionó el identificador de la ruta aérea.');
