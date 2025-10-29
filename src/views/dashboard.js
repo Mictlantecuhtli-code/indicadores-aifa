@@ -25,7 +25,14 @@ import {
   buildPgpaFsSummary,
   buildCapturesChartView
 } from './modals/modalPgpaFs.js';
-
+import {
+  SMS_PISTAS_MODAL_ID,
+  buildSmsPistasModalMarkup,
+  buildSmsPistasChartView,
+  buildSmsPistasChartConfig,
+  buildSmsPistasSummary
+} from './modals/modalIndicadoresSMS.js';
+import { openSmsPistasModal } from './modals/modalIndicadoresSMSInit.js';
 const OPTION_BLUEPRINTS = [
   {
     id: 'monthly-yoy',
@@ -245,7 +252,9 @@ const SMS_SECTION_OBJECTIVES = [
 
 const SMS_INDICATOR_MODAL_ROUTES = {
   'sms-indicator-1-1': () => openImpactosFaunaModal(),
-  'sms-indicator-1-2': () => openPgpaFsModal()
+  'sms-indicator-1-2': () => openPgpaFsModal(),
+  'sms-indicator-2-1': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle),  // <-- NUEVA LÍNEA
+  'sms-indicator-2-2': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle)   // <-- NUEVA LÍNEA
 };
 
 function buildSmsSectionContent() {
