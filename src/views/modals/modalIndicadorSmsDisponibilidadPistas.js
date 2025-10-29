@@ -360,18 +360,54 @@ export function buildSmsDisponibilidadPistasDetailTable(model) {
   const sections = Array.from(groupedByYear.entries())
     .sort((a, b) => b[0] - a[0])
     .map(([year, rows]) => {
-      const sortedRows = rows.slice().sort((a, b) => a.mes - b.mes);
-      const bodyRows = sortedRows
-        .map(row => `
+      const runways = Array.from(
+        new Set(rows.map(item => item.pista).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b));
+
+      const tableRunways = runways.length ? runways : ['General'];
+
+      const bodyRows = MONTHS.map(monthInfo => {
+        const monthRecords = rows.filter(item => item.mes === monthInfo.value);
+
+        const runwayColumns = tableRunways
+          .map(runway => {
+            const record = runway === 'General'
+              ? monthRecords.find(item => !item.pista)
+              : monthRecords.find(item => item.pista === runway);
+
+            return `
+              <td class="px-4 py-2 text-slate-900">
+                ${record?.valor != null ? formatPercentage(record.valor) : '…'}
+              </td>
+            `;
+          })
+          .join('');
+
+        return `
           <tr class="border-b border-slate-100 text-sm text-slate-600 last:border-0">
-            <td class="px-4 py-2 font-medium text-slate-700">${escapeHtml(buildMonthLabel(row.mes, row.anio))}</td>
-            <td class="px-4 py-2 text-slate-900">${formatPercentage(row.valor)}</td>
-            <td class="px-4 py-2">${row.metaMensual != null ? formatPercentage(row.metaMensual) : '—'}</td>
-            <td class="px-4 py-2">${row.pista ? escapeHtml(row.pista) : '—'}</td>
-            <td class="px-4 py-2">${row.observaciones ? escapeHtml(row.observaciones) : '—'}</td>
+            <td class="px-4 py-2 font-medium text-slate-700">${escapeHtml(monthInfo.label.toLowerCase())}</td>
+            ${runwayColumns}
           </tr>
-        `)
-        .join('');
+        `;
+      }).join('');
+
+      const headerRows = tableRunways.length
+        ? `
+            <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th scope="col" rowspan="2" class="px-4 py-2 align-bottom">Mes</th>
+              <th scope="col" colspan="${tableRunways.length}" class="px-4 py-2 text-center">Pista</th>
+            </tr>
+            <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              ${tableRunways
+                .map(runway => `<th scope="col" class="px-4 py-2">${escapeHtml(runway)}</th>`)
+                .join('')}
+            </tr>
+          `
+        : `
+            <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th scope="col" class="px-4 py-2">Mes</th>
+            </tr>
+          `;
 
       return `
         <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -380,15 +416,7 @@ export function buildSmsDisponibilidadPistasDetailTable(model) {
           </header>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-100 text-left">
-              <thead class="bg-slate-50">
-                <tr class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <th scope="col" class="px-4 py-2">Mes</th>
-                  <th scope="col" class="px-4 py-2">Disponibilidad</th>
-                  <th scope="col" class="px-4 py-2">Meta mensual</th>
-                  <th scope="col" class="px-4 py-2">Pista</th>
-                  <th scope="col" class="px-4 py-2">Observaciones</th>
-                </tr>
-              </thead>
+              <thead class="bg-slate-50">${headerRows}</thead>
               <tbody>${bodyRows}</tbody>
             </table>
           </div>
