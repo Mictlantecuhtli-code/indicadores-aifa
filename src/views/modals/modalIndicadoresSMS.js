@@ -131,18 +131,6 @@ export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = '
             </button>
           </div>
         </div>
-
-        <!-- Leyenda de niveles de alerta -->
-        <div class="flex items-center gap-4 text-xs">
-          <div class="flex items-center gap-2">
-            <div class="h-3 w-8 border border-rose-400 bg-rose-100"></div>
-            <span class="text-slate-600">Nivel de alerta 3: &lt;${alertLevel1}%</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="h-3 w-8 border border-amber-400 bg-amber-100"></div>
-            <span class="text-slate-600">Nivel de alerta 2: ${alertLevel1}%-${alertLevel2}%</span>
-          </div>
-        </div>
       </div>
 
       <!-- Gráfica -->
@@ -212,8 +200,17 @@ function buildSmsPistasTableBody(data, fieldName) {
           bgClass = 'bg-rose-50';
           textClass = 'text-rose-900 font-semibold';
         } else if (valueNum < 83) {
+          bgClass = 'bg-orange-50';
+          textClass = 'text-orange-900 font-semibold';
+        } else if (valueNum < 87) {
+          bgClass = 'bg-yellow-50';
+          textClass = 'text-yellow-900 font-semibold';
+        } else if (valueNum < 90) {
           bgClass = 'bg-amber-50';
-          textClass = 'text-amber-900 font-semibold';
+          textClass = 'text-amber-900';
+        } else {
+          bgClass = 'bg-emerald-50';
+          textClass = 'text-emerald-900';
         }
       }
 
@@ -371,12 +368,18 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
               }
               label += context.parsed.y.toFixed(2) + '%';
               
-              // Agregar nivel de alerta
+              // Agregar nivel según el valor
               const value = context.parsed.y;
               if (value < 80) {
                 label += ' (Nivel de alerta 3)';
               } else if (value < 83) {
                 label += ' (Nivel de alerta 2)';
+              } else if (value < 87) {
+                label += ' (Nivel de alerta 1)';
+              } else if (value < 90) {
+                label += ' (Por debajo del objetivo)';
+              } else {
+                label += ' (Objetivo alcanzado)';
               }
               
               return label;
@@ -390,36 +393,80 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
               type: 'line',
               yMin: 80,
               yMax: 80,
-              borderColor: 'rgba(239, 68, 68, 0.5)',
+              borderColor: 'rgba(239, 68, 68, 0.6)',
               borderWidth: 2,
               borderDash: [5, 5],
               label: {
                 content: 'Nivel de alerta 3: 80%',
                 enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                position: 'start',
+                backgroundColor: 'rgba(239, 68, 68, 0.9)',
                 color: 'white',
                 font: {
-                  size: 10
-                }
+                  size: 10,
+                  weight: 'bold'
+                },
+                padding: 4
               }
             },
             line2: {
               type: 'line',
               yMin: 83,
               yMax: 83,
-              borderColor: 'rgba(251, 191, 36, 0.5)',
+              borderColor: 'rgba(249, 115, 22, 0.6)',
               borderWidth: 2,
               borderDash: [5, 5],
               label: {
                 content: 'Nivel de alerta 2: 83%',
                 enabled: true,
-                position: 'end',
-                backgroundColor: 'rgba(251, 191, 36, 0.8)',
+                position: 'start',
+                backgroundColor: 'rgba(249, 115, 22, 0.9)',
                 color: 'white',
                 font: {
-                  size: 10
-                }
+                  size: 10,
+                  weight: 'bold'
+                },
+                padding: 4
+              }
+            },
+            line3: {
+              type: 'line',
+              yMin: 87,
+              yMax: 87,
+              borderColor: 'rgba(234, 179, 8, 0.6)',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              label: {
+                content: 'Nivel de alerta 1: 87%',
+                enabled: true,
+                position: 'start',
+                backgroundColor: 'rgba(234, 179, 8, 0.9)',
+                color: 'white',
+                font: {
+                  size: 10,
+                  weight: 'bold'
+                },
+                padding: 4
+              }
+            },
+            line4: {
+              type: 'line',
+              yMin: 90,
+              yMax: 90,
+              borderColor: 'rgba(34, 197, 94, 0.6)',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              label: {
+                content: 'Objetivo: 90%',
+                enabled: true,
+                position: 'start',
+                backgroundColor: 'rgba(34, 197, 94, 0.9)',
+                color: 'white',
+                font: {
+                  size: 10,
+                  weight: 'bold'
+                },
+                padding: 4
               }
             }
           }
@@ -468,6 +515,9 @@ export function buildSmsPistasSummary(data, indicatorId) {
   const max = Math.max(...values);
   const belowAlert3 = values.filter(v => v < 80).length;
   const belowAlert2 = values.filter(v => v >= 80 && v < 83).length;
+  const belowAlert1 = values.filter(v => v >= 83 && v < 87).length;
+  const belowObjective = values.filter(v => v >= 87 && v < 90).length;
+  const objectiveReached = values.filter(v => v >= 90).length;
 
   return `
     <div class="rounded-lg border border-slate-200 bg-white p-6">
@@ -489,9 +539,23 @@ export function buildSmsPistasSummary(data, indicatorId) {
           <div class="text-xs font-medium uppercase tracking-wide text-rose-700">Alerta 3 (&lt;80%)</div>
           <div class="mt-1 text-2xl font-bold text-rose-900">${belowAlert3}</div>
         </div>
+        <div class="rounded-lg bg-orange-50 p-4">
+          <div class="text-xs font-medium uppercase tracking-wide text-orange-700">Alerta 2 (80-83%)</div>
+          <div class="mt-1 text-2xl font-bold text-orange-900">${belowAlert2}</div>
+        </div>
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-4">
+        <div class="rounded-lg bg-yellow-50 p-4">
+          <div class="text-xs font-medium uppercase tracking-wide text-yellow-700">Alerta 1 (83-87%)</div>
+          <div class="mt-1 text-2xl font-bold text-yellow-900">${belowAlert1}</div>
+        </div>
         <div class="rounded-lg bg-amber-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-amber-700">Alerta 2 (80-83%)</div>
-          <div class="mt-1 text-2xl font-bold text-amber-900">${belowAlert2}</div>
+          <div class="text-xs font-medium uppercase tracking-wide text-amber-700">Bajo Objetivo (87-90%)</div>
+          <div class="mt-1 text-2xl font-bold text-amber-900">${belowObjective}</div>
+        </div>
+        <div class="rounded-lg bg-emerald-50 p-4">
+          <div class="text-xs font-medium uppercase tracking-wide text-emerald-700">Objetivo (≥90%)</div>
+          <div class="mt-1 text-2xl font-bold text-emerald-900">${objectiveReached}</div>
         </div>
       </div>
     </div>
