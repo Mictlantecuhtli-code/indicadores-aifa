@@ -5,7 +5,8 @@ import {
   getIndicatorTargets,
   getCapturasFauna,
   getImpactosFauna,
-  getSmsDocuments
+  getSmsDocuments,
+  getSmsPistasData  // <-- AGREGAR ESTA LÍNEA
 } from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
