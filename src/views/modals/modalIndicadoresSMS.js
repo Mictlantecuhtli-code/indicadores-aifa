@@ -298,15 +298,19 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
     return {
       label: pista,
       data: values,
-      backgroundColor: colorSet.bg,
+      backgroundColor: chartType === 'bar' ? colorSet.bg : colorSet.bg.replace('0.8', '0.1'), // Muy transparente para líneas
       borderColor: colorSet.border,
-      borderWidth: 2,
+      borderWidth: chartType === 'line' ? 3 : 2,
       tension: chartType === 'line' ? 0.4 : 0,
-      fill: chartType === 'line',
+      fill: chartType === 'line' ? false : false, // Sin relleno para líneas
       pointBackgroundColor: colorSet.border,
-      pointBorderColor: colorSet.border,
-      pointRadius: chartType === 'line' ? 4 : 0,
-      pointHoverRadius: chartType === 'line' ? 6 : 0
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: chartType === 'line' ? 5 : 0,
+      pointHoverRadius: chartType === 'line' ? 7 : 0,
+      pointHoverBackgroundColor: colorSet.border,
+      pointHoverBorderColor: '#fff',
+      pointHoverBorderWidth: 2
     };
   });
 
