@@ -18,7 +18,7 @@ let currentIndicatorId = null;
  */
 async function getSmsPistasData() {
   // Importar dinámicamente desde supabaseClient
-  const { getSmsPistasData: fetchData } = await import('../services/supabaseClient.js');
+  const { getSmsPistasData: fetchData } = await import('../../services/supabaseClient.js');
   return fetchData();
 }
 
