@@ -513,16 +513,11 @@ export function buildSmsPistasSummary(data, indicatorId) {
   const avg = values.reduce((a, b) => a + b, 0) / values.length;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const belowAlert3 = values.filter(v => v < 80).length;
-  const belowAlert2 = values.filter(v => v >= 80 && v < 83).length;
-  const belowAlert1 = values.filter(v => v >= 83 && v < 87).length;
-  const belowObjective = values.filter(v => v >= 87 && v < 90).length;
-  const objectiveReached = values.filter(v => v >= 90).length;
 
   return `
     <div class="rounded-lg border border-slate-200 bg-white p-6">
       <h3 class="mb-4 text-lg font-semibold text-slate-900">Resumen ${latestYear}</h3>
-      <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div class="rounded-lg bg-slate-50 p-4">
           <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Promedio</div>
           <div class="mt-1 text-2xl font-bold text-slate-900">${formatPercentage(avg)}</div>
@@ -534,28 +529,6 @@ export function buildSmsPistasSummary(data, indicatorId) {
         <div class="rounded-lg bg-slate-50 p-4">
           <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Máximo</div>
           <div class="mt-1 text-2xl font-bold text-slate-900">${formatPercentage(max)}</div>
-        </div>
-        <div class="rounded-lg bg-rose-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-rose-700">Alerta 3 (&lt;80%)</div>
-          <div class="mt-1 text-2xl font-bold text-rose-900">${belowAlert3}</div>
-        </div>
-        <div class="rounded-lg bg-orange-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-orange-700">Alerta 2 (80-83%)</div>
-          <div class="mt-1 text-2xl font-bold text-orange-900">${belowAlert2}</div>
-        </div>
-      </div>
-      <div class="mt-4 grid grid-cols-3 gap-4">
-        <div class="rounded-lg bg-yellow-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-yellow-700">Alerta 1 (83-87%)</div>
-          <div class="mt-1 text-2xl font-bold text-yellow-900">${belowAlert1}</div>
-        </div>
-        <div class="rounded-lg bg-amber-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-amber-700">Bajo Objetivo (87-90%)</div>
-          <div class="mt-1 text-2xl font-bold text-amber-900">${belowObjective}</div>
-        </div>
-        <div class="rounded-lg bg-emerald-50 p-4">
-          <div class="text-xs font-medium uppercase tracking-wide text-emerald-700">Objetivo (≥90%)</div>
-          <div class="mt-1 text-2xl font-bold text-emerald-900">${objectiveReached}</div>
         </div>
       </div>
     </div>
