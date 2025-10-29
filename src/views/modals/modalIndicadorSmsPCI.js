@@ -237,11 +237,12 @@ export function buildSmsPciChartConfig(data, chartType = 'bar') {
       maintainAspectRatio: false,
       scales: {
         x: {
-          stacked: chartType === 'bar',
+          stacked: false,
           grid: { display: false },
           ticks: { font: { size: 12 } }
         },
         y: {
+          stacked: false,
           beginAtZero: true,
           suggestedMax: 100,
           ticks: {
