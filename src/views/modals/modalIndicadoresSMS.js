@@ -19,6 +19,37 @@ const MONTHS = [
   { value: 12, label: 'Diciembre', short: 'Dic' }
 ];
 
+const ALERT_LINE_CONFIGS = [
+  {
+    value: 80,
+    label: 'Nivel de alerta 3: 80%',
+    color: 'rgb(239, 68, 68)',
+    bgClass: 'bg-rose-50',
+    textClass: 'text-rose-900 font-semibold'
+  },
+  {
+    value: 83,
+    label: 'Nivel de alerta 2: 83%',
+    color: 'rgb(249, 115, 22)',
+    bgClass: 'bg-orange-50',
+    textClass: 'text-orange-900 font-semibold'
+  },
+  {
+    value: 87,
+    label: 'Nivel de alerta 1: 87%',
+    color: 'rgb(234, 179, 8)',
+    bgClass: 'bg-yellow-50',
+    textClass: 'text-yellow-900 font-semibold'
+  },
+  {
+    value: 90,
+    label: 'Objetivo: 90%',
+    color: 'rgb(34, 197, 94)',
+    bgClass: 'bg-emerald-50',
+    textClass: 'text-emerald-900'
+  }
+];
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -95,9 +126,6 @@ export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = '
   const fieldName = indicatorId === 'sms-indicator-2-1' 
     ? 'Índice de Disponibilidad (%)' 
     : 'Índice de Confiabilidad (%)';
-  const alertLevel1 = 80;
-  const alertLevel2 = 83;
-
   return `
     <div class="space-y-6">
       <!-- Controles -->
@@ -196,21 +224,21 @@ function buildSmsPistasTableBody(data, fieldName) {
       let bgClass = '';
       let textClass = 'text-slate-900';
       if (!isNaN(valueNum)) {
-        if (valueNum < 80) {
-          bgClass = 'bg-rose-50';
-          textClass = 'text-rose-900 font-semibold';
-        } else if (valueNum < 83) {
-          bgClass = 'bg-orange-50';
-          textClass = 'text-orange-900 font-semibold';
-        } else if (valueNum < 87) {
-          bgClass = 'bg-yellow-50';
-          textClass = 'text-yellow-900 font-semibold';
-        } else if (valueNum < 90) {
+        if (valueNum < ALERT_LINE_CONFIGS[0].value) {
+          bgClass = ALERT_LINE_CONFIGS[0].bgClass;
+          textClass = ALERT_LINE_CONFIGS[0].textClass;
+        } else if (valueNum < ALERT_LINE_CONFIGS[1].value) {
+          bgClass = ALERT_LINE_CONFIGS[1].bgClass;
+          textClass = ALERT_LINE_CONFIGS[1].textClass;
+        } else if (valueNum < ALERT_LINE_CONFIGS[2].value) {
+          bgClass = ALERT_LINE_CONFIGS[2].bgClass;
+          textClass = ALERT_LINE_CONFIGS[2].textClass;
+        } else if (valueNum < ALERT_LINE_CONFIGS[3].value) {
           bgClass = 'bg-amber-50';
           textClass = 'text-amber-900';
         } else {
-          bgClass = 'bg-emerald-50';
-          textClass = 'text-emerald-900';
+          bgClass = ALERT_LINE_CONFIGS[3].bgClass;
+          textClass = ALERT_LINE_CONFIGS[3].textClass;
         }
       }
 
@@ -316,11 +344,27 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
     };
   });
 
+  const thresholdDatasets = ALERT_LINE_CONFIGS.map((lineConfig, index) => ({
+    label: lineConfig.label,
+    data: labels.map(() => lineConfig.value),
+    type: 'line',
+    borderColor: lineConfig.color,
+    borderWidth: 2,
+    borderDash: index === ALERT_LINE_CONFIGS.length - 1 ? [] : [6, 6],
+    fill: false,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    pointHitRadius: 0,
+    tension: 0,
+    order: 99,
+    isThreshold: true
+  }));
+
   const config = {
     type: chartType,
     data: {
       labels,
-      datasets
+      datasets: [...datasets, ...thresholdDatasets]
     },
     options: {
       responsive: true,
@@ -362,112 +406,31 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
         tooltip: {
           callbacks: {
             label: function(context) {
+              if (context.dataset?.isThreshold) {
+                return context.dataset.label;
+              }
+
               let label = context.dataset.label || '';
               if (label) {
                 label += ': ';
               }
               label += context.parsed.y.toFixed(2) + '%';
-              
+
               // Agregar nivel según el valor
               const value = context.parsed.y;
-              if (value < 80) {
+              if (value < ALERT_LINE_CONFIGS[0].value) {
                 label += ' (Nivel de alerta 3)';
-              } else if (value < 83) {
+              } else if (value < ALERT_LINE_CONFIGS[1].value) {
                 label += ' (Nivel de alerta 2)';
-              } else if (value < 87) {
+              } else if (value < ALERT_LINE_CONFIGS[2].value) {
                 label += ' (Nivel de alerta 1)';
-              } else if (value < 90) {
+              } else if (value < ALERT_LINE_CONFIGS[3].value) {
                 label += ' (Por debajo del objetivo)';
               } else {
                 label += ' (Objetivo alcanzado)';
               }
               
               return label;
-            }
-          }
-        },
-        // Líneas de referencia para niveles de alerta
-        annotation: {
-          annotations: {
-            line1: {
-              type: 'line',
-              yMin: 80,
-              yMax: 80,
-              borderColor: 'rgba(239, 68, 68, 0.6)',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              label: {
-                content: 'Nivel de alerta 3: 80%',
-                enabled: true,
-                position: 'start',
-                backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                color: 'white',
-                font: {
-                  size: 10,
-                  weight: 'bold'
-                },
-                padding: 4
-              }
-            },
-            line2: {
-              type: 'line',
-              yMin: 83,
-              yMax: 83,
-              borderColor: 'rgba(249, 115, 22, 0.6)',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              label: {
-                content: 'Nivel de alerta 2: 83%',
-                enabled: true,
-                position: 'start',
-                backgroundColor: 'rgba(249, 115, 22, 0.9)',
-                color: 'white',
-                font: {
-                  size: 10,
-                  weight: 'bold'
-                },
-                padding: 4
-              }
-            },
-            line3: {
-              type: 'line',
-              yMin: 87,
-              yMax: 87,
-              borderColor: 'rgba(234, 179, 8, 0.6)',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              label: {
-                content: 'Nivel de alerta 1: 87%',
-                enabled: true,
-                position: 'start',
-                backgroundColor: 'rgba(234, 179, 8, 0.9)',
-                color: 'white',
-                font: {
-                  size: 10,
-                  weight: 'bold'
-                },
-                padding: 4
-              }
-            },
-            line4: {
-              type: 'line',
-              yMin: 90,
-              yMax: 90,
-              borderColor: 'rgba(34, 197, 94, 0.6)',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              label: {
-                content: 'Objetivo: 90%',
-                enabled: true,
-                position: 'start',
-                backgroundColor: 'rgba(34, 197, 94, 0.9)',
-                color: 'white',
-                font: {
-                  size: 10,
-                  weight: 'bold'
-                },
-                padding: 4
-              }
             }
           }
         }
