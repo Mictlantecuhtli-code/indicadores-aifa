@@ -3956,24 +3956,29 @@ function initSmsObjectiveAccordions(container) {
 }
 
 function initSmsIndicatorLinks(container) {
-  container.addEventListener('click', event => {
-    const link = event.target.closest('[data-sms-indicator-link]');
-    if (!link) return;
-
-    event.preventDefault();
-
-    const name = link.dataset.smsIndicatorName || 'Indicador SMS';
-    const subtitle = link.dataset.smsIndicatorSubtitle || '';
-    const code = link.dataset.smsIndicatorCode || '';
-    const indicatorId = link.dataset.smsIndicatorId || '';
-
-    const handler = indicatorId ? SMS_INDICATOR_MODAL_ROUTES[indicatorId] : null;
-    if (typeof handler === 'function') {
-      handler({ link, name, subtitle, code });
-      return;
-    }
-
-    openDirectionIndicatorPlaceholderModal({ name, subtitle, code });
+  const links = container.querySelectorAll('[data-sms-indicator-link]');
+  
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      
+      const indicatorId = link.getAttribute('data-sms-indicator-id');
+      const indicatorName = link.getAttribute('data-sms-indicator-name');
+      const indicatorSubtitle = link.getAttribute('data-sms-indicator-subtitle');
+      
+      const openModalFn = SMS_INDICATOR_MODAL_ROUTES[indicatorId];
+      
+      if (openModalFn) {
+        // Llamar la función con los parámetros necesarios
+        if (indicatorId === 'sms-indicator-2-1' || indicatorId === 'sms-indicator-2-2') {
+          openModalFn(indicatorId, indicatorName, indicatorSubtitle);
+        } else {
+          openModalFn();
+        }
+      } else {
+        console.warn(`No hay modal configurado para el indicador: ${indicatorId}`);
+      }
+    });
   });
 }
 
