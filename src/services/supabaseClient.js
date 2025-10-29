@@ -2155,6 +2155,27 @@ export async function deleteAirportRoute(routeId) {
   }
 }
 
+export async function getSmsPistasData() {
+  try {
+    const { data, error } = await supabase
+      .from('v_sms_pistas_mensual')
+      .select('*')
+      .order('anio', { ascending: false })
+      .order('mes', { ascending: true })
+      .order('pista', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de SMS pistas:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error en getSmsPistasData:', error);
+    throw error;
+  }
+}
+
 export async function saveRouteAirlines(routeId, airlines) {
   if (!routeId) {
     throw new Error('No se proporcionó el identificador de la ruta aérea.');
