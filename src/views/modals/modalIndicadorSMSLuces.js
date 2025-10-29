@@ -340,10 +340,6 @@ export function buildSmsLucesModalMarkup(indicatorName, indicatorSubtitle) {
             </p>
             <dl class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
               <div class="flex items-center gap-1">
-                <dt class="font-medium text-slate-600">Clave:</dt>
-                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.clave)}</dd>
-              </div>
-              <div class="flex items-center gap-1">
                 <dt class="font-medium text-slate-600">Área:</dt>
                 <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.area)}</dd>
               </div>
