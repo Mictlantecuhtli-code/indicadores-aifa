@@ -35,12 +35,26 @@ const ALERT_LINE_CONFIGS = [
   { value: 90, label: 'Objetivo: 90%', color: 'rgb(34, 197, 94)', textClass: 'text-emerald-900', dash: [] }
 ];
 
-const VALUE_DATASET_STYLE = {
-  backgroundColor: 'rgba(37, 99, 235, 0.9)',
-  hoverBackgroundColor: 'rgba(37, 99, 235, 1)',
-  borderColor: 'rgba(29, 78, 216, 1)',
-  borderWidth: 1.5
-};
+const RUNWAY_DATASET_STYLES = [
+  {
+    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    hoverBackgroundColor: 'rgba(37, 99, 235, 0.35)',
+    borderColor: 'rgba(37, 99, 235, 0.65)',
+    borderWidth: 1.5
+  },
+  {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    hoverBackgroundColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(16, 185, 129, 0.65)',
+    borderWidth: 1.5
+  },
+  {
+    backgroundColor: 'rgba(244, 114, 182, 0.15)',
+    hoverBackgroundColor: 'rgba(244, 114, 182, 0.35)',
+    borderColor: 'rgba(236, 72, 153, 0.65)',
+    borderWidth: 1.5
+  }
+];
 
 const META_DATASET_STYLE = {
   borderColor: 'rgba(250, 204, 21, 1)',
@@ -57,6 +71,21 @@ function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = value ?? '';
   return div.innerHTML;
+}
+
+function parseRunwayObservation(observaciones) {
+  if (!observaciones || typeof observaciones !== 'string') {
+    return { runway: null, detail: observaciones ?? null };
+  }
+
+  const [runwayPart, ...rest] = observaciones.split('|');
+  const runway = runwayPart?.trim() || null;
+  const detailText = rest.join('|').trim();
+
+  return {
+    runway,
+    detail: detailText.length ? detailText : null
+  };
 }
 
 function formatPercentage(value) {
@@ -107,7 +136,7 @@ export function prepareSmsDisponibilidadPistasModel(records) {
       mes: Number(row?.mes),
       valor: row?.valor != null ? Number(row.valor) : null,
       metaMensual: row?.meta_mensual != null ? Number(row.meta_mensual) : null,
-      observaciones: row?.observaciones ?? null,
+      observacionesOriginal: row?.observaciones ?? null,
       fechaCaptura: row?.fecha_captura ?? null,
       fechaUltimaEdicion: row?.fecha_ultima_edicion ?? null,
       fechaValidacion: row?.fecha_validacion ?? null,
@@ -119,13 +148,63 @@ export function prepareSmsDisponibilidadPistasModel(records) {
       return a.anio - b.anio;
     });
 
-  const months = parsedRecords.map(record => ({
-    ...record,
-    label: buildMonthLabel(record.mes, record.anio)
-  }));
+  const months = parsedRecords.map(record => {
+    const { runway, detail } = parseRunwayObservation(record.observacionesOriginal);
+
+    return {
+      ...record,
+      pista: runway,
+      observaciones: detail,
+      label: buildMonthLabel(record.mes, record.anio)
+    };
+  });
 
   const latestYear = months.length ? Math.max(...months.map(item => item.anio)) : null;
   const chartMonths = latestYear != null ? months.filter(item => item.anio === latestYear) : months;
+
+  const monthGroups = chartMonths.reduce((acc, record) => {
+    const key = `${record.anio}-${record.mes}`;
+    if (!acc.has(key)) {
+      acc.set(key, {
+        key,
+        anio: record.anio,
+        mes: record.mes,
+        label: record.label,
+        registros: []
+      });
+    }
+
+    acc.get(key).registros.push(record);
+    return acc;
+  }, new Map());
+
+  const orderedMonthGroups = Array.from(monthGroups.values()).sort((a, b) => {
+    if (a.anio === b.anio) return a.mes - b.mes;
+    return a.anio - b.anio;
+  });
+
+  const runways = Array.from(
+    new Set(
+      chartMonths
+        .map(record => record.pista)
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const chartLabels = orderedMonthGroups.map(group => group.label);
+
+  const chartRunwaySeries = runways.map(runway => ({
+    runway,
+    data: orderedMonthGroups.map(group => {
+      const runwayRecord = group.registros.find(item => item.pista === runway);
+      return Number.isFinite(runwayRecord?.valor) ? Number(runwayRecord.valor) : null;
+    })
+  }));
+
+  const chartMetaSeries = orderedMonthGroups.map(group => {
+    const recordWithMeta = group.registros.find(item => Number.isFinite(item.metaMensual));
+    return recordWithMeta?.metaMensual != null ? Number(recordWithMeta.metaMensual) : null;
+  });
 
   const chartValues = chartMonths.map(month => month.valor).filter(Number.isFinite);
   const latestMeasurement = months.length ? months[months.length - 1] : null;
@@ -143,12 +222,15 @@ export function prepareSmsDisponibilidadPistasModel(records) {
   return {
     records: months,
     chartMonths,
+    chartLabels,
+    chartRunwaySeries,
+    chartMetaSeries,
     latestYear,
     latestMeasurement,
     latestUpdate,
     stats,
     metaMensualPromedio,
-    hasMetaMensual: chartMonths.some(month => Number.isFinite(month.metaMensual))
+    hasMetaMensual: chartMetaSeries.some(value => Number.isFinite(value))
   };
 }
 
@@ -285,6 +367,7 @@ export function buildSmsDisponibilidadPistasDetailTable(model) {
             <td class="px-4 py-2 font-medium text-slate-700">${escapeHtml(buildMonthLabel(row.mes, row.anio))}</td>
             <td class="px-4 py-2 text-slate-900">${formatPercentage(row.valor)}</td>
             <td class="px-4 py-2">${row.metaMensual != null ? formatPercentage(row.metaMensual) : '—'}</td>
+            <td class="px-4 py-2">${row.pista ? escapeHtml(row.pista) : '—'}</td>
             <td class="px-4 py-2">${row.observaciones ? escapeHtml(row.observaciones) : '—'}</td>
           </tr>
         `)
@@ -302,6 +385,7 @@ export function buildSmsDisponibilidadPistasDetailTable(model) {
                   <th scope="col" class="px-4 py-2">Mes</th>
                   <th scope="col" class="px-4 py-2">Disponibilidad</th>
                   <th scope="col" class="px-4 py-2">Meta mensual</th>
+                  <th scope="col" class="px-4 py-2">Pista</th>
                   <th scope="col" class="px-4 py-2">Observaciones</th>
                 </tr>
               </thead>
@@ -364,27 +448,48 @@ export const smsDisponibilidadHorizontalLinesPlugin = {
 };
 
 export function buildSmsDisponibilidadPistasChartConfig(model) {
-  const labels = model?.chartMonths?.map(month => month.label) ?? [];
+  const labels = model?.chartLabels ?? [];
 
-  const valuesDataset = {
-    type: 'bar',
-    label: 'Disponibilidad (%)',
-    data: (model?.chartMonths ?? []).map(month => (Number.isFinite(month.valor) ? Number(month.valor) : null)),
-    backgroundColor: VALUE_DATASET_STYLE.backgroundColor,
-    hoverBackgroundColor: VALUE_DATASET_STYLE.hoverBackgroundColor,
-    borderColor: VALUE_DATASET_STYLE.borderColor,
-    borderWidth: VALUE_DATASET_STYLE.borderWidth,
-    borderRadius: 8,
-    maxBarThickness: 48
-  };
+  const runwayDatasets = (model?.chartRunwaySeries ?? []).map((series, index) => {
+    const palette = RUNWAY_DATASET_STYLES[index % RUNWAY_DATASET_STYLES.length];
+    const label = series?.runway ? `Pista ${series.runway}` : `Pista ${index + 1}`;
 
-  const datasets = [valuesDataset];
+    return {
+      type: 'bar',
+      label,
+      data: Array.isArray(series?.data)
+        ? series.data.map(value => (Number.isFinite(value) ? Number(value) : null))
+        : [],
+      backgroundColor: palette.backgroundColor,
+      hoverBackgroundColor: palette.hoverBackgroundColor,
+      borderColor: palette.borderColor,
+      borderWidth: palette.borderWidth,
+      borderRadius: 8,
+      maxBarThickness: 48
+    };
+  });
+
+  const datasets = runwayDatasets.length ? runwayDatasets : [
+    {
+      type: 'bar',
+      label: 'Disponibilidad (%)',
+      data: (model?.chartMonths ?? []).map(month => (Number.isFinite(month.valor) ? Number(month.valor) : null)),
+      backgroundColor: RUNWAY_DATASET_STYLES[0].backgroundColor,
+      hoverBackgroundColor: RUNWAY_DATASET_STYLES[0].hoverBackgroundColor,
+      borderColor: RUNWAY_DATASET_STYLES[0].borderColor,
+      borderWidth: RUNWAY_DATASET_STYLES[0].borderWidth,
+      borderRadius: 8,
+      maxBarThickness: 48
+    }
+  ];
 
   if (model?.hasMetaMensual) {
     datasets.push({
       type: 'line',
       label: 'Meta mensual',
-      data: model.chartMonths.map(month => (Number.isFinite(month.metaMensual) ? Number(month.metaMensual) : null)),
+      data: Array.isArray(model?.chartMetaSeries)
+        ? model.chartMetaSeries.map(value => (Number.isFinite(value) ? Number(value) : null))
+        : [],
       ...META_DATASET_STYLE,
       fill: false
     });
