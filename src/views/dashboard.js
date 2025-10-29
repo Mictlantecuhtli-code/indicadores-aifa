@@ -6,7 +6,7 @@ import {
   getCapturasFauna,
   getImpactosFauna,
   getSmsDocuments,
-  getSmsPistasData  // <-- AGREGAR ESTA LÍNEA
+  getSmsPistasData
 } from '../services/supabaseClient.js';
 import { formatValueByUnit } from '../utils/formatters.js';
 import { renderError, renderLoading } from '../ui/feedback.js';
@@ -33,6 +33,7 @@ import {
   buildSmsPistasSummary
 } from './modals/modalIndicadoresSMS.js';
 import { openSmsPistasModal } from './modals/modalIndicadoresSMSInit.js';
+import { openSmsLucesModal } from './modals/modalIndicadorSMSLucesInit.js';
 const OPTION_BLUEPRINTS = [
   {
     id: 'monthly-yoy',
@@ -253,8 +254,9 @@ const SMS_SECTION_OBJECTIVES = [
 const SMS_INDICATOR_MODAL_ROUTES = {
   'sms-indicator-1-1': () => openImpactosFaunaModal(),
   'sms-indicator-1-2': () => openPgpaFsModal(),
-  'sms-indicator-2-1': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle),  // <-- NUEVA LÍNEA
-  'sms-indicator-2-2': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle)   // <-- NUEVA LÍNEA
+  'sms-indicator-2-1': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle),
+  'sms-indicator-2-2': (id, name, subtitle) => openSmsPistasModal(id, name, subtitle),
+  'sms-indicator-2-3': (id, name, subtitle) => openSmsLucesModal(id, name, subtitle)
 };
 
 function buildSmsSectionContent() {
