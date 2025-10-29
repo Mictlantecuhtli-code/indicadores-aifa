@@ -1,3 +1,5 @@
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
+
 const SMS_PCI_MODAL_ID = 'modal-sms-pci';
 
 const MONTHS = [
@@ -23,6 +25,17 @@ const ALERT_THRESHOLDS = [
 
 const OBJECTIVE_THRESHOLD = { value: 70, label: 'Objetivo: 70', color: 'rgb(22, 163, 74)' };
 
+const SMS_PCI_INDICATOR_METADATA = {
+  breadcrumb: 'Indicador SMS / Objetivo 3 / Indicador 3.1',
+  nombre: 'Índice de cumplimiento del PCI',
+  descripcion: 'Comportamiento mensual del Programa de Campo de Vuelo (PCI) por pista.',
+  area: 'SMS (Seguridad Operacional)',
+  unidad: 'PCI',
+  frecuencia: 'Mensual',
+  metaAnual: `${OBJECTIVE_THRESHOLD.value} (PCI)`,
+  metaDescripcion: 'Objetivo mínimo: mantener el PCI ≥ 70.'
+};
+
 const COLOR_SETS = [
   { bg: 'rgba(59, 130, 246, 0.8)', border: 'rgba(59, 130, 246, 1)' },
   { bg: 'rgba(251, 146, 60, 0.8)', border: 'rgba(251, 146, 60, 1)' },
@@ -37,6 +50,27 @@ function escapeHtml(str) {
 }
 
 export function buildSmsPciModalMarkup(indicatorName, indicatorSubtitle) {
+  const title = indicatorName || SMS_PCI_INDICATOR_METADATA.nombre;
+  const subtitle = indicatorSubtitle || SMS_PCI_INDICATOR_METADATA.descripcion;
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: SMS_PCI_INDICATOR_METADATA.breadcrumb,
+    title,
+    subtitle,
+    titleId: 'sms-pci-modal-title',
+    subtitleId: 'sms-pci-modal-description',
+    infoItems: [
+      { label: 'Área responsable', value: SMS_PCI_INDICATOR_METADATA.area },
+      { label: 'Unidad de medida', value: SMS_PCI_INDICATOR_METADATA.unidad },
+      { label: 'Frecuencia', value: SMS_PCI_INDICATOR_METADATA.frecuencia }
+    ],
+    highlight: {
+      label: 'Meta anual',
+      value: SMS_PCI_INDICATOR_METADATA.metaAnual,
+      description: SMS_PCI_INDICATOR_METADATA.metaDescripcion,
+      valueClass: 'text-emerald-700'
+    }
+  });
+
   return `
     <div
       id="${SMS_PCI_MODAL_ID}"
@@ -51,24 +85,7 @@ export function buildSmsPciModalMarkup(indicatorName, indicatorSubtitle) {
         aria-labelledby="sms-pci-modal-title"
         aria-describedby="sms-pci-modal-description"
       >
-        <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-          <div class="flex-1">
-            <h2 id="sms-pci-modal-title" class="text-2xl font-bold text-slate-900">
-              ${escapeHtml(indicatorName)}
-            </h2>
-            <p id="sms-pci-modal-description" class="mt-1 text-sm text-slate-600">
-              ${escapeHtml(indicatorSubtitle)}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="ml-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-aifa-light"
-            data-close-modal
-            aria-label="Cerrar modal"
-          >
-            <i class="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
+        ${headerMarkup}
         <div class="flex-1 overflow-y-auto px-6 py-6" data-modal-body>
           <div class="flex items-center justify-center py-8">
             <div class="flex items-center gap-2 text-slate-400">

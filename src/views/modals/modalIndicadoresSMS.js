@@ -2,6 +2,8 @@
 // Indicador 2.1: Porcentaje de disponibilidad del sistema de iluminación
 // Indicador 2.2: Índice de confiabilidad del sistema de iluminación
 
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
+
 export const SMS_PISTAS_MODAL_ID = 'modal-sms-pistas';
 
 const MONTHS = [
@@ -61,14 +63,58 @@ function formatPercentage(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+const SMS_PISTAS_INDICATOR_METADATA = {
+  default: {
+    breadcrumb: 'Indicadores SMS / Objetivo 2',
+    area: 'SMS (Seguridad Operacional)',
+    unidad: 'Porcentaje',
+    frecuencia: 'Mensual'
+  },
+  'sms-indicator-2-1': {
+    breadcrumb: 'Indicador SMS / Objetivo 2 / Indicador 2.1',
+    metaAnual: 90,
+    metaDescripcion: 'Porcentaje mínimo de disponibilidad del sistema de iluminación.'
+  },
+  'sms-indicator-2-2': {
+    breadcrumb: 'Indicador SMS / Objetivo 2 / Indicador 2.2',
+    metaAnual: 90,
+    metaDescripcion: 'Porcentaje mínimo de confiabilidad del sistema de iluminación.'
+  }
+};
+
 /**
  * Construye el markup del modal de Indicadores SMS
  */
 export function buildSmsPistasModalMarkup(indicatorId, indicatorName, indicatorSubtitle) {
   const indicatorType = indicatorId === 'sms-indicator-2-1' ? 'disponibilidad' : 'confiabilidad';
-  const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'Índice de Disponibilidad (%)' 
+  const fieldName = indicatorId === 'sms-indicator-2-1'
+    ? 'Índice de Disponibilidad (%)'
     : 'Índice de Confiabilidad (%)';
+  const metadata = {
+    ...SMS_PISTAS_INDICATOR_METADATA.default,
+    ...(SMS_PISTAS_INDICATOR_METADATA[indicatorId] || {})
+  };
+  const highlight =
+    metadata.metaAnual != null
+      ? {
+          label: 'Meta anual',
+          value: formatPercentage(metadata.metaAnual),
+          description: metadata.metaDescripcion
+        }
+      : null;
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: metadata.breadcrumb,
+    title: indicatorName,
+    subtitle: indicatorSubtitle,
+    titleId: 'modal-sms-pistas-title',
+    subtitleId: 'modal-sms-pistas-description',
+    infoItems: [
+      { label: 'Área responsable', value: metadata.area },
+      { label: 'Unidad de medida', value: metadata.unidad },
+      { label: 'Frecuencia', value: metadata.frecuencia }
+    ],
+    highlight
+  });
 
   return `
     <div
@@ -84,25 +130,7 @@ export function buildSmsPistasModalMarkup(indicatorId, indicatorName, indicatorS
         aria-labelledby="modal-sms-pistas-title"
         aria-describedby="modal-sms-pistas-description"
       >
-        <!-- Header -->
-        <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-          <div class="flex-1">
-            <h2 id="modal-sms-pistas-title" class="text-2xl font-bold text-slate-900">
-              ${escapeHtml(indicatorName)}
-            </h2>
-            <p id="modal-sms-pistas-description" class="mt-1 text-sm text-slate-600">
-              ${escapeHtml(indicatorSubtitle)}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="ml-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-aifa-light"
-            data-close-modal
-            aria-label="Cerrar modal"
-          >
-            <i class="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
+        ${headerMarkup}
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto px-6 py-6" data-modal-body>

@@ -1,3 +1,5 @@
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
+
 const MONTHS = [
   { value: 1, label: 'Enero', short: 'Ene' },
   { value: 2, label: 'Febrero', short: 'Feb' },
@@ -58,9 +60,14 @@ const SUBSYSTEM_COLORS = [
 export const SMS_LUCES_MODAL_ID = 'modal-sms-luces';
 
 const SMS_LUCES_INDICATOR_METADATA = {
-  clave: 'SMS-04',
-  area: 'Área SMS',
-  unidad: 'Porcentaje'
+  breadcrumb: 'Indicador SMS / Objetivo 2 / Indicador 2.3',
+  nombre: 'Porcentaje de luces operativas del sistema de ayudas visuales en pista',
+  descripcion: 'Evaluación mensual del porcentaje de luces operativas en las pistas 04C-22C y 04L-22R.',
+  area: 'SMS (Seguridad Operacional)',
+  unidad: 'Porcentaje',
+  frecuencia: 'Mensual',
+  metaAnual: 90,
+  metaDescripcion: 'Porcentaje mínimo de luces operativas del sistema de ayudas visuales.'
 };
 
 function escapeHtml(str) {
@@ -312,8 +319,25 @@ export function buildSmsLucesChartModel(records) {
 }
 
 export function buildSmsLucesModalMarkup(indicatorName, indicatorSubtitle) {
-  const title = indicatorName || 'Porcentaje de luces operativas del sistema de ayudas visuales en pista';
-  const subtitle = indicatorSubtitle || 'Evaluación mensual del porcentaje de luces operativas en las pistas 04C-22C y 04L-22R.';
+  const title = indicatorName || SMS_LUCES_INDICATOR_METADATA.nombre;
+  const subtitle = indicatorSubtitle || SMS_LUCES_INDICATOR_METADATA.descripcion;
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: SMS_LUCES_INDICATOR_METADATA.breadcrumb,
+    title,
+    subtitle,
+    titleId: 'modal-sms-luces-title',
+    subtitleId: 'modal-sms-luces-description',
+    infoItems: [
+      { label: 'Área responsable', value: SMS_LUCES_INDICATOR_METADATA.area },
+      { label: 'Unidad de medida', value: SMS_LUCES_INDICATOR_METADATA.unidad },
+      { label: 'Frecuencia', value: SMS_LUCES_INDICATOR_METADATA.frecuencia }
+    ],
+    highlight: {
+      label: 'Meta anual',
+      value: formatPercentage(SMS_LUCES_INDICATOR_METADATA.metaAnual),
+      description: SMS_LUCES_INDICATOR_METADATA.metaDescripcion
+    }
+  });
 
   return `
     <div
@@ -329,35 +353,7 @@ export function buildSmsLucesModalMarkup(indicatorName, indicatorSubtitle) {
         aria-labelledby="modal-sms-luces-title"
         aria-describedby="modal-sms-luces-description"
       >
-        <div class="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-          <div class="flex-1">
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Indicador seleccionado</p>
-            <h2 id="modal-sms-luces-title" class="mt-2 text-2xl font-bold text-slate-900">
-              ${escapeHtml(title)}
-            </h2>
-            <p id="modal-sms-luces-description" class="mt-2 text-sm text-slate-600">
-              ${escapeHtml(subtitle)}
-            </p>
-            <dl class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500">
-              <div class="flex items-center gap-1">
-                <dt class="font-medium text-slate-600">Área:</dt>
-                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.area)}</dd>
-              </div>
-              <div class="flex items-center gap-1">
-                <dt class="font-medium text-slate-600">Unidad:</dt>
-                <dd class="text-slate-700">${escapeHtml(SMS_LUCES_INDICATOR_METADATA.unidad)}</dd>
-              </div>
-            </dl>
-          </div>
-          <button
-            type="button"
-            class="ml-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-aifa-light"
-            data-close-modal
-            aria-label="Cerrar modal"
-          >
-            <i class="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
+        ${headerMarkup}
         <div class="flex-1 overflow-y-auto px-6 py-6" data-modal-body>
           <div class="flex items-center justify-center py-8">
             <div class="flex items-center gap-2 text-slate-400">

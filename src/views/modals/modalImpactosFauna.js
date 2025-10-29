@@ -1,6 +1,18 @@
 import { formatNumber, formatPercentage, monthName } from '../../utils/formatters.js';
+import { buildIndicatorModalHeader } from './sharedIndicatorHeader.js';
 
 export const IMPACTOS_FAUNA_MODAL_ID = 'modalImpactosFauna';
+
+const IMPACTOS_FAUNA_METADATA = {
+  breadcrumb: 'Indicador SMS / Objetivo 1 / Indicador 1.1',
+  nombre: 'Impactos con fauna vs Tasa de impactos con fauna',
+  descripcion: 'Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.',
+  area: 'SMS (Seguridad Operacional)',
+  unidad: 'Porcentaje',
+  frecuencia: 'Mensual',
+  metaAnual: '6',
+  metaDescripcion: 'Tasa objetivo máxima de impactos con fauna por cada 100 operaciones.'
+};
 
 const MONTH_SHORT_NAMES = [
   'Ene',
@@ -572,24 +584,23 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
         </div>
       `;
 
+  const headerMarkup = buildIndicatorModalHeader({
+    breadcrumb: IMPACTOS_FAUNA_METADATA.breadcrumb,
+    title: IMPACTOS_FAUNA_METADATA.nombre,
+    subtitle: IMPACTOS_FAUNA_METADATA.descripcion,
+    infoItems: [
+      { label: 'Área responsable', value: IMPACTOS_FAUNA_METADATA.area },
+      { label: 'Unidad de medida', value: IMPACTOS_FAUNA_METADATA.unidad },
+      { label: 'Frecuencia', value: IMPACTOS_FAUNA_METADATA.frecuencia }
+    ],
+    closeButtonAttributes: 'data-modal-close'
+  });
+
   return `
     <div class="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 py-6" data-modal-overlay data-modal-id="${IMPACTOS_FAUNA_MODAL_ID}">
       <div class="relative w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl" style="max-height: 90vh; overflow-y: auto;">
-        <button
-          type="button"
-          class="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-          aria-label="Cerrar"
-          data-modal-close
-        >
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-
+        ${headerMarkup}
         <div class="space-y-6 p-6">
-          <header class="space-y-2">
-            <h2 class="text-2xl font-semibold text-slate-900">Impactos con fauna vs Tasa de impactos con fauna</h2>
-            <p class="text-sm text-slate-600">Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.</p>
-          </header>
-
           <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-2">
               <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
