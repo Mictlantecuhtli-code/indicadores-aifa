@@ -254,66 +254,67 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
   const latestYear = Math.max(...data.map(d => d.anio));
   const latestYearData = data.filter(d => d.anio === latestYear);
 
-  // Crear labels combinando pista y mes (ej: "04C-22C May")
-  const dataGrouped = new Map();
+  // Obtener pistas únicas
+  const pistas = [...new Set(latestYearData.map(d => d.pista))].sort();
   
-  latestYearData.forEach(row => {
-    const month = MONTHS.find(m => m.value === row.mes);
-    const monthShort = month ? month.short : `M${row.mes}`;
-    const label = `${row.pista} ${monthShort}`;
-    
-    if (!dataGrouped.has(label)) {
-      dataGrouped.set(label, {
-        label,
-        value: Number(row[fieldName]) || 0,
-        pista: row.pista,
-        mes: row.mes,
-        monthShort
-      });
+  // Obtener meses únicos y ordenarlos
+  const meses = [...new Set(latestYearData.map(d => d.mes))].sort((a, b) => a - b);
+  
+  // Crear labels para el eje X (solo los nombres de los meses)
+  const labels = meses.map(mesNum => {
+    const month = MONTHS.find(m => m.value === mesNum);
+    return month ? month.label : `Mes ${mesNum}`;
+  });
+
+  // Colores para cada pista
+  const pistaColors = [
+    { 
+      bg: 'rgba(59, 130, 246, 0.8)',    // Azul para primera pista
+      border: 'rgba(59, 130, 246, 1)'
+    },
+    { 
+      bg: 'rgba(251, 146, 60, 0.8)',    // Naranja para segunda pista
+      border: 'rgba(251, 146, 60, 1)'
+    },
+    { 
+      bg: 'rgba(34, 197, 94, 0.8)',     // Verde para tercera pista (si existe)
+      border: 'rgba(34, 197, 94, 1)'
+    },
+    { 
+      bg: 'rgba(168, 85, 247, 0.8)',    // Morado para cuarta pista (si existe)
+      border: 'rgba(168, 85, 247, 1)'
     }
-  });
+  ];
 
-  // Convertir a array y ordenar por mes y luego por pista
-  const sortedData = Array.from(dataGrouped.values()).sort((a, b) => {
-    if (a.mes !== b.mes) return a.mes - b.mes;
-    return a.pista.localeCompare(b.pista);
-  });
+  // Crear datasets, uno por cada pista
+  const datasets = pistas.map((pista, pistaIndex) => {
+    const values = meses.map(mesNum => {
+      const record = latestYearData.find(d => d.pista === pista && d.mes === mesNum);
+      return record ? Number(record[fieldName]) || 0 : 0;
+    });
 
-  const labels = sortedData.map(d => d.label);
-  const values = sortedData.map(d => d.value);
+    const colorSet = pistaColors[pistaIndex % pistaColors.length];
 
-  // Asignar colores según nivel de alerta
-  const backgroundColors = values.map(value => {
-    if (value < 80) return 'rgba(239, 68, 68, 0.7)'; // Rojo (alerta 3)
-    if (value < 83) return 'rgba(251, 191, 36, 0.7)'; // Amarillo (alerta 2)
-    return 'rgba(34, 197, 94, 0.7)'; // Verde (normal)
-  });
-
-  const borderColors = values.map(value => {
-    if (value < 80) return 'rgba(239, 68, 68, 1)';
-    if (value < 83) return 'rgba(251, 191, 36, 1)';
-    return 'rgba(34, 197, 94, 1)';
+    return {
+      label: pista,
+      data: values,
+      backgroundColor: colorSet.bg,
+      borderColor: colorSet.border,
+      borderWidth: 2,
+      tension: chartType === 'line' ? 0.4 : 0,
+      fill: chartType === 'line',
+      pointBackgroundColor: colorSet.border,
+      pointBorderColor: colorSet.border,
+      pointRadius: chartType === 'line' ? 4 : 0,
+      pointHoverRadius: chartType === 'line' ? 6 : 0
+    };
   });
 
   const config = {
     type: chartType,
     data: {
       labels,
-      datasets: [
-        {
-          label: fieldName,
-          data: values,
-          backgroundColor: chartType === 'bar' ? backgroundColors : 'rgba(59, 130, 246, 0.1)',
-          borderColor: chartType === 'bar' ? borderColors : 'rgba(59, 130, 246, 1)',
-          borderWidth: 2,
-          tension: chartType === 'line' ? 0.4 : 0,
-          fill: chartType === 'line',
-          pointBackgroundColor: chartType === 'line' ? borderColors : undefined,
-          pointBorderColor: chartType === 'line' ? borderColors : undefined,
-          pointRadius: chartType === 'line' ? 4 : 0,
-          pointHoverRadius: chartType === 'line' ? 6 : 0
-        }
-      ]
+      datasets
     },
     options: {
       responsive: true,
@@ -324,10 +325,8 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
             display: false
           },
           ticks: {
-            maxRotation: 45,
-            minRotation: 45,
             font: {
-              size: 10
+              size: 11
             }
           }
         },
@@ -348,7 +347,11 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
         legend: {
           display: true,
           position: 'top',
-          align: 'end'
+          align: 'end',
+          labels: {
+            usePointStyle: true,
+            padding: 15
+          }
         },
         tooltip: {
           callbacks: {
@@ -384,7 +387,12 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
               label: {
                 content: 'Nivel de alerta 3: 80%',
                 enabled: true,
-                position: 'end'
+                position: 'end',
+                backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                color: 'white',
+                font: {
+                  size: 10
+                }
               }
             },
             line2: {
@@ -397,7 +405,12 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
               label: {
                 content: 'Nivel de alerta 2: 83%',
                 enabled: true,
-                position: 'end'
+                position: 'end',
+                backgroundColor: 'rgba(251, 191, 36, 0.8)',
+                color: 'white',
+                font: {
+                  size: 10
+                }
               }
             }
           }
