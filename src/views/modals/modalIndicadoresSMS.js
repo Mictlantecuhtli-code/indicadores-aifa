@@ -36,8 +36,8 @@ function formatPercentage(value) {
 export function buildSmsPistasModalMarkup(indicatorId, indicatorName, indicatorSubtitle) {
   const indicatorType = indicatorId === 'sms-indicator-2-1' ? 'disponibilidad' : 'confiabilidad';
   const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'índice de Disponibilidad (%)' 
-    : 'índice de Confiabilidad (%)';
+    ? 'Índice de Disponibilidad (%)' 
+    : 'Índice de Confiabilidad (%)';
 
   return `
     <div
@@ -93,8 +93,8 @@ export function buildSmsPistasModalMarkup(indicatorId, indicatorName, indicatorS
 export function buildSmsPistasChartView(data, chartType = 'bar', indicatorId = 'sms-indicator-2-1') {
   const indicatorType = indicatorId === 'sms-indicator-2-1' ? 'disponibilidad' : 'confiabilidad';
   const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'índice de Disponibilidad (%)' 
-    : 'índice de Confiabilidad (%)';
+    ? 'Índice de Disponibilidad (%)' 
+    : 'Índice de Confiabilidad (%)';
   const alertLevel1 = 80;
   const alertLevel2 = 83;
 
@@ -233,8 +233,8 @@ function buildSmsPistasTableBody(data, fieldName) {
  */
 export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId = 'sms-indicator-2-1') {
   const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'índice de Disponibilidad (%)' 
-    : 'índice de Confiabilidad (%)';
+    ? 'Índice de Disponibilidad (%)' 
+    : 'Índice de Confiabilidad (%)';
 
   if (!data || !data.length) {
     return {
@@ -414,8 +414,8 @@ export function buildSmsPistasChartConfig(data, chartType = 'bar', indicatorId =
  */
 export function buildSmsPistasSummary(data, indicatorId) {
   const fieldName = indicatorId === 'sms-indicator-2-1' 
-    ? 'índice de Disponibilidad (%)' 
-    : 'índice de Confiabilidad (%)';
+    ? 'Índice de Disponibilidad (%)' 
+    : 'Índice de Confiabilidad (%)';
 
   if (!data || !data.length) {
     return `
