@@ -2224,6 +2224,29 @@ export async function getSmsPciData() {
   }
 }
 
+export async function getSmsMantenimientosPavimentosData() {
+  try {
+    const { data, error } = await supabase
+      .from('v_mantenimientos_pavimentos_mensual')
+      .select(
+        'indicador_id, indicador_nombre, anio, mes, tipo_mantenimiento, unidad, total_mensual, registros_consolidados, ultima_captura'
+      )
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .order('tipo_mantenimiento', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de mantenimientos programados a pavimentos:', error);
+      throw error;
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Error en getSmsMantenimientosPavimentosData:', error);
+    throw error;
+  }
+}
+
 export async function saveRouteAirlines(routeId, airlines) {
   if (!routeId) {
     throw new Error('No se proporcionó el identificador de la ruta aérea.');
