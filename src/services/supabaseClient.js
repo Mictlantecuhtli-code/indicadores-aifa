@@ -2224,6 +2224,31 @@ export async function getSmsPciData() {
   }
 }
 
+export async function getSmsDisponibilidadPistasData() {
+  const INDICATOR_ID = '9c7638fe-9236-48ee-91e8-5d5882ef90a5';
+
+  try {
+    const { data, error } = await supabase
+      .from('mediciones')
+      .select(
+        `id, indicador_id, anio, mes, valor, meta_mensual, observaciones, fecha_captura, fecha_ultima_edicion, fecha_validacion, estatus_validacion`
+      )
+      .eq('indicador_id', INDICATOR_ID)
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de disponibilidad de pistas:', error);
+      throw error;
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Error en getSmsDisponibilidadPistasData:', error);
+    throw error;
+  }
+}
+
 export async function getSmsMantenimientosPavimentosData() {
   try {
     const { data, error } = await supabase
