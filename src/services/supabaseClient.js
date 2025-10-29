@@ -2176,6 +2176,30 @@ export async function getSmsPistasData() {
   }
 }
 
+export async function getSmsLucesOperativasData() {
+  const INDICATOR_ID = '5f3428ab-95d8-4ca3-ac87-5a172cbaa7c9';
+
+  try {
+    const { data, error } = await supabase
+      .from('mediciones')
+      .select('id, indicador_id, anio, mes, valor, meta_mensual, observaciones')
+      .eq('indicador_id', INDICATOR_ID)
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .order('observaciones', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de luces operativas SMS:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error en getSmsLucesOperativasData:', error);
+    throw error;
+  }
+}
+
 export async function saveRouteAirlines(routeId, airlines) {
   if (!routeId) {
     throw new Error('No se proporcionó el identificador de la ruta aérea.');
