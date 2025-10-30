@@ -18,7 +18,7 @@ const NAV_ITEMS = [
     id: 'visualizacion',
     label: 'Visualización de Indicadores',
     icon: 'fa-chart-area',
-    roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Todos pueden ver
+    roles: ['SUBDIRECTOR', 'ADMIN', 'CAPTURISTA'] // Director NO puede ver
   },
   {
     id: 'airport-info',

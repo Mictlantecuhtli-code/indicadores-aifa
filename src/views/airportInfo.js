@@ -10,6 +10,7 @@ import { renderLoading, renderError, showToast } from '../ui/feedback.js';
 import { getUserRole } from '../state/session.js';
 
 const EDITABLE_ROLES = new Set(['DIRECTOR', 'SUBDIRECTOR', 'ADMIN']);
+const AIRPORT_MAP_IMAGE_URL = new URL('../../assets/Plano.jpeg', import.meta.url).href;
 
 const SECTION_BLUEPRINTS = [
   {
@@ -804,7 +805,78 @@ function buildAirportInfoMarkup(sections, routes, editable) {
   return `
     <div class="space-y-10" data-airport-info>
       ${buildInfoSectionsMarkup(sections, editable)}
+      ${buildAirportMapSection()}
       ${buildRoutesSection(routes, editable)}
+    </div>
+  `;
+}
+
+function buildAirportMapSection() {
+  return `
+    <section class="rounded-[28px] border border-slate-200/70 bg-white/95 p-6 shadow-sm shadow-slate-900/5" data-airport-map>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="max-w-2xl">
+          <p class="text-xs font-semibold uppercase tracking-[0.4em] text-primary-600">Plano del aeropuerto</p>
+          <h2 class="text-xl font-semibold text-slate-800">Explora la distribución general del aeródromo</h2>
+          <p class="mt-2 text-sm text-slate-500">
+            Consulta el plano del Aeropuerto Internacional Felipe Ángeles para identificar las principales áreas y accesos.
+            Selecciona la imagen para ampliarla en pantalla completa.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-primary-200 px-3 py-1 text-xs font-semibold text-primary-600 transition hover:border-primary-400 hover:bg-primary-50"
+            data-action="open-airport-map"
+          >
+            <i class="fa-solid fa-maximize"></i>
+            Ver a detalle
+          </button>
+        </div>
+      </div>
+      <div class="mt-6">
+        <button
+          type="button"
+          class="group relative w-full overflow-hidden rounded-3xl border border-slate-200 shadow-sm shadow-slate-900/5 transition focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-200"
+          data-action="open-airport-map"
+          aria-label="Abrir el plano del aeropuerto en una vista ampliada"
+        >
+          <img
+            src="${AIRPORT_MAP_IMAGE_URL}"
+            alt="Plano general del Aeropuerto Internacional Felipe Ángeles"
+            class="max-h-96 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+            loading="lazy"
+          />
+          <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/30 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100"></div>
+          <span class="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-lg shadow-slate-900/10">
+            <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+            Ampliar
+          </span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function buildAirportMapModal() {
+  return `
+    <div class="fixed inset-0 z-[2000] flex min-h-full items-center justify-center overflow-y-auto bg-slate-900/70 px-4 py-6" data-modal-overlay>
+      <div class="relative w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl" role="dialog" aria-modal="true">
+        <button
+          type="button"
+          class="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-slate-500 transition hover:bg-white hover:text-slate-700"
+          data-modal-close
+          aria-label="Cerrar"
+        >
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        <img
+          src="${AIRPORT_MAP_IMAGE_URL}"
+          alt="Plano general del Aeropuerto Internacional Felipe Ángeles"
+          class="h-full w-full object-contain"
+          loading="lazy"
+        />
+      </div>
     </div>
   `;
 }
@@ -1668,6 +1740,12 @@ function bindEvents(container) {
       if (icon) {
         icon.classList.toggle('rotate-180', nextState);
       }
+    });
+  });
+
+  container.querySelectorAll('[data-action="open-airport-map"]').forEach(button => {
+    button.addEventListener('click', () => {
+      openModal(buildAirportMapModal());
     });
   });
 
