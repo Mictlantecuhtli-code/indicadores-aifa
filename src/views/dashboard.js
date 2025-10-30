@@ -37,6 +37,7 @@ import { openSmsLucesModal } from './modals/modalIndicadorSMSLucesInit.js';
 import { openSmsPciModal } from './modals/modalIndicadorSmsPCIInit.js';
 import { openSmsMantenimientosModal } from './modals/modalIndicadorSmsMantenimientosInit.js';
 import { openSmsDisponibilidadPistasModal } from './modals/modalIndicadorSmsDisponibilidadPistasInit.js';
+import { openSmsCapacitacionesModal } from './modals/modalIndicadorSmsCapacitacionesInit.js';
 const OPTION_BLUEPRINTS = [
   {
     id: 'monthly-yoy',
@@ -262,7 +263,8 @@ const SMS_INDICATOR_MODAL_ROUTES = {
   'sms-indicator-2-3': (id, name, subtitle) => openSmsLucesModal(id, name, subtitle),
   'sms-indicator-3-1': (id, name, subtitle) => openSmsPciModal(id, name, subtitle),
   'sms-indicator-3-2': (id, name, subtitle) => openSmsMantenimientosModal(id, name, subtitle),
-  'sms-indicator-3-3': (id, name, subtitle) => openSmsDisponibilidadPistasModal(id, name, subtitle)
+  'sms-indicator-3-3': (id, name, subtitle) => openSmsDisponibilidadPistasModal(id, name, subtitle),
+  'sms-indicator-4-1': (id, name, subtitle) => openSmsCapacitacionesModal(id, name, subtitle)
 };
 
 function buildSmsSectionContent() {
