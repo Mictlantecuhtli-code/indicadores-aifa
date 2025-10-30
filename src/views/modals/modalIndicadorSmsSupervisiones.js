@@ -446,16 +446,6 @@ export function buildSmsSupervisionesSummary(model) {
       label: 'Total de supervisiones',
       value: formatNumber(model.totalSupervisiones, 0),
       helperText: `${model.yearCount} año${model.yearCount === 1 ? '' : 's'} con información.`
-    },
-    {
-      label: 'Último mes reportado',
-      value: model.lastMonthLabel ?? '—',
-      helperText: model.lastStatus ? `Estatus: ${model.lastStatus}` : null
-    },
-    {
-      label: 'Última actualización',
-      value: formatDateLong(model.latestUpdate),
-      helperText: model.lastRange ? `Periodo reportado: ${escapeHtml(model.lastRange)}` : null
     }
   ];
 
@@ -475,7 +465,7 @@ export function buildSmsSupervisionesSummary(model) {
         <h3 class="text-base font-semibold text-slate-900">Resumen del indicador</h3>
         <p class="mt-1 text-sm text-slate-600">Comportamiento general de las supervisiones registradas.</p>
       </header>
-      <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
         ${cardsMarkup}
       </div>
     </section>
@@ -562,22 +552,7 @@ export function buildSmsSupervisionesModalMarkup(indicatorName, indicatorSubtitl
       value: formatPercentage(INDICATOR_METADATA.metaAnual),
       description: 'Porcentaje mínimo de supervisiones programadas ejecutadas.'
     },
-    extraContent: `
-      <div class="flex flex-wrap gap-2 text-xs text-slate-500">
-        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-          <i class="fa-solid fa-hashtag text-slate-400"></i>
-          Clave: ${escapeHtml(INDICATOR_METADATA.clave)}
-        </span>
-        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-          <i class="fa-solid fa-fingerprint text-slate-400"></i>
-          UUID indicador: ${escapeHtml(INDICATOR_METADATA.uuid)}
-        </span>
-        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-          <i class="fa-solid fa-layer-group text-slate-400"></i>
-          UUID área: ${escapeHtml(INDICATOR_METADATA.areaUuid)}
-        </span>
-      </div>
-    `
+    extraContent: ''
   });
 
   return `
