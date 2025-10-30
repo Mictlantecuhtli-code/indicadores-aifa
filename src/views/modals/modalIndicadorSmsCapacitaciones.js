@@ -187,19 +187,7 @@ export function buildSmsCapacitacionesModalMarkup(indicatorName, indicatorSubtit
       label: 'Meta anual',
       value: formatPercentage(INDICATOR_METADATA.metaAnual),
       description: 'Porcentaje mínimo de personal del AIFA que debe ser capacitado cada año.'
-    },
-    extraContent: `
-      <div class="grid gap-3 text-xs text-slate-600 sm:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white/70 px-3 py-2">
-          <p class="font-semibold uppercase tracking-wide text-slate-500">Clave</p>
-          <p class="mt-1 font-mono text-sm text-slate-700">${escapeHtml(INDICATOR_METADATA.clave)}</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white/70 px-3 py-2">
-          <p class="font-semibold uppercase tracking-wide text-slate-500">UUID</p>
-          <p class="mt-1 break-all font-mono text-[11px] text-slate-700">${escapeHtml(INDICATOR_METADATA.uuid)}</p>
-        </div>
-      </div>
-    `
+    }
   });
 
   return `
