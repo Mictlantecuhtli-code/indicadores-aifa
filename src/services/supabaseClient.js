@@ -2272,6 +2272,28 @@ export async function getSmsMantenimientosPavimentosData() {
   }
 }
 
+export async function getSmsCapacitacionesData() {
+  try {
+    const { data, error } = await supabase
+      .from('v_capacitaciones_sms')
+      .select('anio, mes, area, nombre_curso, personal_capacitado, total_personal, porcentaje, promedio_area_mes')
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .order('area', { ascending: true })
+      .order('nombre_curso', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de capacitaciones SMS:', error);
+      throw error;
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Error en getSmsCapacitacionesData:', error);
+    throw error;
+  }
+}
+
 export async function saveRouteAirlines(routeId, airlines) {
   if (!routeId) {
     throw new Error('No se proporcionó el identificador de la ruta aérea.');
