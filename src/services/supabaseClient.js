@@ -2272,6 +2272,29 @@ export async function getSmsMantenimientosPavimentosData() {
   }
 }
 
+export async function getSmsSupervisionesData() {
+  try {
+    const { data, error } = await supabase
+      .from('v_supervisiones_sms')
+      .select(
+        'anio, mes, area, estatus, rango_fechas, fecha_inicio, fecha_fin, porcentaje'
+      )
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+      .order('area', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener datos de supervisiones SMS:', error);
+      throw error;
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Error en getSmsSupervisionesData:', error);
+    throw error;
+  }
+}
+
 export async function getSmsCapacitacionesData() {
   try {
     const { data, error } = await supabase
