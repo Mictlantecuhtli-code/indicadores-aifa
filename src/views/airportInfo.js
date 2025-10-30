@@ -49,12 +49,6 @@ const SECTION_BLUEPRINTS = [
     description: 'Balizamiento, señalización y dispositivos visuales instalados.',
     order: 6
   },
-  {
-    key: 'mapa',
-    title: 'Plano del aeropuerto',
-    description: 'Representación gráfica y distribución general del aeródromo.',
-    order: 7
-  }
 ];
 
 let storedSections = [];
