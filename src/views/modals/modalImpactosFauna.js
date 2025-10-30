@@ -606,9 +606,9 @@ export function buildImpactosFaunaModalMarkup({ showHistorical = false, summary 
               <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Indicador seleccionado</p>
               <h3 class="text-lg font-semibold text-slate-900">Indicador 1.1 · Tasa de impactos con fauna dentro del aeropuerto.</h3>
               <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                <span>Área: SMS</span>
+                <span>Meta anual: ${IMPACTOS_FAUNA_METADATA.metaAnual}</span>
                 <span class="hidden sm:inline">·</span>
-                <span>Unidad: Porcentaje</span>
+                <span>${IMPACTOS_FAUNA_METADATA.metaDescripcion}</span>
               </div>
               <p class="text-sm text-slate-600">Valores mensuales${summary ? ` (${summary.periodLabel})` : ''}</p>
             </div>
