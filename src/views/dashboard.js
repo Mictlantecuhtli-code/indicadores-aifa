@@ -4407,7 +4407,7 @@ function buildDirectionSection(direction) {
             <i class="fa-solid fa-sitemap h-6 w-6"></i>
           </span>
           <div class="space-y-1">
-            <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(direction?.nombre ?? '—')}</h2>
+            <h2 class="text-lg font-semibold text-aifa-blue">${escapeHtml(direction?.nombre ?? '—')}</h2>
           </div>
         </div>
         <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-accordion-chevron></i>
