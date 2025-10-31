@@ -458,8 +458,7 @@ export function buildPgpaFsChartView(records, { indicadorId, showHistorical = fa
     fill: false,
     tension: 0,
     yAxisID: 'percentage',
-    order: -20 - index,
-    z: -20,
+    order: 20 + index,
     segment: {
       borderDash: threshold.borderDash ?? []
     },
