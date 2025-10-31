@@ -162,7 +162,8 @@ const EXCLUDED_AREA_NAMES = new Set(
     'Dirección Comercial y de Servicios',
     'Dirección de Administración',
     'Dirección de Operación',
-    'Dirección Jurídica'
+    'Dirección Jurídica',
+    'Gerencia de Procesos y Estadística'
   ].map(normalizeAreaName)
 );
 
@@ -3760,7 +3761,7 @@ function buildSectionsMarkup(sections) {
               <i class="${section.iconClass} h-6 w-6"></i>
             </span>
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(section.title)}</h2>
+              <h2 class="text-lg font-semibold text-aifa-blue">${escapeHtml(section.title)}</h2>
             </div>
           </div>
           <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform ${
@@ -3938,6 +3939,35 @@ function initSmsObjectiveAccordions(container) {
   const root = container.querySelector('[data-sms-objectives-root]');
   if (!root) return;
 
+  const findPanelById = panelId =>
+    Array.from(root.querySelectorAll('[data-sms-objective-panel]')).find(
+      element => element.dataset.smsObjectivePanel === panelId
+    );
+
+  const setObjectiveState = (objectiveButton, expanded) => {
+    if (!objectiveButton) return;
+
+    const targetPanelId = objectiveButton.dataset.smsObjectivePanelTarget;
+    if (!targetPanelId) return;
+
+    const targetPanel = findPanelById(targetPanelId);
+
+    objectiveButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+    if (targetPanel) {
+      if (expanded) {
+        targetPanel.removeAttribute('hidden');
+      } else {
+        targetPanel.setAttribute('hidden', '');
+      }
+    }
+
+    const chevron = objectiveButton.querySelector('[data-sms-objective-chevron]');
+    if (chevron) {
+      chevron.classList.toggle('rotate-180', expanded);
+    }
+  };
+
   root.addEventListener('click', event => {
     const button = event.target.closest('[data-sms-objective-button]');
     if (!button || !root.contains(button)) return;
@@ -3945,25 +3975,20 @@ function initSmsObjectiveAccordions(container) {
     const panelId = button.dataset.smsObjectivePanelTarget;
     if (!panelId) return;
 
-    const panel = Array.from(root.querySelectorAll('[data-sms-objective-panel]')).find(
-      element => element.dataset.smsObjectivePanel === panelId
-    );
+    const panel = findPanelById(panelId);
     if (!panel) return;
 
     const isExpanded = button.getAttribute('aria-expanded') === 'true';
     const nextState = !isExpanded;
 
-    button.setAttribute('aria-expanded', nextState ? 'true' : 'false');
     if (nextState) {
-      panel.removeAttribute('hidden');
-    } else {
-      panel.setAttribute('hidden', '');
+      root.querySelectorAll('[data-sms-objective-button]').forEach(otherButton => {
+        if (otherButton === button) return;
+        setObjectiveState(otherButton, false);
+      });
     }
 
-    const chevron = button.querySelector('[data-sms-objective-chevron]');
-    if (chevron) {
-      chevron.classList.toggle('rotate-180', nextState);
-    }
+    setObjectiveState(button, nextState);
   });
 }
 
@@ -4382,7 +4407,7 @@ function buildDirectionSection(direction) {
             <i class="fa-solid fa-sitemap h-6 w-6"></i>
           </span>
           <div class="space-y-1">
-            <h2 class="text-lg font-semibold text-slate-900">${escapeHtml(direction?.nombre ?? '—')}</h2>
+            <h2 class="text-lg font-semibold text-aifa-blue">${escapeHtml(direction?.nombre ?? '—')}</h2>
           </div>
         </div>
         <i class="fa-solid fa-chevron-down h-5 w-5 text-slate-400 transition-transform" data-accordion-chevron></i>
