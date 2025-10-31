@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   },
   {
     id: 'airport-info',
-    label: 'Información Técnica AIFA',
+    label: 'DATOS TÉCNICOS AIFA',
     icon: 'fa-plane-departure',
     roles: ['DIRECTOR', 'SUBDIRECTOR', 'ADMIN']
   },

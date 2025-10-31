@@ -162,7 +162,8 @@ const EXCLUDED_AREA_NAMES = new Set(
     'Dirección Comercial y de Servicios',
     'Dirección de Administración',
     'Dirección de Operación',
-    'Dirección Jurídica'
+    'Dirección Jurídica',
+    'Gerencia de Procesos y Estadística'
   ].map(normalizeAreaName)
 );
 
