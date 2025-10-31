@@ -573,7 +573,7 @@ function buildAirlinesList(route) {
 
           return `
             <li class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-900/5">
-              <p class="text-sm font-semibold text-slate-700">${name}</p>
+              <p class="text-sm font-semibold text-red-600">${name}</p>
               ${frequency}
               ${notes}
             </li>
@@ -605,7 +605,7 @@ function buildRouteDetails(route, editable) {
         <dl class="grid gap-4 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Destino</dt>
-            <dd class="mt-1 text-sm text-slate-700">${destination}</dd>
+            <dd class="mt-1 text-sm text-red-600">${destination}</dd>
           </div>
           <div>
             <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Tipo de vuelo</dt>
@@ -698,7 +698,7 @@ function buildRouteItem(route, editable) {
         aria-expanded="false"
       >
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-semibold text-slate-800 sm:text-base">${escapeHtml(destination)}</p>
+          <p class="text-sm font-semibold text-red-600 sm:text-base">${escapeHtml(destination)}</p>
           ${country}
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
