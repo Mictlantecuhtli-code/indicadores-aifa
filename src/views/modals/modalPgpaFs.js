@@ -12,12 +12,12 @@ export const PGPAFS_THRESHOLDS = [
   },
   {
     label: 'Nivel de alerta 1',
-    value: 92,
+    value: 90,
     color: '#facc15'
   },
   {
     label: 'Nivel de alerta 2',
-    value: 88,
+    value: 85,
     color: '#fb923c'
   },
   {
@@ -444,34 +444,99 @@ export function buildPgpaFsChartView(records, { indicadorId, showHistorical = fa
     };
   });
 
-  // Comentado para eliminar las líneas de umbrales de la gráfica
-  // const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => ({
-  //   type: 'line',
-  //   label: `${threshold.label} (${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })})`,
-  //   data: entries.map(() => threshold.value),
-  //   borderColor: threshold.color,
-  //   backgroundColor: threshold.color,
-  //   borderWidth: 2,
-  //   borderDash: threshold.borderDash ?? [],
-  //   pointRadius: 0,
-  //   pointHoverRadius: 0,
-  //   fill: false,
-  //   yAxisID: 'percentage',
-  //   order: -20 - index,
-  //   z: -20,
-  //   segment: {
-  //     borderDash: threshold.borderDash ?? []
-  //   },
-  //   tooltip: {
-  //     enabled: false
-  //   }
-  // }));
+  const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => {
+    const dashPattern = Array.isArray(threshold.borderDash) ? threshold.borderDash : [];
+
+    return {
+      type: 'line',
+      label: `${threshold.label}: ${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })}`,
+      data: entries.map(() => threshold.value),
+      borderColor: threshold.color,
+      backgroundColor: threshold.color,
+      borderWidth: 0,
+      borderDash: dashPattern,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      pointHitRadius: 0,
+      fill: false,
+      tension: 0,
+      yAxisID: 'percentage',
+      order: 20 + index,
+      clip: false,
+      tooltip: {
+        enabled: false
+      }
+    };
+  });
+
+  const thresholdDatasetOffset = barDatasets.length;
+
+  const thresholdGuidesPlugin = {
+    id: 'pgpafs-threshold-guides',
+    afterDatasetsDraw(chart) {
+      if (!thresholdDatasets.length) {
+        return;
+      }
+
+      const percentageScale = chart.scales?.percentage;
+      const chartArea = chart.chartArea;
+
+      if (!percentageScale || !chartArea) {
+        return;
+      }
+
+      const { left, right, top, bottom } = chartArea;
+      const ctx = chart.ctx;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+
+      thresholdDatasets.forEach((dataset, index) => {
+        const meta = chart.getDatasetMeta(thresholdDatasetOffset + index);
+        if (meta?.hidden) {
+          return;
+        }
+
+        const rawValue = Number(dataset.data?.[0]);
+        if (!Number.isFinite(rawValue)) {
+          return;
+        }
+
+        const y = percentageScale.getPixelForValue(rawValue);
+        if (!Number.isFinite(y) || y < top || y > bottom) {
+          return;
+        }
+
+        const dashPattern = Array.isArray(dataset.borderDash) ? dataset.borderDash : [];
+
+        // Dibujar una línea base suave para mejorar el contraste sobre las barras apiladas.
+        ctx.setLineDash(dashPattern);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(right, y);
+        ctx.stroke();
+
+        // Trazar la línea de umbral con el estilo solicitado.
+        ctx.setLineDash(dashPattern);
+        ctx.strokeStyle = dataset.borderColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(right, y);
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    }
+  };
 
   const config = {
     type: 'bar',
     data: {
       labels,
-      datasets: [...barDatasets] // Eliminado thresholdDatasets
+      datasets: [...barDatasets, ...thresholdDatasets]
     },
     options: {
       responsive: true,
@@ -555,7 +620,8 @@ export function buildPgpaFsChartView(records, { indicadorId, showHistorical = fa
           }
         }
       }
-    }
+    },
+    plugins: [thresholdGuidesPlugin]
   };
 
   return {
