@@ -11,6 +11,20 @@ import { supabase, signOut } from './services/supabaseClient.js';
 import { showToast } from './ui/feedback.js';
 import { getRoutesForRole, getDefaultRouteForRole } from './constants/legacyAccess.js';
 
+const SESSION_EXPIRED_EVENT = 'session-expired';
+
+function handleSessionExpired() {
+  showToast('Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.', { type: 'warning' });
+
+  if (window.location.hash !== '#login') {
+    window.location.hash = '#login';
+  }
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+}
+
 const routes = {
   login: renderLogin,
   dashboard: renderDashboard,
