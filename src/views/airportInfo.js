@@ -586,11 +586,6 @@ function buildAirlinesList(route) {
 
 function buildRouteDetails(route, editable) {
   const identifier = getRouteIdentifier(route);
-  const destinationParts = [route.destino, route.pais].filter(Boolean).map(escapeHtml);
-  const destination = destinationParts.length ? destinationParts.join(', ') : '—';
-  const type = route.tipo_vuelo ? escapeHtml(route.tipo_vuelo) : '—';
-  const estimatedTime = route.tiempo_estimado ? escapeHtml(route.tiempo_estimado) : '—';
-  const description = route.descripcion ? `<p class="text-sm text-slate-600">${formatMultiline(route.descripcion)}</p>` : '';
   const notes = route.notas
     ? `<div class="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <p class="font-semibold">Notas adicionales</p>
@@ -601,28 +596,6 @@ function buildRouteDetails(route, editable) {
 
   return `
     <div class="space-y-5" data-route-details="${identifier}">
-      <div class="rounded-xl border border-slate-200 bg-white px-4 py-4">
-        <dl class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Destino</dt>
-            <dd class="mt-1 text-sm text-red-600">${destination}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Tipo de vuelo</dt>
-            <dd class="mt-1 text-sm text-slate-700">${type}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Distancia estimada</dt>
-            <dd class="mt-1 text-sm text-slate-700">${formatDistance(route.distancia_km)}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Tiempo estimado</dt>
-            <dd class="mt-1 text-sm text-slate-700">${estimatedTime}</dd>
-          </div>
-        </dl>
-        ${description ? `<div class="mt-4 text-sm text-slate-600">${description}</div>` : ''}
-      </div>
-
       <div class="rounded-xl border border-slate-200 bg-white px-4 py-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
