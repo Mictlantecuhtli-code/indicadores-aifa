@@ -12,12 +12,12 @@ export const PGPAFS_THRESHOLDS = [
   },
   {
     label: 'Nivel de alerta 1',
-    value: 92,
+    value: 90,
     color: '#facc15'
   },
   {
     label: 'Nivel de alerta 2',
-    value: 88,
+    value: 85,
     color: '#fb923c'
   },
   {
@@ -444,34 +444,35 @@ export function buildPgpaFsChartView(records, { indicadorId, showHistorical = fa
     };
   });
 
-  // Comentado para eliminar las líneas de umbrales de la gráfica
-  // const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => ({
-  //   type: 'line',
-  //   label: `${threshold.label} (${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })})`,
-  //   data: entries.map(() => threshold.value),
-  //   borderColor: threshold.color,
-  //   backgroundColor: threshold.color,
-  //   borderWidth: 2,
-  //   borderDash: threshold.borderDash ?? [],
-  //   pointRadius: 0,
-  //   pointHoverRadius: 0,
-  //   fill: false,
-  //   yAxisID: 'percentage',
-  //   order: -20 - index,
-  //   z: -20,
-  //   segment: {
-  //     borderDash: threshold.borderDash ?? []
-  //   },
-  //   tooltip: {
-  //     enabled: false
-  //   }
-  // }));
+  const thresholdDatasets = PGPAFS_THRESHOLDS.map((threshold, index) => ({
+    type: 'line',
+    label: `${threshold.label}: ${formatPercentage(threshold.value, { decimals: 0, scale: 'percentage' })}`,
+    data: entries.map(() => threshold.value),
+    borderColor: threshold.color,
+    backgroundColor: threshold.color,
+    borderWidth: 2,
+    borderDash: threshold.borderDash ?? [],
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    pointHitRadius: 0,
+    fill: false,
+    tension: 0,
+    yAxisID: 'percentage',
+    order: -20 - index,
+    z: -20,
+    segment: {
+      borderDash: threshold.borderDash ?? []
+    },
+    tooltip: {
+      enabled: false
+    }
+  }));
 
   const config = {
     type: 'bar',
     data: {
       labels,
-      datasets: [...barDatasets] // Eliminado thresholdDatasets
+      datasets: [...barDatasets, ...thresholdDatasets]
     },
     options: {
       responsive: true,
