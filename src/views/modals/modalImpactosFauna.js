@@ -32,23 +32,23 @@ const MONTH_SHORT_NAMES = [
 const IMPACT_RATE_THRESHOLDS = [
   {
     label: 'Tasa Objetivo',
-    value: 6,
+    value: 0.06,
     color: '#22c55e',
     borderDash: [6, 6]
   },
   {
     label: 'Nivel de Alerta 1',
-    value: 13.4,
+    value: 0.134,
     color: '#facc15'
   },
   {
     label: 'Nivel de Alerta 2',
-    value: 21.4,
+    value: 0.214,
     color: '#fb923c'
   },
   {
     label: 'Nivel de Alerta 3',
-    value: 29.4,
+    value: 0.294,
     color: '#ef4444'
   }
 ];
@@ -178,6 +178,22 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
   const impactosData = filtered.map(record => record.impactos);
   const tasaData = filtered.map(record => computeImpactRate(record));
   const operationsData = filtered.map(record => record.total_operaciones);
+  const thresholdDatasets = IMPACT_RATE_THRESHOLDS.map((threshold, index) => ({
+    type: 'line',
+    label: `${threshold.label}: ${formatPercentage(threshold.value, { decimals: 3, scale: 'percentage' })}`,
+    data: Array(filtered.length).fill(threshold.value),
+    borderColor: threshold.color,
+    borderWidth: 2,
+    borderDash: threshold.borderDash ?? [],
+    pointRadius: 0,
+    pointHitRadius: 0,
+    pointHoverRadius: 0,
+    fill: false,
+    yAxisID: 'tasa',
+    order: 5 + index,
+    z: 15,
+    tension: 0
+  }));
   const config = {
     type: 'bar',
     data: {
@@ -211,7 +227,8 @@ export function buildImpactosFaunaChartView(records, { showHistorical = false } 
           yAxisID: 'tasa',
           order: 10,
           z: 20
-        }
+        },
+        ...thresholdDatasets
       ]
     },
     options: {
